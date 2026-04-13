@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	db "go-starter/internal/db/generated"
+	db "github.com/inkyvoxel/go-spark/internal/db/generated"
 
 	_ "modernc.org/sqlite"
 )

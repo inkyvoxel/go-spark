@@ -77,7 +77,7 @@ make migrate-down
 Override the database path for a command:
 
 ```sh
-make migrate-up DB_PATH=/tmp/go-starter.db
+make migrate-up DB_PATH=/tmp/go-spark.db
 ```
 
 ## SQLC Workflow

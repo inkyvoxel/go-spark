@@ -1,6 +1,6 @@
 # Architecture
 
-This document captures the longer design notes for Go Starter.
+This document captures the longer design notes for Go Spark.
 
 ## Overview
 

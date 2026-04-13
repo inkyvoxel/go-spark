@@ -7,8 +7,8 @@ import (
 	"net/http"
 	"path/filepath"
 
-	db "go-starter/internal/db/generated"
-	"go-starter/internal/services"
+	db "github.com/inkyvoxel/go-spark/internal/db/generated"
+	"github.com/inkyvoxel/go-spark/internal/services"
 )
 
 type Server struct {
@@ -55,7 +55,7 @@ func (s *Server) Routes() http.Handler {
 
 func (s *Server) home(w http.ResponseWriter, r *http.Request) {
 	data := map[string]string{
-		"Title": "Go Starter",
+		"Title": "Go Spark",
 	}
 
 	if err := s.templates.ExecuteTemplate(w, "home.html", data); err != nil {

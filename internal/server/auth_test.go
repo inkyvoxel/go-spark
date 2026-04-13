@@ -9,8 +9,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	db "go-starter/internal/db/generated"
-	"go-starter/internal/services"
+	db "github.com/inkyvoxel/go-spark/internal/db/generated"
+	"github.com/inkyvoxel/go-spark/internal/services"
 )
 
 func TestRequireAuthAddsCurrentUserToContext(t *testing.T) {

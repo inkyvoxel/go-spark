@@ -1,4 +1,4 @@
-# Go Starter
+# Go Spark
 
 A small starter template for server-rendered Go web applications.
 

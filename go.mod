@@ -1,4 +1,4 @@
-module go-starter
+module github.com/inkyvoxel/go-spark
 
 go 1.26
 

@@ -18,9 +18,9 @@ This document tracks the starter-template work so future sessions can pick up th
 - [x] Add sqlc configuration and example query.
 - [x] Generate sqlc code after `sqlc` is installed.
 - [x] Run migrations after `goose` is installed.
-- [ ] Decide final module path before publishing.
+- [x] Decide final module path before publishing.
 - [x] Initialize Git repository.
-- [ ] Update `LICENSE` with the correct copyright holder.
+- [x] Update `LICENSE` with the correct copyright holder.
 
 ## Phase 2: Template Documentation
 
@@ -56,8 +56,8 @@ This document tracks the starter-template work so future sessions can pick up th
 
 ## Phase 5: Release Preparation
 
-- [ ] Confirm repository name.
-- [ ] Confirm package/module path.
+- [x] Confirm repository name.
+- [x] Confirm package/module path.
 - [ ] Run full test suite from a clean clone.
 - [ ] Check generated files are committed or documented.
 - [ ] Review README from a first-time user perspective.

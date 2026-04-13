@@ -1,6 +1,6 @@
 # Contributing
 
-Thanks for taking an interest in Go Starter.
+Thanks for taking an interest in Go Spark.
 
 This project is intended to stay small, explicit, and easy to adapt. Contributions should preserve that shape.
 
@@ -28,8 +28,8 @@ make test
 If you change migrations, also run:
 
 ```sh
-make migrate-up DB_PATH=/tmp/go-starter-contrib.db
-make migrate-status DB_PATH=/tmp/go-starter-contrib.db
+make migrate-up DB_PATH=/tmp/go-spark-contrib.db
+make migrate-status DB_PATH=/tmp/go-spark-contrib.db
 ```
 
 ## Guidelines

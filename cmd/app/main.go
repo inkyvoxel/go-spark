@@ -10,9 +10,9 @@ import (
 	"syscall"
 	"time"
 
-	"go-starter/internal/config"
-	"go-starter/internal/database"
-	"go-starter/internal/server"
+	"github.com/inkyvoxel/go-spark/internal/config"
+	"github.com/inkyvoxel/go-spark/internal/database"
+	"github.com/inkyvoxel/go-spark/internal/server"
 )
 
 func main() {

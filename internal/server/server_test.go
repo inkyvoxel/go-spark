@@ -24,8 +24,8 @@ func TestRoutesHome(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
 	}
-	if !strings.Contains(rec.Body.String(), "Go Starter") {
-		t.Fatalf("body = %q, want it to contain %q", rec.Body.String(), "Go Starter")
+	if !strings.Contains(rec.Body.String(), "Go Spark") {
+		t.Fatalf("body = %q, want it to contain %q", rec.Body.String(), "Go Spark")
 	}
 }
 

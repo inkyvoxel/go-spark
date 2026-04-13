@@ -4,8 +4,8 @@ import (
 	"errors"
 	"net/http"
 
-	db "go-starter/internal/db/generated"
-	"go-starter/internal/services"
+	db "github.com/inkyvoxel/go-spark/internal/db/generated"
+	"github.com/inkyvoxel/go-spark/internal/services"
 )
 
 type templateData struct {

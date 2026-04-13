@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	db "go-starter/internal/db/generated"
+	db "github.com/inkyvoxel/go-spark/internal/db/generated"
 
 	"golang.org/x/crypto/bcrypt"
 	_ "modernc.org/sqlite"
