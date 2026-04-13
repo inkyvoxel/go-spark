@@ -75,6 +75,8 @@ make tools
 
 See [docs/development.md](docs/development.md) for tool and workflow details.
 
+See [CONTRIBUTING.md](CONTRIBUTING.md) before opening pull requests, and [CHANGELOG.md](CHANGELOG.md) for notable changes.
+
 ## Project Layout
 
 ```text
@@ -88,6 +90,7 @@ See [docs/development.md](docs/development.md) for tool and workflow details.
 /static             CSS and static assets
 /docs               roadmap and architecture notes
 .github/workflows   CI configuration
+.github             issue and pull request templates
 ```
 
 ## After Cloning
