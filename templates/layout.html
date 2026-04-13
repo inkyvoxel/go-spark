@@ -5,6 +5,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{ .Title }}</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
   <link rel="stylesheet" href="/static/styles.css">
   <script src="https://cdn.jsdelivr.net/npm/htmx.org@2.0.8/dist/htmx.min.js"
     integrity="sha384-/TgkGk7p307TH7EXJDuUlgG3Ce1UVolAOFopFekQkkXihi5u/6OCvVKyz1W+idaz"
@@ -12,7 +13,28 @@
 </head>
 
 <body>
-  <main class="page-shell">
+  <header class="container">
+    <nav>
+      <ul>
+        <li><strong><a href="/" class="contrast">Go Spark ⚡</a></strong></li>
+      </ul>
+      <ul>
+        {{ if .User.Email }}
+        <li><a href="/account">Account</a></li>
+        <li><button type="submit" form="logout-form" class="secondary">Sign out</button></li>
+        {{ else }}
+        <li><a href="/login">Sign in</a></li>
+        <li><a href="/register">Create account</a></li>
+        {{ end }}
+      </ul>
+    </nav>
+    {{ if .User.Email }}
+    <form id="logout-form" method="post" action="/logout" hidden>
+      <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
+    </form>
+    {{ end }}
+  </header>
+  <main class="container">
     {{ template "content" . }}
   </main>
 </body>

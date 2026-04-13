@@ -1,15 +1,14 @@
 {{ define "content" }}
-<section class="intro">
-  <p class="eyebrow">Go Spark</p>
-  <h1>A small base for server-rendered Go apps.</h1>
+<section>
+  <h1>Go from idea to app faster.</h1>
   <p>
-    This starter keeps the first screen simple while the project grows:
-    Go, SQLite, server-rendered templates, and room for HTMX where it helps.
+    Go Spark gives you a small, practical foundation: Go, SQLite, templates, sessions, CSRF protection, and auth already
+    wired in.
   </p>
-  <div class="actions">
-    <a href="/register">Create account</a>
-    <a href="/login">Sign in</a>
-    <a href="/healthz">Check health</a>
-  </div>
+  <p>
+    <a href="/register" role="button">Create account</a>
+    <a href="/login" role="button" class="secondary">Sign in</a>
+    <a href="/healthz" role="button" class="contrast">Check health</a>
+  </p>
 </section>
 {{ end }}

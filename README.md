@@ -2,7 +2,7 @@
 
 A small starter template for server-rendered Go web applications.
 
-The default shape is intentionally simple: Go, `net/http`, `html/template`, HTMX where it helps, SQLite, SQL migrations, and a small set of conventions that are easy to change later.
+The default shape is intentionally simple: Go, `net/http`, `html/template`, PicoCSS, HTMX where it helps, SQLite, SQL migrations, and a small set of conventions that are easy to change later.
 
 It includes a runnable app, SQLite setup, migrations, generated SQL code, CSRF protection, and basic email/password session authentication.
 
@@ -11,6 +11,7 @@ It includes a runnable app, SQLite setup, migrations, generated SQL code, CSRF p
 * Go
 * `net/http`
 * `html/template`
+* PicoCSS
 * HTMX
 * SQLite via `modernc.org/sqlite`
 * `database/sql`

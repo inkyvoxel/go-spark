@@ -1,9 +1,8 @@
 {{ define "content" }}
-<section class="intro">
-  <p class="eyebrow">Go Spark</p>
+<article>
   <h1>Create account</h1>
-  {{ if .Error }}<p class="form-error">{{ .Error }}</p>{{ end }}
-  <form class="auth-form" method="post" action="/register">
+  {{ if .Error }}<p role="alert">{{ .Error }}</p>{{ end }}
+  <form method="post" action="/register">
     <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
     <label>
       Email
@@ -16,5 +15,5 @@
     <button type="submit">Create account</button>
   </form>
   <p><a href="/login">Sign in instead</a></p>
-</section>
+</article>
 {{ end }}

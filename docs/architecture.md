@@ -26,9 +26,10 @@ This repository is intentionally structured to be:
 
 ### Frontend
 
+* PicoCSS for default styling and semantic HTML components.
 * HTMX for progressive enhancement.
 * Minimal JavaScript only when necessary.
-* Simple custom CSS.
+* Project-specific CSS only when the defaults need overrides.
 
 ### Database
 
