@@ -21,11 +21,12 @@ Implemented so far:
 * Project-pinned `sqlc` and `goose` tools via `go.mod`.
 * Auth service foundation with bcrypt password hashing and database-backed sessions.
 * Session middleware and current-user request context helpers.
+* CSRF token generation and validation middleware.
 * MIT license placeholder.
 
 Still pending:
 
-* Authentication routes, middleware, CSRF protection, and templates.
+* Authentication routes and templates.
 * Final module path and license copyright details.
 * GitHub-ready release polish.
 

@@ -40,7 +40,7 @@ This document tracks the starter-template work so future sessions can pick up th
 - [x] Add session creation and deletion.
 - [x] Add session middleware.
 - [x] Add request context helper for current user.
-- [ ] Add CSRF token generation and validation.
+- [x] Add CSRF token generation and validation.
 - [ ] Add authenticated example page.
 - [x] Add tests for auth services and session handling.
 

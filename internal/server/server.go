@@ -44,7 +44,7 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("GET /healthz", s.health)
 	mux.HandleFunc("GET /", s.home)
 
-	return s.logRequests(mux)
+	return s.logRequests(s.csrf(mux))
 }
 
 func (s *Server) home(w http.ResponseWriter, r *http.Request) {
