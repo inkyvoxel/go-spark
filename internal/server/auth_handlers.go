@@ -2,6 +2,7 @@ package server
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 
 	db "github.com/inkyvoxel/go-spark/internal/db/generated"
@@ -116,8 +117,17 @@ func (s *Server) handleAuthFormError(w http.ResponseWriter, r *http.Request, tem
 
 func (s *Server) render(w http.ResponseWriter, templateName string, data templateData) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := s.templates.ExecuteTemplate(w, templateName, data); err != nil {
+	if err := s.renderTemplate(w, templateName, data); err != nil {
 		s.logger.Error("render template", "template", templateName, "err", err)
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 	}
+}
+
+func (s *Server) renderTemplate(w http.ResponseWriter, templateName string, data templateData) error {
+	tmpl, ok := s.templates[templateName]
+	if !ok {
+		return fmt.Errorf("template %q not found", templateName)
+	}
+
+	return tmpl.ExecuteTemplate(w, "layout.html", data)
 }

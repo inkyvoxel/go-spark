@@ -75,10 +75,26 @@ func testServer(t *testing.T) *Server {
 	return &Server{
 		db:     db,
 		logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
-		templates: template.Must(template.New("home.html").Parse(`
-			<!doctype html>
-			<title>{{ .Title }}</title>
-			<h1>{{ .Title }}</h1>
-		`)),
+		templates: testTemplates(t, map[string]string{
+			"home.html": `<h1>{{ .Title }}</h1>`,
+		}),
 	}
+}
+
+func testTemplates(t *testing.T, pages map[string]string) map[string]*template.Template {
+	t.Helper()
+
+	templates := make(map[string]*template.Template, len(pages))
+	for name, content := range pages {
+		templates[name] = template.Must(template.New("layout.html").Parse(`
+			{{ define "layout.html" }}
+				<!doctype html>
+				<title>{{ .Title }}</title>
+				{{ template "content" . }}
+			{{ end }}
+			{{ define "content" }}` + content + `{{ end }}
+		`))
+	}
+
+	return templates
 }

@@ -15,7 +15,7 @@ type Server struct {
 	db        *sql.DB
 	auth      authService
 	logger    *slog.Logger
-	templates *template.Template
+	templates map[string]*template.Template
 }
 
 type Options struct {
@@ -33,8 +33,38 @@ func New(opts Options) *Server {
 		db:        opts.DB,
 		auth:      services.NewAuthService(db.New(opts.DB), services.AuthOptions{}),
 		logger:    logger,
-		templates: template.Must(template.ParseGlob(filepath.Join("templates", "*.html"))),
+		templates: mustParseTemplates(),
 	}
+}
+
+func mustParseTemplates() map[string]*template.Template {
+	templates, err := parseTemplates()
+	if err != nil {
+		panic(err)
+	}
+
+	return templates
+}
+
+func parseTemplates() (map[string]*template.Template, error) {
+	pages := []string{
+		"account.html",
+		"home.html",
+		"login.html",
+		"register.html",
+	}
+	templates := make(map[string]*template.Template, len(pages))
+	layout := filepath.Join("templates", "layout.html")
+
+	for _, page := range pages {
+		parsed, err := template.ParseFiles(layout, filepath.Join("templates", page))
+		if err != nil {
+			return nil, err
+		}
+		templates[page] = parsed
+	}
+
+	return templates, nil
 }
 
 func (s *Server) Routes() http.Handler {
@@ -54,14 +84,11 @@ func (s *Server) Routes() http.Handler {
 }
 
 func (s *Server) home(w http.ResponseWriter, r *http.Request) {
-	data := map[string]string{
-		"Title": "Go Spark",
+	data := templateData{
+		Title: "Go Spark",
 	}
 
-	if err := s.templates.ExecuteTemplate(w, "home.html", data); err != nil {
-		s.logger.Error("render home", "err", err)
-		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-	}
+	s.render(w, "home.html", data)
 }
 
 func (s *Server) health(w http.ResponseWriter, r *http.Request) {

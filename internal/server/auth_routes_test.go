@@ -2,7 +2,6 @@ package server
 
 import (
 	"database/sql"
-	"html/template"
 	"io"
 	"log/slog"
 	"net/http"
@@ -170,12 +169,12 @@ func newAuthRouteTestServer(t *testing.T, auth authService) *Server {
 		db:     conn,
 		auth:   auth,
 		logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
-		templates: template.Must(template.New("test").Parse(`
-			{{ define "home.html" }}home{{ end }}
-			{{ define "register.html" }}register {{ .Error }} {{ .CSRFToken }}{{ end }}
-			{{ define "login.html" }}login {{ .Error }} {{ .CSRFToken }}{{ end }}
-			{{ define "account.html" }}account {{ .User.Email }} {{ .CSRFToken }}{{ end }}
-		`)),
+		templates: testTemplates(t, map[string]string{
+			"home.html":     `home`,
+			"register.html": `register {{ .Error }} {{ .CSRFToken }}`,
+			"login.html":    `login {{ .Error }} {{ .CSRFToken }}`,
+			"account.html":  `account {{ .User.Email }} {{ .CSRFToken }}`,
+		}),
 	}
 }
 
