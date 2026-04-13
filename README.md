@@ -17,13 +17,12 @@ Implemented so far:
 * Home route and `/healthz`.
 * Base template and stylesheet.
 * Initial migration file.
-* `sqlc` configuration and example query.
+* `sqlc` configuration, generated code, and example query.
+* Project-pinned `sqlc` and `goose` tools via `go.mod`.
 * MIT license placeholder.
 
 Still pending:
 
-* Generated `sqlc` code.
-* Local `goose` migration run.
 * Authentication implementation.
 * Final module path and license copyright details.
 * GitHub-ready release polish.
@@ -68,11 +67,13 @@ make tidy
 make sqlc
 make migrate-up
 make migrate-down
+make migrate-status
+make tools
 ```
 
-`make sqlc`, `make migrate-up`, and `make migrate-down` require `sqlc` and `goose` to be installed locally.
+`sqlc` and `goose` are pinned as Go tool dependencies in `go.mod`, so the Makefile runs them through `go tool`. You do not need separate global installs.
 
-See [docs/development.md](docs/development.md) for local tool installation and workflow details.
+See [docs/development.md](docs/development.md) for tool and workflow details.
 
 ## Project Layout
 
@@ -97,7 +98,6 @@ If you use this as a template for a new project:
 - [ ] Update the app name in README, templates, and config where needed.
 - [ ] Copy `.env.example` to `.env`.
 - [ ] Review `DATABASE_PATH`.
-- [ ] Install `sqlc` and `goose`.
 - [ ] Run migrations.
 - [ ] Replace or remove example routes and templates.
 - [ ] Update the copyright holder in `LICENSE`.

@@ -32,5 +32,13 @@ jobs:
           go mod tidy
           git diff --exit-code -- go.mod go.sum
 
+      - name: Check generated SQL code
+        run: |
+          go tool sqlc generate
+          git diff --exit-code -- internal/db/generated
+
+      - name: Check migrations
+        run: go tool goose -dir ./migrations sqlite3 /tmp/go-starter-ci.db up
+
       - name: Run tests
         run: go test ./...

@@ -1,4 +1,4 @@
-.PHONY: run test fmt tidy sqlc migrate-up migrate-down
+.PHONY: run test fmt tidy sqlc migrate-up migrate-down migrate-status tools
 
 DB_PATH ?= ./data/app.db
 GOOSE_DRIVER ?= sqlite3
@@ -18,10 +18,20 @@ tidy:
 	go mod tidy
 
 sqlc:
-	sqlc generate
+	go tool sqlc generate
 
 migrate-up:
-	goose -dir $(GOOSE_MIGRATION_DIR) $(GOOSE_DRIVER) "$(GOOSE_DBSTRING)" up
+	mkdir -p $(dir $(DB_PATH))
+	go tool goose -dir $(GOOSE_MIGRATION_DIR) $(GOOSE_DRIVER) "$(GOOSE_DBSTRING)" up
 
 migrate-down:
-	goose -dir $(GOOSE_MIGRATION_DIR) $(GOOSE_DRIVER) "$(GOOSE_DBSTRING)" down
+	mkdir -p $(dir $(DB_PATH))
+	go tool goose -dir $(GOOSE_MIGRATION_DIR) $(GOOSE_DRIVER) "$(GOOSE_DBSTRING)" down
+
+migrate-status:
+	mkdir -p $(dir $(DB_PATH))
+	go tool goose -dir $(GOOSE_MIGRATION_DIR) $(GOOSE_DRIVER) "$(GOOSE_DBSTRING)" status
+
+tools:
+	go tool sqlc version
+	go tool goose --version

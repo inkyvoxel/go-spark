@@ -48,10 +48,11 @@ This document tracks the starter-template work so future sessions can pick up th
 
 - [x] Add focused tests for config, database opening, and route behavior.
 - [x] Add GitHub Actions for formatting and tests.
+- [x] Pin `sqlc` and `goose` as Go tool dependencies.
 - [ ] Add `CONTRIBUTING.md`.
 - [ ] Add `CHANGELOG.md`.
 - [ ] Add issue and pull request templates.
-- [x] Document local installation for `sqlc` and `goose`.
+- [x] Document project tool usage for `sqlc` and `goose`.
 
 ## Phase 5: Release Preparation
 
