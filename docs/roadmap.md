@@ -36,13 +36,13 @@ This document tracks the starter-template work so future sessions can pick up th
 - [ ] Add user registration route.
 - [ ] Add login route.
 - [ ] Add logout route.
-- [ ] Add bcrypt password hashing.
-- [ ] Add session creation and deletion.
+- [x] Add bcrypt password hashing.
+- [x] Add session creation and deletion.
 - [ ] Add session middleware.
 - [ ] Add request context helper for current user.
 - [ ] Add CSRF token generation and validation.
 - [ ] Add authenticated example page.
-- [ ] Add tests for auth services and session handling.
+- [x] Add tests for auth services and session handling.
 
 ## Phase 4: Developer Experience
 

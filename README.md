@@ -19,11 +19,12 @@ Implemented so far:
 * Initial migration file.
 * `sqlc` configuration, generated code, and example query.
 * Project-pinned `sqlc` and `goose` tools via `go.mod`.
+* Auth service foundation with bcrypt password hashing and database-backed sessions.
 * MIT license placeholder.
 
 Still pending:
 
-* Authentication implementation.
+* Authentication routes, middleware, CSRF protection, and templates.
 * Final module path and license copyright details.
 * GitHub-ready release polish.
 
