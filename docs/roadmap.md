@@ -16,8 +16,8 @@ This document tracks the starter-template work so future sessions can pick up th
 - [x] Add base template and stylesheet.
 - [x] Add initial migration file.
 - [x] Add sqlc configuration and example query.
-- [ ] Generate sqlc code after `sqlc` is installed.
-- [ ] Run migrations after `goose` is installed.
+- [x] Generate sqlc code after `sqlc` is installed.
+- [x] Run migrations after `goose` is installed.
 - [ ] Decide final module path before publishing.
 - [x] Initialize Git repository.
 - [ ] Update `LICENSE` with the correct copyright holder.
