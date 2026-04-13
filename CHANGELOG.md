@@ -21,4 +21,4 @@ This project follows a simple, human-written changelog format. Versioning will b
 * CSRF token cookie, request validation middleware, and tests.
 * Register, login, logout, and authenticated account routes.
 * GitHub Actions test workflow.
-* Template README, architecture notes, development guide, and roadmap.
+* Template README, architecture notes, and development guide.

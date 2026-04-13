@@ -4,32 +4,7 @@ A small starter template for server-rendered Go web applications.
 
 The default shape is intentionally simple: Go, `net/http`, `html/template`, HTMX where it helps, SQLite, SQL migrations, and a small set of conventions that are easy to change later.
 
-## Current Status
-
-This template is in early development. The first runnable scaffold is in place, and the outstanding work is tracked in [docs/roadmap.md](docs/roadmap.md).
-
-Implemented so far:
-
-* Go module and runnable app entrypoint.
-* Environment-based config.
-* SQLite database opener.
-* Static file serving.
-* Home route and `/healthz`.
-* Base template and stylesheet.
-* Initial migration file.
-* `sqlc` configuration, generated code, and example query.
-* Project-pinned `sqlc` and `goose` tools via `go.mod`.
-* Auth service foundation with bcrypt password hashing and database-backed sessions.
-* Session middleware and current-user request context helpers.
-* CSRF token generation and validation middleware.
-* Register, login, logout, and authenticated account routes.
-* MIT license placeholder.
-
-Still pending:
-
-* Template polish and release details.
-* Final module path and license copyright details.
-* GitHub-ready release polish.
+It includes a runnable app, SQLite setup, migrations, generated SQL code, CSRF protection, and basic email/password session authentication.
 
 ## Tech Stack
 
@@ -49,6 +24,7 @@ See [docs/architecture.md](docs/architecture.md) for the longer rationale and pl
 
 ```sh
 cp .env.example .env
+make migrate-up
 make run
 ```
 
@@ -92,7 +68,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) before opening pull requests, and [CHANGE
 /migrations         goose migrations
 /templates          server-rendered HTML
 /static             CSS and static assets
-/docs               roadmap and architecture notes
+/docs               architecture and development notes
 .github/workflows   CI configuration
 .github             issue and pull request templates
 ```
@@ -139,7 +115,3 @@ Keeping database access behind explicit SQL and small service boundaries should 
 ## Removing Example Code
 
 As the starter grows, example code should stay easy to identify and delete. For a new project, start by replacing the home template, removing sample routes that do not fit, and adding the first real model, migration, query, service, and handler as a thin vertical slice.
-
-## Roadmap
-
-See [docs/roadmap.md](docs/roadmap.md).
