@@ -46,7 +46,7 @@ This document tracks the starter-template work so future sessions can pick up th
 
 ## Phase 4: Developer Experience
 
-- [ ] Add focused tests for config, database opening, and route behavior.
+- [x] Add focused tests for config, database opening, and route behavior.
 - [ ] Add GitHub Actions for formatting and tests.
 - [ ] Add `CONTRIBUTING.md`.
 - [ ] Add `CHANGELOG.md`.
