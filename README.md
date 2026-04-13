@@ -20,6 +20,7 @@ Implemented so far:
 * `sqlc` configuration, generated code, and example query.
 * Project-pinned `sqlc` and `goose` tools via `go.mod`.
 * Auth service foundation with bcrypt password hashing and database-backed sessions.
+* Session middleware and current-user request context helpers.
 * MIT license placeholder.
 
 Still pending:

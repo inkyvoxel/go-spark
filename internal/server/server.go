@@ -6,10 +6,14 @@ import (
 	"log/slog"
 	"net/http"
 	"path/filepath"
+
+	db "go-starter/internal/db/generated"
+	"go-starter/internal/services"
 )
 
 type Server struct {
 	db        *sql.DB
+	auth      authSessionLookup
 	logger    *slog.Logger
 	templates *template.Template
 }
@@ -27,6 +31,7 @@ func New(opts Options) *Server {
 
 	return &Server{
 		db:        opts.DB,
+		auth:      services.NewAuthService(db.New(opts.DB), services.AuthOptions{}),
 		logger:    logger,
 		templates: template.Must(template.ParseGlob(filepath.Join("templates", "*.html"))),
 	}

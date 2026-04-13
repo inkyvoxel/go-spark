@@ -17,5 +17,6 @@ This project follows a simple, human-written changelog format. Versioning will b
 * Focused tests for config, database opening, and routes.
 * Auth service foundation with bcrypt password hashing and database-backed sessions.
 * SQLC auth queries for users and sessions.
+* Session middleware and current-user request context helpers.
 * GitHub Actions test workflow.
 * Template README, architecture notes, development guide, and roadmap.
