@@ -1,0 +1,21 @@
+# Build artifacts
+/bin/
+/tmp/
+*.test
+
+# Local environment
+.env
+.env.*
+!.env.example
+
+# SQLite databases
+*.db
+*.db-*
+*.sqlite
+*.sqlite-*
+
+# OS/editor noise
+.DS_Store
+.idea/
+.vscode/
+.codex
