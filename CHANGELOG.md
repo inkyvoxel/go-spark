@@ -19,5 +19,6 @@ This project follows a simple, human-written changelog format. Versioning will b
 * SQLC auth queries for users and sessions.
 * Session middleware and current-user request context helpers.
 * CSRF token cookie, request validation middleware, and tests.
+* Register, login, logout, and authenticated account routes.
 * GitHub Actions test workflow.
 * Template README, architecture notes, development guide, and roadmap.

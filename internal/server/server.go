@@ -13,7 +13,7 @@ import (
 
 type Server struct {
 	db        *sql.DB
-	auth      authSessionLookup
+	auth      authService
 	logger    *slog.Logger
 	templates *template.Template
 }
@@ -42,6 +42,12 @@ func (s *Server) Routes() http.Handler {
 
 	mux.Handle("GET /static/", http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))
 	mux.HandleFunc("GET /healthz", s.health)
+	mux.HandleFunc("GET /register", s.registerForm)
+	mux.HandleFunc("POST /register", s.register)
+	mux.HandleFunc("GET /login", s.loginForm)
+	mux.HandleFunc("POST /login", s.login)
+	mux.HandleFunc("POST /logout", s.logout)
+	mux.Handle("GET /account", s.requireAuth(http.HandlerFunc(s.account)))
 	mux.HandleFunc("GET /", s.home)
 
 	return s.logRequests(s.csrf(mux))

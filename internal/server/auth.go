@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"time"
 
 	db "go-starter/internal/db/generated"
 	"go-starter/internal/services"
@@ -11,7 +12,10 @@ import (
 
 const sessionCookieName = "session"
 
-type authSessionLookup interface {
+type authService interface {
+	Login(context.Context, string, string) (db.User, db.Session, error)
+	Logout(context.Context, string) error
+	Register(context.Context, string, string) (db.User, error)
 	UserBySessionToken(context.Context, string) (db.User, error)
 }
 
@@ -24,6 +28,31 @@ func currentUser(ctx context.Context) (db.User, bool) {
 
 func contextWithUser(ctx context.Context, user db.User) context.Context {
 	return context.WithValue(ctx, authContextKey{}, user)
+}
+
+func setSessionCookie(w http.ResponseWriter, r *http.Request, session db.Session) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     sessionCookieName,
+		Value:    session.Token,
+		Path:     "/",
+		Expires:  session.ExpiresAt,
+		HttpOnly: true,
+		Secure:   r.TLS != nil,
+		SameSite: http.SameSiteLaxMode,
+	})
+}
+
+func clearSessionCookie(w http.ResponseWriter, r *http.Request) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     sessionCookieName,
+		Value:    "",
+		Path:     "/",
+		Expires:  time.Unix(0, 0),
+		MaxAge:   -1,
+		HttpOnly: true,
+		Secure:   r.TLS != nil,
+		SameSite: http.SameSiteLaxMode,
+	})
 }
 
 func (s *Server) requireAuth(next http.Handler) http.Handler {

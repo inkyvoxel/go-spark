@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{ .Title }}</title>
+    <link rel="stylesheet" href="/static/styles.css">
+  </head>
+  <body>
+    <main class="page-shell">
+      <section class="intro">
+        <p class="eyebrow">Go Starter</p>
+        <h1>Create account</h1>
+        {{ if .Error }}<p class="form-error">{{ .Error }}</p>{{ end }}
+        <form class="auth-form" method="post" action="/register">
+          <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
+          <label>
+            Email
+            <input type="email" name="email" autocomplete="email" required>
+          </label>
+          <label>
+            Password
+            <input type="password" name="password" autocomplete="new-password" required>
+          </label>
+          <button type="submit">Create account</button>
+        </form>
+        <p><a href="/login">Sign in instead</a></p>
+      </section>
+    </main>
+  </body>
+</html>

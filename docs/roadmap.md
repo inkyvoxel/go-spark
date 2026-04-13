@@ -33,15 +33,15 @@ This document tracks the starter-template work so future sessions can pick up th
 
 ## Phase 3: Authentication Slice
 
-- [ ] Add user registration route.
-- [ ] Add login route.
-- [ ] Add logout route.
+- [x] Add user registration route.
+- [x] Add login route.
+- [x] Add logout route.
 - [x] Add bcrypt password hashing.
 - [x] Add session creation and deletion.
 - [x] Add session middleware.
 - [x] Add request context helper for current user.
 - [x] Add CSRF token generation and validation.
-- [ ] Add authenticated example page.
+- [x] Add authenticated example page.
 - [x] Add tests for auth services and session handling.
 
 ## Phase 4: Developer Experience

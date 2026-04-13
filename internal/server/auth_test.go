@@ -103,9 +103,19 @@ func TestCurrentUserReturnsFalseWhenMissing(t *testing.T) {
 }
 
 type fakeAuthLookup struct {
-	user  db.User
-	token string
-	err   error
+	user          db.User
+	token         string
+	err           error
+	registered    bool
+	registerEmail string
+	registerPass  string
+	registerErr   error
+	loginEmail    string
+	loginPass     string
+	loginSession  db.Session
+	loginErr      error
+	logoutToken   string
+	logoutErr     error
 }
 
 func (f *fakeAuthLookup) UserBySessionToken(ctx context.Context, token string) (db.User, error) {
@@ -113,7 +123,28 @@ func (f *fakeAuthLookup) UserBySessionToken(ctx context.Context, token string) (
 	return f.user, f.err
 }
 
-func newAuthMiddlewareTestServer(auth authSessionLookup) *Server {
+func (f *fakeAuthLookup) Login(ctx context.Context, email string, password string) (db.User, db.Session, error) {
+	f.loginEmail = email
+	f.loginPass = password
+	if f.loginErr != nil {
+		return db.User{}, db.Session{}, f.loginErr
+	}
+	return f.user, f.loginSession, nil
+}
+
+func (f *fakeAuthLookup) Logout(ctx context.Context, token string) error {
+	f.logoutToken = token
+	return f.logoutErr
+}
+
+func (f *fakeAuthLookup) Register(ctx context.Context, email string, password string) (db.User, error) {
+	f.registered = true
+	f.registerEmail = email
+	f.registerPass = password
+	return f.user, f.registerErr
+}
+
+func newAuthMiddlewareTestServer(auth authService) *Server {
 	return &Server{
 		auth:   auth,
 		logger: slog.New(slog.NewTextHandler(io.Discard, nil)),

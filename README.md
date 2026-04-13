@@ -22,11 +22,12 @@ Implemented so far:
 * Auth service foundation with bcrypt password hashing and database-backed sessions.
 * Session middleware and current-user request context helpers.
 * CSRF token generation and validation middleware.
+* Register, login, logout, and authenticated account routes.
 * MIT license placeholder.
 
 Still pending:
 
-* Authentication routes and templates.
+* Template polish and release details.
 * Final module path and license copyright details.
 * GitHub-ready release polish.
 
