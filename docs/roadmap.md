@@ -24,12 +24,12 @@ This document tracks the starter-template work so future sessions can pick up th
 
 ## Phase 2: Template Documentation
 
-- [ ] Rewrite `README.md` for template users.
-- [ ] Move detailed architecture notes into `docs/architecture.md`.
-- [ ] Add "After Cloning" checklist.
-- [ ] Add production notes for cookies, HTTPS, backups, migrations, and secrets.
-- [ ] Add a short section on replacing SQLite with Postgres later.
-- [ ] Add guidance for removing or replacing example code.
+- [x] Rewrite `README.md` for template users.
+- [x] Move detailed architecture notes into `docs/architecture.md`.
+- [x] Add "After Cloning" checklist.
+- [x] Add production notes for cookies, HTTPS, backups, migrations, and secrets.
+- [x] Add a short section on replacing SQLite with Postgres later.
+- [x] Add guidance for removing or replacing example code.
 
 ## Phase 3: Authentication Slice
 

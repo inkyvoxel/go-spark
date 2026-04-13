@@ -1,0 +1,363 @@
+# Architecture
+
+This document captures the longer design notes for Go Starter.
+
+## Overview
+
+This project is a server-rendered web application starter built with a focus on simplicity, maintainability, and performance. It uses a Go-first architecture with minimal dependencies, avoiding unnecessary frontend complexity and heavy abstractions.
+
+The guiding philosophy is:
+
+> Prefer simple, explicit, and well-understood tools over complex frameworks.
+
+This repository is intentionally structured to be:
+
+* Easy for humans to understand.
+* Easy for AI tools to navigate and modify.
+* Stable over time with minimal churn.
+
+## Tech Stack
+
+### Backend
+
+* Go as the primary language.
+* `net/http` for the HTTP server.
+* `html/template` for server-side rendering.
+
+### Frontend
+
+* HTMX for progressive enhancement.
+* Minimal JavaScript only when necessary.
+* Simple custom CSS.
+
+### Database
+
+* SQLite as the embedded database.
+* `database/sql` as the standard Go database interface.
+* `modernc.org/sqlite` as the pure-Go SQLite driver.
+
+### Data Access
+
+* SQL-first approach.
+* `sqlc` for type-safe Go code generated from SQL queries.
+
+### Migrations
+
+* `goose` for SQL-based migrations.
+
+### Logging
+
+* `log/slog` for structured logging.
+
+## Architecture Principles
+
+### Server-Driven UI
+
+The application uses server-side rendering as the default:
+
+* HTML is rendered on the server using `html/template`.
+* HTMX is used for partial updates and interactivity.
+* SPA-style complexity is avoided unless clearly needed.
+
+This keeps state on the server, centralizes logic, and keeps the frontend predictable.
+
+### SQL-First Data Layer
+
+This starter intentionally avoids ORMs.
+
+Instead:
+
+* SQL queries live in `.sql` files.
+* `sqlc` generates strongly typed Go code.
+* Queries are explicit, readable, and easy to optimize.
+
+The goal is to keep performance, debugging, and data access behavior visible.
+
+### Minimal Dependencies
+
+Prefer:
+
+* Standard library where possible.
+* Small, focused libraries where necessary.
+
+Avoid:
+
+* Large frameworks.
+* Hidden magic.
+* Code generation beyond cases where it clearly pays for itself, such as `sqlc`.
+* Deep dependency trees.
+
+### Clear Separation of Concerns
+
+The intended codebase structure is:
+
+```text
+/cmd/app            application entrypoint
+/internal
+  /config           environment config
+  /database         database connection setup
+  /server           HTTP routes and handlers
+  /services         business logic
+  /db
+    /queries        SQL files for sqlc
+    /generated      sqlc-generated code
+/templates          HTML templates
+/migrations         goose migration files
+/static             CSS and assets
+```
+
+Guidelines:
+
+* Handlers own HTTP request and response concerns.
+* Services own business logic.
+* The DB layer owns persistence.
+* Templates render data and avoid business rules.
+
+### Thin Templates
+
+Templates should:
+
+* Render data.
+* Use simple conditionals and loops.
+* Avoid complex logic.
+
+Real logic belongs in Go code.
+
+### HTMX Usage
+
+HTMX is used for:
+
+* Partial page updates.
+* Forms and interactions.
+* Reducing full page reloads where it improves the user experience.
+
+Guidelines:
+
+* Return HTML fragments from handlers where appropriate.
+* Keep endpoints small and focused.
+* Prefer progressive enhancement.
+
+### Database Strategy
+
+SQLite is used because it has zero service configuration, works well for local development, and is fast for many small-to-medium workloads.
+
+Important notes:
+
+* SQLite is suitable for low to moderate concurrency.
+* If scaling to multiple instances, consider migrating to Postgres.
+* Keep schema simple and well-indexed.
+* Treat database backups as part of production readiness.
+
+### Migrations
+
+Migrations live in `/migrations` and use `goose` SQL files:
+
+```sql
+-- +goose Up
+CREATE TABLE users (
+    id INTEGER PRIMARY KEY,
+    email TEXT NOT NULL
+);
+
+-- +goose Down
+DROP TABLE users;
+```
+
+Always write reversible migrations when practical.
+
+### Future AI Integration
+
+If a project built from this template adds AI features:
+
+* Keep all AI calls server-side.
+* Wrap provider calls behind a small internal interface.
+* Avoid calling external AI APIs directly from handlers.
+* Keep prompts versioned or structured.
+* Log inputs and outputs only with appropriate redaction.
+* Prefer structured outputs where possible.
+
+## Authentication Strategy
+
+Authentication is planned as a simple, server-side session model implemented with Go's standard library and a few focused dependencies.
+
+The goal is to keep authentication:
+
+* Easy to understand.
+* Secure by default.
+* Compatible with server-rendered HTML.
+* Maintainable by both humans and AI tools.
+
+### Overview
+
+Authentication will use:
+
+* Email and password login.
+* Server-side sessions stored in SQLite.
+* HTTP-only cookies for session IDs.
+* Minimal external dependencies.
+
+This starter intentionally avoids:
+
+* JWT-based auth for regular server-rendered pages.
+* Large auth frameworks.
+* Client-side auth state.
+
+### Users Table
+
+```sql
+CREATE TABLE users (
+    id INTEGER PRIMARY KEY,
+    email TEXT NOT NULL UNIQUE,
+    password_hash TEXT NOT NULL,
+    created_at TIMESTAMP NOT NULL
+);
+```
+
+### Sessions Table
+
+```sql
+CREATE TABLE sessions (
+    id INTEGER PRIMARY KEY,
+    user_id INTEGER NOT NULL,
+    token TEXT NOT NULL UNIQUE,
+    expires_at TIMESTAMP NOT NULL,
+    created_at TIMESTAMP NOT NULL,
+    FOREIGN KEY (user_id) REFERENCES users(id)
+);
+```
+
+### Login Flow
+
+1. User submits email and password.
+2. Application looks up the user by email.
+3. Application compares the password using `bcrypt`.
+4. If valid, the application generates a secure random session token, stores it in the `sessions` table, and sets a cookie with the session token.
+
+### Session Handling
+
+The cookie contains only the session token.
+
+On each request:
+
+1. Middleware reads the session cookie.
+2. Middleware looks up the session in the database.
+3. Middleware loads the associated user.
+4. Middleware attaches the user to the request context.
+
+Handlers should not handle auth logic directly.
+
+### Logout
+
+Logout deletes the session from the database and clears the cookie.
+
+### Password Security
+
+* Passwords are hashed using `bcrypt`.
+* Plaintext passwords are never stored.
+* The default cost factor is fine to start.
+
+### Cookie Configuration
+
+Session cookies must be configured securely:
+
+```go
+http.SetCookie(w, &http.Cookie{
+    Name:     "session",
+    Value:    token,
+    Path:     "/",
+    HttpOnly: true,
+    Secure:   true,
+    SameSite: http.SameSiteLaxMode,
+})
+```
+
+For local development, `Secure` may need environment-aware handling if testing over plain HTTP.
+
+### CSRF Protection
+
+All state-changing requests should include CSRF protection.
+
+Recommended approach:
+
+* Generate a CSRF token per session.
+* Include the token in forms.
+* Validate the token on submission.
+
+### Token Generation
+
+Use cryptographically secure random values with at least 32 bytes of entropy:
+
+```go
+b := make([]byte, 32)
+_, err := rand.Read(b)
+token := hex.EncodeToString(b)
+```
+
+### Session Expiry
+
+* Store `expires_at` in the database.
+* Enforce expiration on each request.
+* Optionally implement session rotation.
+
+### Optional Enhancements
+
+These can be added later if a project needs them:
+
+* Password reset via email.
+* Email verification.
+* Remember-me sessions.
+* OAuth login with providers such as Google or GitHub.
+* Rate limiting on login attempts.
+
+### Auth Non-Goals
+
+* Do not store passwords in plaintext.
+* Do not invent custom hashing or crypto.
+* Do not store auth tokens in `localStorage`.
+* Do not expose session tokens to JavaScript.
+* Do not rely on client-side auth logic.
+
+## Development Guidelines
+
+### Code Style
+
+* Prefer clarity over cleverness.
+* Use small functions.
+* Use explicit naming.
+* Avoid deep abstraction layers.
+
+### Adding Features
+
+1. Add a migration if schema changes are needed.
+2. Add or update SQL queries.
+3. Generate code via `sqlc`.
+4. Add service logic.
+5. Add a handler.
+6. Add a template or partial.
+7. Add focused tests for the behavior.
+
+### Testing
+
+Focus tests on service logic, database interactions, and route behavior. Avoid over-testing template markup unless the rendered behavior is important.
+
+## When This Architecture Works Best
+
+* CRUD apps.
+* SaaS dashboards.
+* Internal tools.
+* Admin panels.
+* AI-backed workflows.
+* Content-driven apps.
+
+## When To Reconsider
+
+You may need a different architecture if the product requires:
+
+* Highly interactive client-side app behavior.
+* Real-time collaboration.
+* Heavy frontend state management.
+* Offline-first functionality.
+
+## Summary
+
+This starter favors Go, SQL, HTML, server-first design, minimalism, and clarity. The goal is a codebase that scales in complexity slowly, remains understandable, and works well with both humans and AI-assisted development.
