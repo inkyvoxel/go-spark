@@ -47,11 +47,11 @@ This document tracks the starter-template work so future sessions can pick up th
 ## Phase 4: Developer Experience
 
 - [x] Add focused tests for config, database opening, and route behavior.
-- [ ] Add GitHub Actions for formatting and tests.
+- [x] Add GitHub Actions for formatting and tests.
 - [ ] Add `CONTRIBUTING.md`.
 - [ ] Add `CHANGELOG.md`.
 - [ ] Add issue and pull request templates.
-- [ ] Document local installation for `sqlc` and `goose`.
+- [x] Document local installation for `sqlc` and `goose`.
 
 ## Phase 5: Release Preparation
 

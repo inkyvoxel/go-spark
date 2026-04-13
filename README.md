@@ -72,6 +72,8 @@ make migrate-down
 
 `make sqlc`, `make migrate-up`, and `make migrate-down` require `sqlc` and `goose` to be installed locally.
 
+See [docs/development.md](docs/development.md) for local tool installation and workflow details.
+
 ## Project Layout
 
 ```text
@@ -84,6 +86,7 @@ make migrate-down
 /templates          server-rendered HTML
 /static             CSS and static assets
 /docs               roadmap and architecture notes
+.github/workflows   CI configuration
 ```
 
 ## After Cloning
