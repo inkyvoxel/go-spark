@@ -12,7 +12,7 @@
         value="{{ .Email }}"
         autocomplete="email"
         pattern="{{ .EmailPattern }}"
-        aria-invalid="{{ if index .FieldErrors "email" }}true{{ else }}false{{ end }}"
+        {{ if index .FieldErrors "email" }}aria-invalid="true"{{ end }}
         required>
       {{ with index .FieldErrors "email" }}<small role="alert">{{ . }}</small>{{ end }}
     </label>
@@ -23,7 +23,7 @@
         name="password"
         autocomplete="new-password"
         minlength="{{ .PasswordMinLength }}"
-        aria-invalid="{{ if index .FieldErrors "password" }}true{{ else }}false{{ end }}"
+        {{ if index .FieldErrors "password" }}aria-invalid="true"{{ end }}
         required>
       {{ with index .FieldErrors "password" }}<small role="alert">{{ . }}</small>{{ end }}
     </label>
@@ -34,7 +34,7 @@
         name="confirm_password"
         autocomplete="new-password"
         minlength="{{ .PasswordMinLength }}"
-        aria-invalid="{{ if index .FieldErrors "confirm_password" }}true{{ else }}false{{ end }}"
+        {{ if index .FieldErrors "confirm_password" }}aria-invalid="true"{{ end }}
         required>
       {{ with index .FieldErrors "confirm_password" }}<small role="alert">{{ . }}</small>{{ end }}
     </label>
