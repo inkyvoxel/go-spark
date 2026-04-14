@@ -19,7 +19,7 @@
         <li><strong><a href="/" class="contrast">Go Spark ⚡</a></strong></li>
       </ul>
       <ul>
-        {{ if .User.Email }}
+        {{ if .Authenticated }}
         <li><a href="/account">Account</a></li>
         <li><button type="submit" form="logout-form" class="secondary">Sign out</button></li>
         {{ else }}
@@ -28,7 +28,7 @@
         {{ end }}
       </ul>
     </nav>
-    {{ if .User.Email }}
+    {{ if .Authenticated }}
     <form id="logout-form" method="post" action="/logout" hidden>
       <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
     </form>

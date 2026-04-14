@@ -334,7 +334,7 @@ func newAuthRouteTestServer(t *testing.T, auth authService) *Server {
 		auth:   auth,
 		logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
 		templates: testTemplates(t, map[string]string{
-			"home.html":     `home {{ if .User.Email }}Account Sign out {{ .User.Email }}{{ else }}Sign in Create account{{ end }}`,
+			"home.html":     `home {{ if .Authenticated }}Account Sign out {{ .User.Email }}{{ else }}Sign in Create account{{ end }}`,
 			"register.html": `register {{ .Error }} {{ .CSRFToken }}`,
 			"login.html":    `login {{ .Error }} {{ .CSRFToken }} {{ .Next }}`,
 			"account.html":  `account {{ .User.Email }} {{ .CSRFToken }}`,

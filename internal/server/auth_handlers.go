@@ -10,11 +10,12 @@ import (
 )
 
 type templateData struct {
-	Title     string
-	CSRFToken string
-	Error     string
-	Next      string
-	User      db.User
+	Title         string
+	CSRFToken     string
+	Error         string
+	Next          string
+	Authenticated bool
+	User          db.User
 }
 
 func newTemplateData(r *http.Request, title string) templateData {
@@ -23,6 +24,7 @@ func newTemplateData(r *http.Request, title string) templateData {
 		CSRFToken: csrfToken(r.Context()),
 	}
 	if user, ok := currentUser(r.Context()); ok {
+		data.Authenticated = true
 		data.User = user
 	}
 	return data

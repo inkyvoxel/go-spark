@@ -6,8 +6,12 @@
     wired in.
   </p>
   <p>
+    {{ if .Authenticated }}
+    <a href="/account" role="button">Account</a>
+    {{ else }}
     <a href="/register" role="button">Create account</a>
     <a href="/login" role="button" class="secondary">Sign in</a>
+    {{ end }}
     <a href="/healthz" role="button" class="contrast">Check health</a>
   </p>
 </section>
