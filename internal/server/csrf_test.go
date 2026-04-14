@@ -37,6 +37,23 @@ func TestCSRFSetsTokenCookieOnSafeRequest(t *testing.T) {
 	}
 }
 
+func TestCSRFSetsSecureCookieWhenConfigured(t *testing.T) {
+	srv := newAuthMiddlewareTestServer(nil)
+	srv.cookieSecure = true
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+
+	srv.csrf(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	})).ServeHTTP(rec, req)
+
+	cookie := csrfCookieFromRecorder(t, rec)
+	if !cookie.Secure {
+		t.Fatal("csrf cookie Secure = false, want true")
+	}
+}
+
 func TestCSRFAllowsPostWithHeaderToken(t *testing.T) {
 	srv := newAuthMiddlewareTestServer(nil)
 

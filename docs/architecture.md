@@ -293,6 +293,8 @@ http.SetCookie(w, &http.Cookie{
 
 For local development, `Secure` may need environment-aware handling if testing over plain HTTP.
 
+Set `APP_COOKIE_SECURE=true` in production when HTTPS is terminated before the Go process, such as behind a reverse proxy or load balancer. Direct HTTPS requests also receive secure cookies automatically because the server can see `r.TLS`.
+
 ### CSRF Protection
 
 All state-changing requests should include CSRF protection.

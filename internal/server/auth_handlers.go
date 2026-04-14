@@ -54,7 +54,7 @@ func (s *Server) register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	setSessionCookie(w, r, session)
+	s.setSessionCookie(w, r, session)
 	http.Redirect(w, r, "/account", http.StatusSeeOther)
 }
 
@@ -83,7 +83,7 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 		next = "/account"
 	}
 
-	setSessionCookie(w, r, session)
+	s.setSessionCookie(w, r, session)
 	http.Redirect(w, r, next, http.StatusSeeOther)
 }
 
@@ -97,7 +97,7 @@ func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	clearSessionCookie(w, r)
+	s.clearSessionCookie(w, r)
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 

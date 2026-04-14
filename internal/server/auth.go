@@ -32,19 +32,19 @@ func contextWithUser(ctx context.Context, user db.User) context.Context {
 	return context.WithValue(ctx, authContextKey{}, user)
 }
 
-func setSessionCookie(w http.ResponseWriter, r *http.Request, session db.Session) {
+func (s *Server) setSessionCookie(w http.ResponseWriter, r *http.Request, session db.Session) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     sessionCookieName,
 		Value:    session.Token,
 		Path:     "/",
 		Expires:  session.ExpiresAt,
 		HttpOnly: true,
-		Secure:   r.TLS != nil,
+		Secure:   s.secureCookie(r),
 		SameSite: http.SameSiteLaxMode,
 	})
 }
 
-func clearSessionCookie(w http.ResponseWriter, r *http.Request) {
+func (s *Server) clearSessionCookie(w http.ResponseWriter, r *http.Request) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     sessionCookieName,
 		Value:    "",
@@ -52,9 +52,13 @@ func clearSessionCookie(w http.ResponseWriter, r *http.Request) {
 		Expires:  time.Unix(0, 0),
 		MaxAge:   -1,
 		HttpOnly: true,
-		Secure:   r.TLS != nil,
+		Secure:   s.secureCookie(r),
 		SameSite: http.SameSiteLaxMode,
 	})
+}
+
+func (s *Server) secureCookie(r *http.Request) bool {
+	return s.cookieSecure || r.TLS != nil
 }
 
 func (s *Server) loadSession(next http.Handler) http.Handler {
@@ -76,7 +80,7 @@ func (s *Server) loadSession(next http.Handler) http.Handler {
 
 		user, err := s.auth.UserBySessionToken(r.Context(), cookie.Value)
 		if errors.Is(err, services.ErrInvalidSession) {
-			clearSessionCookie(w, r)
+			s.clearSessionCookie(w, r)
 			next.ServeHTTP(w, r)
 			return
 		}

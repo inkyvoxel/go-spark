@@ -54,6 +54,16 @@ make migrate-status
 make tools
 ```
 
+## Frontend Assets
+
+PicoCSS and HTMX are vendored in:
+
+```text
+static/vendor
+```
+
+This keeps local development independent from CDN availability and makes runtime assets visible in the repository. When intentionally upgrading a vendored asset, replace the file in `static/vendor`, verify the app in a browser, and commit the asset change with the code that depends on it.
+
 ## Database Workflow
 
 The default database path is:

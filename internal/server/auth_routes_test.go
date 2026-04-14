@@ -56,6 +56,35 @@ func TestRoutesLogin(t *testing.T) {
 	}
 }
 
+func TestRoutesLoginSetsSecureSessionCookieWhenConfigured(t *testing.T) {
+	auth := &fakeAuthLookup{
+		user: db.User{ID: 1, Email: "user@example.com"},
+		loginSession: db.Session{
+			Token:     "session-token",
+			ExpiresAt: time.Now().Add(time.Hour),
+		},
+	}
+	srv := newAuthRouteTestServer(t, auth)
+	srv.cookieSecure = true
+
+	form := url.Values{
+		"email":       []string{"user@example.com"},
+		"password":    []string{"password"},
+		csrfFieldName: []string{"csrf"},
+	}
+	req := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: "csrf"})
+	rec := httptest.NewRecorder()
+
+	srv.Routes().ServeHTTP(rec, req)
+
+	session := cookieFromRecorder(t, rec, sessionCookieName)
+	if !session.Secure {
+		t.Fatal("session cookie Secure = false, want true")
+	}
+}
+
 func TestRoutesLoginRedirectsToSafeNextPath(t *testing.T) {
 	auth := &fakeAuthLookup{
 		user: db.User{ID: 1, Email: "user@example.com"},

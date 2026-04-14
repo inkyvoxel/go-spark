@@ -28,14 +28,18 @@ func main() {
 	defer db.Close()
 
 	app := server.New(server.Options{
-		Logger: logger,
-		DB:     db,
+		Logger:       logger,
+		DB:           db,
+		CookieSecure: cfg.CookieSecure,
 	})
 
 	httpServer := &http.Server{
 		Addr:              cfg.Addr,
 		Handler:           app.Routes(),
 		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       10 * time.Second,
+		WriteTimeout:      30 * time.Second,
+		IdleTimeout:       120 * time.Second,
 	}
 
 	errs := make(chan error, 1)

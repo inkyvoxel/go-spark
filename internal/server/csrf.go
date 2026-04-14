@@ -25,7 +25,7 @@ func (s *Server) csrf(next http.Handler) http.Handler {
 				http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 				return
 			}
-			setCSRFCookie(w, r, token)
+			s.setCSRFCookie(w, r, token)
 		}
 
 		if isUnsafeMethod(r.Method) && !validCSRFToken(token, csrfTokenFromRequest(r)) {
@@ -62,14 +62,14 @@ func validCSRFToken(cookieToken, requestToken string) bool {
 	return subtle.ConstantTimeCompare([]byte(cookieToken), []byte(requestToken)) == 1
 }
 
-func setCSRFCookie(w http.ResponseWriter, r *http.Request, token string) {
+func (s *Server) setCSRFCookie(w http.ResponseWriter, r *http.Request, token string) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     csrfCookieName,
 		Value:    token,
 		Path:     "/",
 		Expires:  time.Now().UTC().Add(24 * time.Hour),
 		HttpOnly: true,
-		Secure:   r.TLS != nil,
+		Secure:   s.secureCookie(r),
 		SameSite: http.SameSiteLaxMode,
 	})
 }

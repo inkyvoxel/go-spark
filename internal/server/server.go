@@ -12,15 +12,17 @@ import (
 )
 
 type Server struct {
-	db        *sql.DB
-	auth      authService
-	logger    *slog.Logger
-	templates map[string]*template.Template
+	db           *sql.DB
+	auth         authService
+	logger       *slog.Logger
+	templates    map[string]*template.Template
+	cookieSecure bool
 }
 
 type Options struct {
-	DB     *sql.DB
-	Logger *slog.Logger
+	DB           *sql.DB
+	Logger       *slog.Logger
+	CookieSecure bool
 }
 
 func New(opts Options) *Server {
@@ -30,10 +32,11 @@ func New(opts Options) *Server {
 	}
 
 	return &Server{
-		db:        opts.DB,
-		auth:      services.NewAuthService(db.New(opts.DB), services.AuthOptions{}),
-		logger:    logger,
-		templates: mustParseTemplates(),
+		db:           opts.DB,
+		auth:         services.NewAuthService(db.New(opts.DB), services.AuthOptions{}),
+		logger:       logger,
+		templates:    mustParseTemplates(),
+		cookieSecure: opts.CookieSecure,
 	}
 }
 

@@ -99,6 +99,7 @@ Before deploying an app based on this template:
 * Back up the SQLite database file.
 * Run migrations as part of deploy or a controlled release step.
 * Set file permissions so the app can read and write the database path, but does not expose it publicly.
+* Set `APP_COOKIE_SECURE=true` when the app is served over HTTPS by a reverse proxy or load balancer.
 * Add request timeouts and deployment-specific logging/metrics as the app grows.
 
 ## Replacing SQLite Later
