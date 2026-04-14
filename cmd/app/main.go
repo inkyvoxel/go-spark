@@ -28,9 +28,10 @@ func main() {
 	defer db.Close()
 
 	app := server.New(server.Options{
-		Logger:       logger,
-		DB:           db,
-		CookieSecure: cfg.CookieSecure,
+		Logger:            logger,
+		DB:                db,
+		CookieSecure:      cfg.CookieSecure,
+		PasswordMinLength: cfg.PasswordMinLength,
 	})
 
 	httpServer := &http.Server{

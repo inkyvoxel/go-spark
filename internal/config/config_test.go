@@ -7,6 +7,7 @@ func TestFromEnvUsesDefaults(t *testing.T) {
 	t.Setenv("APP_ENV", "")
 	t.Setenv("DATABASE_PATH", "")
 	t.Setenv("APP_COOKIE_SECURE", "")
+	t.Setenv("AUTH_PASSWORD_MIN_LENGTH", "")
 
 	cfg := FromEnv()
 
@@ -22,6 +23,9 @@ func TestFromEnvUsesDefaults(t *testing.T) {
 	if cfg.CookieSecure {
 		t.Fatal("CookieSecure = true, want false")
 	}
+	if cfg.PasswordMinLength != DefaultPasswordMinLength {
+		t.Fatalf("PasswordMinLength = %d, want %d", cfg.PasswordMinLength, DefaultPasswordMinLength)
+	}
 }
 
 func TestFromEnvUsesEnvironment(t *testing.T) {
@@ -29,6 +33,7 @@ func TestFromEnvUsesEnvironment(t *testing.T) {
 	t.Setenv("APP_ENV", "test")
 	t.Setenv("DATABASE_PATH", "/tmp/app-test.db")
 	t.Setenv("APP_COOKIE_SECURE", "true")
+	t.Setenv("AUTH_PASSWORD_MIN_LENGTH", "16")
 
 	cfg := FromEnv()
 
@@ -44,6 +49,9 @@ func TestFromEnvUsesEnvironment(t *testing.T) {
 	if !cfg.CookieSecure {
 		t.Fatal("CookieSecure = false, want true")
 	}
+	if cfg.PasswordMinLength != 16 {
+		t.Fatalf("PasswordMinLength = %d, want %d", cfg.PasswordMinLength, 16)
+	}
 }
 
 func TestFromEnvParsesCookieSecureBool(t *testing.T) {
@@ -53,5 +61,15 @@ func TestFromEnvParsesCookieSecureBool(t *testing.T) {
 
 	if !cfg.CookieSecure {
 		t.Fatal("CookieSecure = false, want true")
+	}
+}
+
+func TestFromEnvFallsBackForInvalidPasswordMinLength(t *testing.T) {
+	t.Setenv("AUTH_PASSWORD_MIN_LENGTH", "nope")
+
+	cfg := FromEnv()
+
+	if cfg.PasswordMinLength != DefaultPasswordMinLength {
+		t.Fatalf("PasswordMinLength = %d, want %d", cfg.PasswordMinLength, DefaultPasswordMinLength)
 	}
 }

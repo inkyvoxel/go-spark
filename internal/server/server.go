@@ -12,17 +12,19 @@ import (
 )
 
 type Server struct {
-	db           *sql.DB
-	auth         authService
-	logger       *slog.Logger
-	templates    map[string]*template.Template
-	cookieSecure bool
+	db                *sql.DB
+	auth              authService
+	logger            *slog.Logger
+	templates         map[string]*template.Template
+	cookieSecure      bool
+	passwordMinLength int
 }
 
 type Options struct {
-	DB           *sql.DB
-	Logger       *slog.Logger
-	CookieSecure bool
+	DB                *sql.DB
+	Logger            *slog.Logger
+	CookieSecure      bool
+	PasswordMinLength int
 }
 
 func New(opts Options) *Server {
@@ -31,12 +33,20 @@ func New(opts Options) *Server {
 		logger = slog.Default()
 	}
 
+	passwordMinLength := opts.PasswordMinLength
+	if passwordMinLength == 0 {
+		passwordMinLength = services.DefaultPasswordMinLength
+	}
+
 	return &Server{
-		db:           opts.DB,
-		auth:         services.NewAuthService(db.New(opts.DB), services.AuthOptions{}),
-		logger:       logger,
-		templates:    mustParseTemplates(),
-		cookieSecure: opts.CookieSecure,
+		db: opts.DB,
+		auth: services.NewAuthService(db.New(opts.DB), services.AuthOptions{
+			PasswordMinLen: passwordMinLength,
+		}),
+		logger:            logger,
+		templates:         mustParseTemplates(),
+		cookieSecure:      opts.CookieSecure,
+		passwordMinLength: passwordMinLength,
 	}
 }
 
@@ -92,7 +102,7 @@ func (s *Server) Routes() http.Handler {
 }
 
 func (s *Server) home(w http.ResponseWriter, r *http.Request) {
-	s.render(w, "home.html", newTemplateData(r, "Go Spark"))
+	s.render(w, "home.html", s.newTemplateData(r, "Go Spark"))
 }
 
 func (s *Server) health(w http.ResponseWriter, r *http.Request) {

@@ -4,24 +4,34 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
+	"unicode/utf8"
 
 	db "github.com/inkyvoxel/go-spark/internal/db/generated"
 	"github.com/inkyvoxel/go-spark/internal/services"
 )
 
+const emailPattern = `[^@\s]+@[^@\s]+\.[^@\s]+`
+
 type templateData struct {
-	Title         string
-	CSRFToken     string
-	Error         string
-	Next          string
-	Authenticated bool
-	User          db.User
+	Title             string
+	CSRFToken         string
+	Error             string
+	FieldErrors       map[string]string
+	Email             string
+	EmailPattern      string
+	Next              string
+	Authenticated     bool
+	User              db.User
+	PasswordMinLength int
 }
 
 func newTemplateData(r *http.Request, title string) templateData {
 	data := templateData{
-		Title:     title,
-		CSRFToken: csrfToken(r.Context()),
+		Title:             title,
+		CSRFToken:         csrfToken(r.Context()),
+		EmailPattern:      emailPattern,
+		PasswordMinLength: services.DefaultPasswordMinLength,
 	}
 	if user, ok := currentUser(r.Context()); ok {
 		data.Authenticated = true
@@ -31,7 +41,7 @@ func newTemplateData(r *http.Request, title string) templateData {
 }
 
 func (s *Server) registerForm(w http.ResponseWriter, r *http.Request) {
-	s.render(w, "register.html", newTemplateData(r, "Create Account"))
+	s.render(w, "register.html", s.newTemplateData(r, "Create Account"))
 }
 
 func (s *Server) register(w http.ResponseWriter, r *http.Request) {
@@ -42,15 +52,30 @@ func (s *Server) register(w http.ResponseWriter, r *http.Request) {
 
 	email := r.FormValue("email")
 	password := r.FormValue("password")
+	confirmPassword := r.FormValue("confirm_password")
+
+	if fieldErrors := s.validateRegistrationForm(email, password, confirmPassword); len(fieldErrors) > 0 {
+		data := s.newTemplateData(r, "Create Account")
+		data.Email = strings.TrimSpace(email)
+		data.Error = "Check your details and try again."
+		data.FieldErrors = fieldErrors
+		w.WriteHeader(http.StatusBadRequest)
+		s.render(w, "register.html", data)
+		return
+	}
 
 	if _, err := s.auth.Register(r.Context(), email, password); err != nil {
-		s.handleAuthFormError(w, "register.html", newTemplateData(r, "Create Account"), err)
+		data := s.newTemplateData(r, "Create Account")
+		data.Email = strings.TrimSpace(email)
+		s.handleAuthFormError(w, "register.html", data, err)
 		return
 	}
 
 	_, session, err := s.auth.Login(r.Context(), email, password)
 	if err != nil {
-		s.handleAuthFormError(w, "register.html", newTemplateData(r, "Create Account"), err)
+		data := s.newTemplateData(r, "Create Account")
+		data.Email = strings.TrimSpace(email)
+		s.handleAuthFormError(w, "register.html", data, err)
 		return
 	}
 
@@ -59,7 +84,7 @@ func (s *Server) register(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) loginForm(w http.ResponseWriter, r *http.Request) {
-	data := newTemplateData(r, "Sign In")
+	data := s.newTemplateData(r, "Sign In")
 	data.Next = safeRedirectPath(r.URL.Query().Get("next"))
 	s.render(w, "login.html", data)
 }
@@ -72,7 +97,8 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 
 	_, session, err := s.auth.Login(r.Context(), r.FormValue("email"), r.FormValue("password"))
 	if err != nil {
-		data := newTemplateData(r, "Sign In")
+		data := s.newTemplateData(r, "Sign In")
+		data.Email = strings.TrimSpace(r.FormValue("email"))
 		data.Next = safeRedirectPath(r.FormValue("next"))
 		s.handleAuthFormError(w, "login.html", data, err)
 		return
@@ -102,21 +128,71 @@ func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) account(w http.ResponseWriter, r *http.Request) {
-	s.render(w, "account.html", newTemplateData(r, "Account"))
+	s.render(w, "account.html", s.newTemplateData(r, "Account"))
 }
 
 func (s *Server) handleAuthFormError(w http.ResponseWriter, templateName string, data templateData, err error) {
-	if errors.Is(err, services.ErrInvalidEmail) ||
-		errors.Is(err, services.ErrInvalidPassword) ||
-		errors.Is(err, services.ErrInvalidCredentials) {
+	if errors.Is(err, services.ErrInvalidEmail) {
 		w.WriteHeader(http.StatusBadRequest)
 		data.Error = "Check your details and try again."
+		data.FieldErrors = map[string]string{"email": "Enter a valid email address."}
+		s.render(w, templateName, data)
+		return
+	}
+	if errors.Is(err, services.ErrInvalidPassword) {
+		w.WriteHeader(http.StatusBadRequest)
+		data.Error = "Check your details and try again."
+		data.FieldErrors = map[string]string{"password": fmt.Sprintf("Use at least %d characters.", data.PasswordMinLength)}
+		s.render(w, templateName, data)
+		return
+	}
+	if errors.Is(err, services.ErrEmailAlreadyRegistered) {
+		w.WriteHeader(http.StatusBadRequest)
+		data.Error = "Check your details and try again."
+		data.FieldErrors = map[string]string{"email": "An account with this email already exists."}
+		s.render(w, templateName, data)
+		return
+	}
+	if errors.Is(err, services.ErrInvalidCredentials) {
+		w.WriteHeader(http.StatusBadRequest)
+		data.Error = "Email or password is not correct."
 		s.render(w, templateName, data)
 		return
 	}
 
 	s.logger.Error("auth form", "err", err)
 	http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+}
+
+func (s *Server) validateRegistrationForm(email, password, confirmPassword string) map[string]string {
+	passwordMinLength := s.passwordMinLength
+	if passwordMinLength == 0 {
+		passwordMinLength = services.DefaultPasswordMinLength
+	}
+
+	fieldErrors := make(map[string]string)
+	if strings.TrimSpace(email) == "" {
+		fieldErrors["email"] = "Enter your email address."
+	}
+	if password == "" {
+		fieldErrors["password"] = "Enter a password."
+	} else if utf8.RuneCountInString(password) < passwordMinLength {
+		fieldErrors["password"] = fmt.Sprintf("Use at least %d characters.", passwordMinLength)
+	}
+	if confirmPassword == "" {
+		fieldErrors["confirm_password"] = "Confirm your password."
+	} else if password != confirmPassword {
+		fieldErrors["confirm_password"] = "Passwords do not match."
+	}
+	return fieldErrors
+}
+
+func (s *Server) newTemplateData(r *http.Request, title string) templateData {
+	data := newTemplateData(r, title)
+	if s.passwordMinLength > 0 {
+		data.PasswordMinLength = s.passwordMinLength
+	}
+	return data
 }
 
 func (s *Server) render(w http.ResponseWriter, templateName string, data templateData) {

@@ -60,8 +60,25 @@ func TestAuthServiceRegisterValidatesInput(t *testing.T) {
 	if _, err := service.Register(context.Background(), "not-an-email", "password"); !errors.Is(err, ErrInvalidEmail) {
 		t.Fatalf("Register() error = %v, want %v", err, ErrInvalidEmail)
 	}
+	if _, err := service.Register(context.Background(), "test@example", "password"); !errors.Is(err, ErrInvalidEmail) {
+		t.Fatalf("Register() error = %v, want %v", err, ErrInvalidEmail)
+	}
 	if _, err := service.Register(context.Background(), "user@example.com", ""); !errors.Is(err, ErrInvalidPassword) {
 		t.Fatalf("Register() error = %v, want %v", err, ErrInvalidPassword)
+	}
+	if _, err := service.Register(context.Background(), "user@example.com", "short"); !errors.Is(err, ErrInvalidPassword) {
+		t.Fatalf("Register() error = %v, want %v", err, ErrInvalidPassword)
+	}
+}
+
+func TestAuthServiceRegisterRejectsDuplicateEmail(t *testing.T) {
+	service := newTestAuthService(t)
+
+	if _, err := service.Register(context.Background(), "user@example.com", "password"); err != nil {
+		t.Fatalf("Register() error = %v", err)
+	}
+	if _, err := service.Register(context.Background(), "USER@example.com", "password"); !errors.Is(err, ErrEmailAlreadyRegistered) {
+		t.Fatalf("Register() error = %v, want %v", err, ErrEmailAlreadyRegistered)
 	}
 }
 
@@ -159,5 +176,6 @@ func newTestAuthService(t *testing.T) *AuthService {
 	return NewAuthService(db.New(conn), AuthOptions{
 		SessionDuration: time.Hour,
 		BcryptCost:      bcrypt.MinCost,
+		PasswordMinLen:  8,
 	})
 }

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	db "github.com/inkyvoxel/go-spark/internal/db/generated"
+	"github.com/inkyvoxel/go-spark/internal/services"
 
 	_ "modernc.org/sqlite"
 )
@@ -210,9 +211,10 @@ func TestRoutesRegister(t *testing.T) {
 	srv := newAuthRouteTestServer(t, auth)
 
 	form := url.Values{
-		"email":       []string{"new@example.com"},
-		"password":    []string{"password"},
-		csrfFieldName: []string{"csrf"},
+		"email":            []string{"new@example.com"},
+		"password":         []string{"password"},
+		"confirm_password": []string{"password"},
+		csrfFieldName:      []string{"csrf"},
 	}
 	req := httptest.NewRequest(http.MethodPost, "/register", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -233,6 +235,90 @@ func TestRoutesRegister(t *testing.T) {
 	session := cookieFromRecorder(t, rec, sessionCookieName)
 	if session.Value != "new-session-token" {
 		t.Fatalf("session cookie = %q, want %q", session.Value, "new-session-token")
+	}
+}
+
+func TestRoutesRegisterRejectsMismatchedPasswordConfirmation(t *testing.T) {
+	auth := &fakeAuthLookup{}
+	srv := newAuthRouteTestServer(t, auth)
+
+	form := url.Values{
+		"email":            []string{"new@example.com"},
+		"password":         []string{"password"},
+		"confirm_password": []string{"different"},
+		csrfFieldName:      []string{"csrf"},
+	}
+	req := httptest.NewRequest(http.MethodPost, "/register", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: "csrf"})
+	rec := httptest.NewRecorder()
+
+	srv.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+	}
+	if auth.registered {
+		t.Fatal("Register() was called")
+	}
+	if !strings.Contains(rec.Body.String(), "Passwords do not match.") {
+		t.Fatalf("body = %q, want confirmation error", rec.Body.String())
+	}
+}
+
+func TestRoutesRegisterValidatesRequiredFields(t *testing.T) {
+	auth := &fakeAuthLookup{}
+	srv := newAuthRouteTestServer(t, auth)
+
+	form := url.Values{csrfFieldName: []string{"csrf"}}
+	req := httptest.NewRequest(http.MethodPost, "/register", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: "csrf"})
+	rec := httptest.NewRecorder()
+
+	srv.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+	}
+	if auth.registered {
+		t.Fatal("Register() was called")
+	}
+	body := rec.Body.String()
+	for _, want := range []string{"Enter your email address.", "Enter a password.", "Confirm your password."} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("body = %q, want %q", body, want)
+		}
+	}
+}
+
+func TestRoutesRegisterShowsServiceValidationErrors(t *testing.T) {
+	auth := &fakeAuthLookup{
+		registerErr: services.ErrEmailAlreadyRegistered,
+	}
+	srv := newAuthRouteTestServer(t, auth)
+
+	form := url.Values{
+		"email":            []string{"new@example.com"},
+		"password":         []string{"password"},
+		"confirm_password": []string{"password"},
+		csrfFieldName:      []string{"csrf"},
+	}
+	req := httptest.NewRequest(http.MethodPost, "/register", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: "csrf"})
+	rec := httptest.NewRecorder()
+
+	srv.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+	}
+	if !strings.Contains(rec.Body.String(), "An account with this email already exists.") {
+		t.Fatalf("body = %q, want duplicate email error", rec.Body.String())
+	}
+	if strings.Contains(rec.Body.String(), http.StatusText(http.StatusInternalServerError)) {
+		t.Fatalf("body = %q, want validation error instead of internal server error", rec.Body.String())
 	}
 }
 
@@ -364,10 +450,11 @@ func newAuthRouteTestServer(t *testing.T, auth authService) *Server {
 		logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
 		templates: testTemplates(t, map[string]string{
 			"home.html":     `home {{ if .Authenticated }}Account Sign out {{ .User.Email }}{{ else }}Sign in Create account{{ end }}`,
-			"register.html": `register {{ .Error }} {{ .CSRFToken }}`,
+			"register.html": `register {{ .Error }} {{ with index .FieldErrors "email" }}{{ . }}{{ end }} {{ with index .FieldErrors "password" }}{{ . }}{{ end }} {{ with index .FieldErrors "confirm_password" }}{{ . }}{{ end }} {{ .Email }} {{ .PasswordMinLength }} {{ .CSRFToken }}`,
 			"login.html":    `login {{ .Error }} {{ .CSRFToken }} {{ .Next }}`,
 			"account.html":  `account {{ .User.Email }} {{ .CSRFToken }}`,
 		}),
+		passwordMinLength: 8,
 	}
 }
 

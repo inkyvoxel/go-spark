@@ -6,11 +6,37 @@
     <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
     <label>
       Email
-      <input type="email" name="email" autocomplete="email" required>
+      <input
+        type="email"
+        name="email"
+        value="{{ .Email }}"
+        autocomplete="email"
+        pattern="{{ .EmailPattern }}"
+        aria-invalid="{{ if index .FieldErrors "email" }}true{{ else }}false{{ end }}"
+        required>
+      {{ with index .FieldErrors "email" }}<small role="alert">{{ . }}</small>{{ end }}
     </label>
     <label>
       Password
-      <input type="password" name="password" autocomplete="new-password" required>
+      <input
+        type="password"
+        name="password"
+        autocomplete="new-password"
+        minlength="{{ .PasswordMinLength }}"
+        aria-invalid="{{ if index .FieldErrors "password" }}true{{ else }}false{{ end }}"
+        required>
+      {{ with index .FieldErrors "password" }}<small role="alert">{{ . }}</small>{{ end }}
+    </label>
+    <label>
+      Confirm password
+      <input
+        type="password"
+        name="confirm_password"
+        autocomplete="new-password"
+        minlength="{{ .PasswordMinLength }}"
+        aria-invalid="{{ if index .FieldErrors "confirm_password" }}true{{ else }}false{{ end }}"
+        required>
+      {{ with index .FieldErrors "confirm_password" }}<small role="alert">{{ . }}</small>{{ end }}
     </label>
     <button type="submit">Create account</button>
   </form>

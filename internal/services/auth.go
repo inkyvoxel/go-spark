@@ -7,19 +7,26 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"net/mail"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	db "github.com/inkyvoxel/go-spark/internal/db/generated"
 
 	"golang.org/x/crypto/bcrypt"
+	"modernc.org/sqlite"
+	sqlite3 "modernc.org/sqlite/lib"
 )
 
+const DefaultPasswordMinLength = 12
+
 var (
-	ErrInvalidCredentials = errors.New("invalid credentials")
-	ErrInvalidEmail       = errors.New("invalid email")
-	ErrInvalidPassword    = errors.New("invalid password")
-	ErrInvalidSession     = errors.New("invalid session")
+	ErrEmailAlreadyRegistered = errors.New("email already registered")
+	ErrInvalidCredentials     = errors.New("invalid credentials")
+	ErrInvalidEmail           = errors.New("invalid email")
+	ErrInvalidPassword        = errors.New("invalid password")
+	ErrInvalidSession         = errors.New("invalid session")
 )
 
 type AuthService struct {
@@ -27,12 +34,14 @@ type AuthService struct {
 	sessionDuration time.Duration
 	bcryptCost      int
 	tokenBytes      int
+	passwordMinLen  int
 }
 
 type AuthOptions struct {
 	SessionDuration time.Duration
 	BcryptCost      int
 	TokenBytes      int
+	PasswordMinLen  int
 }
 
 func NewAuthService(queries *db.Queries, opts AuthOptions) *AuthService {
@@ -51,20 +60,26 @@ func NewAuthService(queries *db.Queries, opts AuthOptions) *AuthService {
 		tokenBytes = 32
 	}
 
+	passwordMinLen := opts.PasswordMinLen
+	if passwordMinLen == 0 {
+		passwordMinLen = DefaultPasswordMinLength
+	}
+
 	return &AuthService{
 		queries:         queries,
 		sessionDuration: sessionDuration,
 		bcryptCost:      bcryptCost,
 		tokenBytes:      tokenBytes,
+		passwordMinLen:  passwordMinLen,
 	}
 }
 
 func (s *AuthService) Register(ctx context.Context, email, password string) (db.User, error) {
 	email = normalizeEmail(email)
-	if email == "" || !strings.Contains(email, "@") {
+	if !isValidEmail(email) {
 		return db.User{}, ErrInvalidEmail
 	}
-	if password == "" {
+	if utf8.RuneCountInString(password) < s.passwordMinLen {
 		return db.User{}, ErrInvalidPassword
 	}
 
@@ -78,6 +93,9 @@ func (s *AuthService) Register(ctx context.Context, email, password string) (db.
 		PasswordHash: string(hash),
 	})
 	if err != nil {
+		if isUniqueConstraintError(err) {
+			return db.User{}, ErrEmailAlreadyRegistered
+		}
 		return db.User{}, fmt.Errorf("create user: %w", err)
 	}
 
@@ -154,6 +172,54 @@ func (s *AuthService) DeleteExpiredSessions(ctx context.Context) error {
 
 func normalizeEmail(email string) string {
 	return strings.ToLower(strings.TrimSpace(email))
+}
+
+func isValidEmail(email string) bool {
+	if len(email) > 254 {
+		return false
+	}
+
+	address, err := mail.ParseAddress(email)
+	if err != nil || address.Name != "" || address.Address != email {
+		return false
+	}
+
+	local, domain, ok := strings.Cut(email, "@")
+	if !ok || local == "" || domain == "" || len(local) > 64 {
+		return false
+	}
+
+	labels := strings.Split(domain, ".")
+	if len(labels) < 2 {
+		return false
+	}
+
+	for _, label := range labels {
+		if label == "" || len(label) > 63 || strings.HasPrefix(label, "-") || strings.HasSuffix(label, "-") {
+			return false
+		}
+		for _, r := range label {
+			if (r < 'a' || r > 'z') && (r < '0' || r > '9') && r != '-' {
+				return false
+			}
+		}
+	}
+
+	tld := labels[len(labels)-1]
+	if len(tld) < 2 {
+		return false
+	}
+	for _, r := range tld {
+		if r >= 'a' && r <= 'z' {
+			return true
+		}
+	}
+	return false
+}
+
+func isUniqueConstraintError(err error) bool {
+	var sqliteErr *sqlite.Error
+	return errors.As(err, &sqliteErr) && sqliteErr.Code() == sqlite3.SQLITE_CONSTRAINT_UNIQUE
 }
 
 func generateToken(bytes int) (string, error) {
