@@ -55,4 +55,4 @@ Commit generated changes when they are expected.
 
 Do not open public issues with secrets, private keys, tokens, production database files, or sensitive user data.
 
-If a vulnerability reporting process is added later, this section should point to it.
+See [SECURITY.md](SECURITY.md) for vulnerability reporting guidance.
