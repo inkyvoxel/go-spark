@@ -6,6 +6,8 @@ The default shape is intentionally simple: Go, `net/http`, `html/template`, Pico
 
 It includes a runnable app, SQLite setup, migrations, generated SQL code, CSRF protection, and basic email/password session authentication.
 
+Frontend assets are vendored under `static/vendor` so the starter works without runtime CDN dependencies.
+
 ## Tech Stack
 
 * Go
