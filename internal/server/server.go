@@ -69,26 +69,26 @@ func parseTemplates() (map[string]*template.Template, error) {
 
 func (s *Server) Routes() http.Handler {
 	mux := http.NewServeMux()
+	dynamic := http.NewServeMux()
 
 	mux.Handle("GET /static/", http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))
 	mux.HandleFunc("GET /healthz", s.health)
-	mux.HandleFunc("GET /register", s.registerForm)
-	mux.HandleFunc("POST /register", s.register)
-	mux.HandleFunc("GET /login", s.loginForm)
-	mux.HandleFunc("POST /login", s.login)
-	mux.HandleFunc("POST /logout", s.logout)
-	mux.Handle("GET /account", s.requireAuth(http.HandlerFunc(s.account)))
-	mux.HandleFunc("GET /", s.home)
 
-	return s.logRequests(s.csrf(mux))
+	dynamic.HandleFunc("GET /register", s.registerForm)
+	dynamic.HandleFunc("POST /register", s.register)
+	dynamic.HandleFunc("GET /login", s.loginForm)
+	dynamic.HandleFunc("POST /login", s.login)
+	dynamic.HandleFunc("POST /logout", s.logout)
+	dynamic.Handle("GET /account", s.requireAuth(http.HandlerFunc(s.account)))
+	dynamic.HandleFunc("GET /", s.home)
+
+	mux.Handle("/", s.csrf(s.loadSession(dynamic)))
+
+	return s.logRequests(mux)
 }
 
 func (s *Server) home(w http.ResponseWriter, r *http.Request) {
-	data := templateData{
-		Title: "Go Spark",
-	}
-
-	s.render(w, "home.html", data)
+	s.render(w, "home.html", newTemplateData(r, "Go Spark"))
 }
 
 func (s *Server) health(w http.ResponseWriter, r *http.Request) {

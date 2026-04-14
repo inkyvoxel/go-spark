@@ -118,6 +118,53 @@ func TestRoutesLogout(t *testing.T) {
 	}
 }
 
+func TestRoutesHomeShowsAnonymousNav(t *testing.T) {
+	srv := newAuthRouteTestServer(t, &fakeAuthLookup{})
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+
+	srv.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, "Sign in") || !strings.Contains(body, "Create account") {
+		t.Fatalf("body = %q, want anonymous nav", body)
+	}
+	if strings.Contains(body, "Sign out") {
+		t.Fatalf("body = %q, want it not to contain signed-in nav", body)
+	}
+}
+
+func TestRoutesHomeShowsAuthenticatedNav(t *testing.T) {
+	auth := &fakeAuthLookup{
+		user: db.User{ID: 1, Email: "user@example.com"},
+	}
+	srv := newAuthRouteTestServer(t, auth)
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.AddCookie(&http.Cookie{Name: sessionCookieName, Value: "session-token"})
+	rec := httptest.NewRecorder()
+
+	srv.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, "Account") || !strings.Contains(body, "Sign out") {
+		t.Fatalf("body = %q, want signed-in nav", body)
+	}
+	if strings.Contains(body, "Create account") {
+		t.Fatalf("body = %q, want it not to contain anonymous nav", body)
+	}
+	if auth.token != "session-token" {
+		t.Fatalf("session lookup token = %q, want %q", auth.token, "session-token")
+	}
+}
+
 func TestRoutesAccountRequiresAuth(t *testing.T) {
 	auth := &fakeAuthLookup{
 		user: db.User{ID: 1, Email: "user@example.com"},
@@ -170,7 +217,7 @@ func newAuthRouteTestServer(t *testing.T, auth authService) *Server {
 		auth:   auth,
 		logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
 		templates: testTemplates(t, map[string]string{
-			"home.html":     `home`,
+			"home.html":     `home {{ if .User.Email }}Account Sign out {{ .User.Email }}{{ else }}Sign in Create account{{ end }}`,
 			"register.html": `register {{ .Error }} {{ .CSRFToken }}`,
 			"login.html":    `login {{ .Error }} {{ .CSRFToken }}`,
 			"account.html":  `account {{ .User.Email }} {{ .CSRFToken }}`,

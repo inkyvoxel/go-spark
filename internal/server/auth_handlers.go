@@ -16,11 +16,19 @@ type templateData struct {
 	User      db.User
 }
 
-func (s *Server) registerForm(w http.ResponseWriter, r *http.Request) {
-	s.render(w, "register.html", templateData{
-		Title:     "Create Account",
+func newTemplateData(r *http.Request, title string) templateData {
+	data := templateData{
+		Title:     title,
 		CSRFToken: csrfToken(r.Context()),
-	})
+	}
+	if user, ok := currentUser(r.Context()); ok {
+		data.User = user
+	}
+	return data
+}
+
+func (s *Server) registerForm(w http.ResponseWriter, r *http.Request) {
+	s.render(w, "register.html", newTemplateData(r, "Create Account"))
 }
 
 func (s *Server) register(w http.ResponseWriter, r *http.Request) {
@@ -48,10 +56,7 @@ func (s *Server) register(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) loginForm(w http.ResponseWriter, r *http.Request) {
-	s.render(w, "login.html", templateData{
-		Title:     "Sign In",
-		CSRFToken: csrfToken(r.Context()),
-	})
+	s.render(w, "login.html", newTemplateData(r, "Sign In"))
 }
 
 func (s *Server) login(w http.ResponseWriter, r *http.Request) {
@@ -85,17 +90,7 @@ func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) account(w http.ResponseWriter, r *http.Request) {
-	user, ok := currentUser(r.Context())
-	if !ok {
-		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-		return
-	}
-
-	s.render(w, "account.html", templateData{
-		Title:     "Account",
-		CSRFToken: csrfToken(r.Context()),
-		User:      user,
-	})
+	s.render(w, "account.html", newTemplateData(r, "Account"))
 }
 
 func (s *Server) handleAuthFormError(w http.ResponseWriter, r *http.Request, templateName, title string, err error) {
@@ -103,11 +98,9 @@ func (s *Server) handleAuthFormError(w http.ResponseWriter, r *http.Request, tem
 		errors.Is(err, services.ErrInvalidPassword) ||
 		errors.Is(err, services.ErrInvalidCredentials) {
 		w.WriteHeader(http.StatusBadRequest)
-		s.render(w, templateName, templateData{
-			Title:     title,
-			CSRFToken: csrfToken(r.Context()),
-			Error:     "Check your details and try again.",
-		})
+		data := newTemplateData(r, title)
+		data.Error = "Check your details and try again."
+		s.render(w, templateName, data)
 		return
 	}
 

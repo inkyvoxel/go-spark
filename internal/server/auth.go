@@ -55,17 +55,16 @@ func clearSessionCookie(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (s *Server) requireAuth(next http.Handler) http.Handler {
+func (s *Server) loadSession(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if s.auth == nil {
-			s.logger.Error("auth service is not configured")
-			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+			next.ServeHTTP(w, r)
 			return
 		}
 
 		cookie, err := r.Cookie(sessionCookieName)
 		if errors.Is(err, http.ErrNoCookie) {
-			http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+			next.ServeHTTP(w, r)
 			return
 		}
 		if err != nil {
@@ -75,7 +74,8 @@ func (s *Server) requireAuth(next http.Handler) http.Handler {
 
 		user, err := s.auth.UserBySessionToken(r.Context(), cookie.Value)
 		if errors.Is(err, services.ErrInvalidSession) {
-			http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+			clearSessionCookie(w, r)
+			next.ServeHTTP(w, r)
 			return
 		}
 		if err != nil {
@@ -85,5 +85,16 @@ func (s *Server) requireAuth(next http.Handler) http.Handler {
 		}
 
 		next.ServeHTTP(w, r.WithContext(contextWithUser(r.Context(), user)))
+	})
+}
+
+func (s *Server) requireAuth(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if _, ok := currentUser(r.Context()); !ok {
+			http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+			return
+		}
+
+		next.ServeHTTP(w, r)
 	})
 }
