@@ -13,6 +13,7 @@ type templateData struct {
 	Title     string
 	CSRFToken string
 	Error     string
+	Next      string
 	User      db.User
 }
 
@@ -41,13 +42,13 @@ func (s *Server) register(w http.ResponseWriter, r *http.Request) {
 	password := r.FormValue("password")
 
 	if _, err := s.auth.Register(r.Context(), email, password); err != nil {
-		s.handleAuthFormError(w, r, "register.html", "Create Account", err)
+		s.handleAuthFormError(w, "register.html", newTemplateData(r, "Create Account"), err)
 		return
 	}
 
 	_, session, err := s.auth.Login(r.Context(), email, password)
 	if err != nil {
-		s.handleAuthFormError(w, r, "register.html", "Create Account", err)
+		s.handleAuthFormError(w, "register.html", newTemplateData(r, "Create Account"), err)
 		return
 	}
 
@@ -56,7 +57,9 @@ func (s *Server) register(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) loginForm(w http.ResponseWriter, r *http.Request) {
-	s.render(w, "login.html", newTemplateData(r, "Sign In"))
+	data := newTemplateData(r, "Sign In")
+	data.Next = safeRedirectPath(r.URL.Query().Get("next"))
+	s.render(w, "login.html", data)
 }
 
 func (s *Server) login(w http.ResponseWriter, r *http.Request) {
@@ -67,12 +70,19 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 
 	_, session, err := s.auth.Login(r.Context(), r.FormValue("email"), r.FormValue("password"))
 	if err != nil {
-		s.handleAuthFormError(w, r, "login.html", "Sign In", err)
+		data := newTemplateData(r, "Sign In")
+		data.Next = safeRedirectPath(r.FormValue("next"))
+		s.handleAuthFormError(w, "login.html", data, err)
 		return
 	}
 
+	next := safeRedirectPath(r.FormValue("next"))
+	if next == "" {
+		next = "/account"
+	}
+
 	setSessionCookie(w, r, session)
-	http.Redirect(w, r, "/account", http.StatusSeeOther)
+	http.Redirect(w, r, next, http.StatusSeeOther)
 }
 
 func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
@@ -93,12 +103,11 @@ func (s *Server) account(w http.ResponseWriter, r *http.Request) {
 	s.render(w, "account.html", newTemplateData(r, "Account"))
 }
 
-func (s *Server) handleAuthFormError(w http.ResponseWriter, r *http.Request, templateName, title string, err error) {
+func (s *Server) handleAuthFormError(w http.ResponseWriter, templateName string, data templateData, err error) {
 	if errors.Is(err, services.ErrInvalidEmail) ||
 		errors.Is(err, services.ErrInvalidPassword) ||
 		errors.Is(err, services.ErrInvalidCredentials) {
 		w.WriteHeader(http.StatusBadRequest)
-		data := newTemplateData(r, title)
 		data.Error = "Check your details and try again."
 		s.render(w, templateName, data)
 		return

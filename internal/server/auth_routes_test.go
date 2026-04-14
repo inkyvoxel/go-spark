@@ -56,6 +56,120 @@ func TestRoutesLogin(t *testing.T) {
 	}
 }
 
+func TestRoutesLoginRedirectsToSafeNextPath(t *testing.T) {
+	auth := &fakeAuthLookup{
+		user: db.User{ID: 1, Email: "user@example.com"},
+		loginSession: db.Session{
+			Token:     "session-token",
+			ExpiresAt: time.Now().Add(time.Hour),
+		},
+	}
+	srv := newAuthRouteTestServer(t, auth)
+
+	form := url.Values{
+		"email":       []string{"user@example.com"},
+		"password":    []string{"password"},
+		"next":        []string{"/dashboard?tab=home"},
+		csrfFieldName: []string{"csrf"},
+	}
+	req := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: "csrf"})
+	rec := httptest.NewRecorder()
+
+	srv.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusSeeOther)
+	}
+	if location := rec.Header().Get("Location"); location != "/dashboard?tab=home" {
+		t.Fatalf("Location = %q, want %q", location, "/dashboard?tab=home")
+	}
+}
+
+func TestRoutesLoginRejectsUnsafeNextPath(t *testing.T) {
+	auth := &fakeAuthLookup{
+		user: db.User{ID: 1, Email: "user@example.com"},
+		loginSession: db.Session{
+			Token:     "session-token",
+			ExpiresAt: time.Now().Add(time.Hour),
+		},
+	}
+	srv := newAuthRouteTestServer(t, auth)
+
+	form := url.Values{
+		"email":       []string{"user@example.com"},
+		"password":    []string{"password"},
+		"next":        []string{"https://evil.example"},
+		csrfFieldName: []string{"csrf"},
+	}
+	req := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: "csrf"})
+	rec := httptest.NewRecorder()
+
+	srv.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusSeeOther)
+	}
+	if location := rec.Header().Get("Location"); location != "/account" {
+		t.Fatalf("Location = %q, want %q", location, "/account")
+	}
+}
+
+func TestRoutesLoginFormIncludesSafeNextPath(t *testing.T) {
+	srv := newAuthRouteTestServer(t, &fakeAuthLookup{})
+
+	req := httptest.NewRequest(http.MethodGet, "/login?next=%2Faccount", nil)
+	rec := httptest.NewRecorder()
+
+	srv.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	if !strings.Contains(rec.Body.String(), "/account") {
+		t.Fatalf("body = %q, want safe next path", rec.Body.String())
+	}
+}
+
+func TestRoutesLoginFormOmitsUnsafeNextPath(t *testing.T) {
+	srv := newAuthRouteTestServer(t, &fakeAuthLookup{})
+
+	req := httptest.NewRequest(http.MethodGet, "/login?next=https%3A%2F%2Fevil.example", nil)
+	rec := httptest.NewRecorder()
+
+	srv.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	if strings.Contains(rec.Body.String(), "evil.example") {
+		t.Fatalf("body = %q, want unsafe next path omitted", rec.Body.String())
+	}
+}
+
+func TestRoutesLoginRedirectsAuthenticatedUserToAccount(t *testing.T) {
+	auth := &fakeAuthLookup{
+		user: db.User{ID: 1, Email: "user@example.com"},
+	}
+	srv := newAuthRouteTestServer(t, auth)
+
+	req := httptest.NewRequest(http.MethodGet, "/login", nil)
+	req.AddCookie(&http.Cookie{Name: sessionCookieName, Value: "session-token"})
+	rec := httptest.NewRecorder()
+
+	srv.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusSeeOther)
+	}
+	if location := rec.Header().Get("Location"); location != "/account" {
+		t.Fatalf("Location = %q, want %q", location, "/account")
+	}
+}
+
 func TestRoutesRegister(t *testing.T) {
 	auth := &fakeAuthLookup{
 		user: db.User{ID: 1, Email: "new@example.com"},
@@ -196,8 +310,11 @@ func TestRoutesAccountRejectsAnonymousUser(t *testing.T) {
 
 	srv.Routes().ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusUnauthorized {
-		t.Fatalf("status = %d, want %d", rec.Code, http.StatusUnauthorized)
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusSeeOther)
+	}
+	if location := rec.Header().Get("Location"); location != "/login?next=%2Faccount" {
+		t.Fatalf("Location = %q, want %q", location, "/login?next=%2Faccount")
 	}
 }
 
@@ -219,7 +336,7 @@ func newAuthRouteTestServer(t *testing.T, auth authService) *Server {
 		templates: testTemplates(t, map[string]string{
 			"home.html":     `home {{ if .User.Email }}Account Sign out {{ .User.Email }}{{ else }}Sign in Create account{{ end }}`,
 			"register.html": `register {{ .Error }} {{ .CSRFToken }}`,
-			"login.html":    `login {{ .Error }} {{ .CSRFToken }}`,
+			"login.html":    `login {{ .Error }} {{ .CSRFToken }} {{ .Next }}`,
 			"account.html":  `account {{ .User.Email }} {{ .CSRFToken }}`,
 		}),
 	}

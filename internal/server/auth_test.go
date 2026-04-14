@@ -125,7 +125,7 @@ func TestRequireAuthAllowsCurrentUser(t *testing.T) {
 func TestRequireAuthRejectsMissingCurrentUser(t *testing.T) {
 	srv := newAuthMiddlewareTestServer(&fakeAuthLookup{})
 
-	req := httptest.NewRequest(http.MethodGet, "/private", nil)
+	req := httptest.NewRequest(http.MethodPost, "/private", nil)
 	rec := httptest.NewRecorder()
 
 	srv.requireAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -134,6 +134,83 @@ func TestRequireAuthRejectsMissingCurrentUser(t *testing.T) {
 
 	if rec.Code != http.StatusUnauthorized {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusUnauthorized)
+	}
+}
+
+func TestRequireAuthRedirectsAnonymousGETToLogin(t *testing.T) {
+	srv := newAuthMiddlewareTestServer(&fakeAuthLookup{})
+
+	req := httptest.NewRequest(http.MethodGet, "/private?tab=one", nil)
+	rec := httptest.NewRecorder()
+
+	srv.requireAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatal("next handler should not run")
+	})).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusSeeOther)
+	}
+	if location := rec.Header().Get("Location"); location != "/login?next=%2Fprivate%3Ftab%3Done" {
+		t.Fatalf("Location = %q, want %q", location, "/login?next=%2Fprivate%3Ftab%3Done")
+	}
+}
+
+func TestRequireAnonymousRedirectsCurrentUserToAccount(t *testing.T) {
+	srv := newAuthMiddlewareTestServer(&fakeAuthLookup{})
+
+	req := httptest.NewRequest(http.MethodGet, "/login", nil)
+	req = req.WithContext(contextWithUser(req.Context(), db.User{ID: 42, Email: "user@example.com"}))
+	rec := httptest.NewRecorder()
+
+	srv.requireAnonymous(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatal("next handler should not run")
+	})).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusSeeOther)
+	}
+	if location := rec.Header().Get("Location"); location != "/account" {
+		t.Fatalf("Location = %q, want %q", location, "/account")
+	}
+}
+
+func TestRequireAnonymousAllowsAnonymousUser(t *testing.T) {
+	srv := newAuthMiddlewareTestServer(&fakeAuthLookup{})
+
+	req := httptest.NewRequest(http.MethodGet, "/login", nil)
+	rec := httptest.NewRecorder()
+
+	srv.requireAnonymous(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	})).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusNoContent)
+	}
+}
+
+func TestSafeRedirectPath(t *testing.T) {
+	tests := []struct {
+		name  string
+		value string
+		want  string
+	}{
+		{name: "path", value: "/account", want: "/account"},
+		{name: "path with query", value: "/account?tab=profile", want: "/account?tab=profile"},
+		{name: "absolute URL", value: "https://evil.example/account", want: ""},
+		{name: "protocol relative URL", value: "//evil.example/account", want: ""},
+		{name: "missing leading slash", value: "account", want: ""},
+		{name: "backslash prefix", value: `\evil.example`, want: ""},
+		{name: "slash backslash prefix", value: `/\evil.example`, want: ""},
+		{name: "backslash in path", value: `/account\evil`, want: ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := safeRedirectPath(tt.value); got != tt.want {
+				t.Fatalf("safeRedirectPath(%q) = %q, want %q", tt.value, got, tt.want)
+			}
+		})
 	}
 }
 

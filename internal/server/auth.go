@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"net/url"
+	"strings"
 	"time"
 
 	db "github.com/inkyvoxel/go-spark/internal/db/generated"
@@ -91,10 +93,59 @@ func (s *Server) loadSession(next http.Handler) http.Handler {
 func (s *Server) requireAuth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if _, ok := currentUser(r.Context()); !ok {
+			if r.Method == http.MethodGet {
+				redirectToLogin(w, r)
+				return
+			}
 			http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
 			return
 		}
 
 		next.ServeHTTP(w, r)
 	})
+}
+
+func (s *Server) requireAnonymous(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if _, ok := currentUser(r.Context()); ok {
+			http.Redirect(w, r, "/account", http.StatusSeeOther)
+			return
+		}
+
+		next.ServeHTTP(w, r)
+	})
+}
+
+func redirectToLogin(w http.ResponseWriter, r *http.Request) {
+	loginURL := "/login"
+	next := safeRedirectPath(r.URL.RequestURI())
+	if next != "" {
+		loginURL += "?next=" + url.QueryEscape(next)
+	}
+	http.Redirect(w, r, loginURL, http.StatusSeeOther)
+}
+
+func safeRedirectPath(value string) string {
+	if value == "" {
+		return ""
+	}
+	if strings.HasPrefix(value, `\`) || strings.HasPrefix(value, `/\`) {
+		return ""
+	}
+
+	u, err := url.Parse(value)
+	if err != nil {
+		return ""
+	}
+	if u.IsAbs() || u.Host != "" {
+		return ""
+	}
+	if !strings.HasPrefix(u.Path, "/") || strings.HasPrefix(u.Path, "//") {
+		return ""
+	}
+	if strings.Contains(u.Path, `\`) {
+		return ""
+	}
+
+	return u.RequestURI()
 }

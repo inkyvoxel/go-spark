@@ -74,11 +74,12 @@ func (s *Server) Routes() http.Handler {
 	mux.Handle("GET /static/", http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))
 	mux.HandleFunc("GET /healthz", s.health)
 
-	dynamic.HandleFunc("GET /register", s.registerForm)
-	dynamic.HandleFunc("POST /register", s.register)
-	dynamic.HandleFunc("GET /login", s.loginForm)
-	dynamic.HandleFunc("POST /login", s.login)
-	dynamic.HandleFunc("POST /logout", s.logout)
+	// Register new protected pages with requireAuth and anonymous-only pages with requireAnonymous.
+	dynamic.Handle("GET /register", s.requireAnonymous(http.HandlerFunc(s.registerForm)))
+	dynamic.Handle("POST /register", s.requireAnonymous(http.HandlerFunc(s.register)))
+	dynamic.Handle("GET /login", s.requireAnonymous(http.HandlerFunc(s.loginForm)))
+	dynamic.Handle("POST /login", s.requireAnonymous(http.HandlerFunc(s.login)))
+	dynamic.Handle("POST /logout", s.requireAuth(http.HandlerFunc(s.logout)))
 	dynamic.Handle("GET /account", s.requireAuth(http.HandlerFunc(s.account)))
 	dynamic.HandleFunc("GET /", s.home)
 

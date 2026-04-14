@@ -247,6 +247,25 @@ On each request:
 
 Handlers should not handle auth logic directly.
 
+### Route Auth Policies
+
+Routes should express their auth policy at registration time:
+
+```go
+dynamic.Handle("GET /dashboard", s.requireAuth(http.HandlerFunc(s.dashboard)))
+dynamic.Handle("GET /login", s.requireAnonymous(http.HandlerFunc(s.loginForm)))
+```
+
+Use:
+
+* `loadSession` for dynamic routes that should know who the current user is when a valid session cookie is present.
+* `requireAuth` for protected pages and actions.
+* `requireAnonymous` for sign-in and registration pages that should redirect signed-in users back to their account.
+
+For browser page requests, anonymous `GET` requests to protected pages should redirect to `/login` with a safe `next` path. Unsafe requests such as `POST` should return `401 Unauthorized` when the user is not signed in.
+
+Redirect destinations must be validated before use. Only local paths such as `/account` or `/dashboard?tab=home` should be accepted. Absolute URLs like `https://example.com` and protocol-relative URLs like `//example.com` must be rejected to avoid open redirect vulnerabilities.
+
 ### Logout
 
 Logout deletes the session from the database and clears the cookie.
