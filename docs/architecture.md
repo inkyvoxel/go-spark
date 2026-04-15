@@ -204,7 +204,8 @@ CREATE TABLE users (
     id INTEGER PRIMARY KEY,
     email TEXT NOT NULL UNIQUE,
     password_hash TEXT NOT NULL,
-    created_at TIMESTAMP NOT NULL
+    created_at TIMESTAMP NOT NULL,
+    email_verified_at TIMESTAMP
 );
 ```
 
@@ -220,6 +221,22 @@ CREATE TABLE sessions (
     FOREIGN KEY (user_id) REFERENCES users(id)
 );
 ```
+
+### Email Verification Tokens Table
+
+```sql
+CREATE TABLE email_verification_tokens (
+    id INTEGER PRIMARY KEY,
+    user_id INTEGER NOT NULL,
+    token_hash TEXT NOT NULL UNIQUE,
+    expires_at TIMESTAMP NOT NULL,
+    consumed_at TIMESTAMP,
+    created_at TIMESTAMP NOT NULL,
+    FOREIGN KEY (user_id) REFERENCES users(id)
+);
+```
+
+Only token hashes are stored. The raw token is generated once, sent to the user, and treated as a secret.
 
 ### Login Flow
 

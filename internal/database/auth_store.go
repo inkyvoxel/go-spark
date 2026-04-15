@@ -2,6 +2,7 @@ package database
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"strings"
@@ -14,13 +15,17 @@ import (
 )
 
 type AuthStore struct {
+	db      *sql.DB
 	queries *db.Queries
 }
 
 var _ services.AuthStore = (*AuthStore)(nil)
 
-func NewAuthStore(queries *db.Queries) *AuthStore {
-	return &AuthStore{queries: queries}
+func NewAuthStore(conn *sql.DB) *AuthStore {
+	return &AuthStore{
+		db:      conn,
+		queries: db.New(conn),
+	}
 }
 
 func (s *AuthStore) CreateUser(ctx context.Context, email, passwordHash string) (db.User, error) {
@@ -75,6 +80,51 @@ func (s *AuthStore) DeleteSessionByToken(ctx context.Context, token string) erro
 	}
 
 	return nil
+}
+
+func (s *AuthStore) CreateEmailVerificationToken(ctx context.Context, userID int64, tokenHash string, expiresAt time.Time) (db.EmailVerificationToken, error) {
+	token, err := s.queries.CreateEmailVerificationToken(ctx, db.CreateEmailVerificationTokenParams{
+		UserID:    userID,
+		TokenHash: tokenHash,
+		ExpiresAt: expiresAt,
+	})
+	if err != nil {
+		return db.EmailVerificationToken{}, fmt.Errorf("create email verification token: %w", err)
+	}
+
+	return token, nil
+}
+
+func (s *AuthStore) VerifyEmailByTokenHash(ctx context.Context, tokenHash string, verifiedAt time.Time) (db.User, error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return db.User{}, fmt.Errorf("begin verify email transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	queries := s.queries.WithTx(tx)
+	token, err := queries.ConsumeEmailVerificationToken(ctx, db.ConsumeEmailVerificationTokenParams{
+		ConsumedAt: sql.NullTime{Time: verifiedAt, Valid: true},
+		TokenHash:  tokenHash,
+		ExpiresAt:  verifiedAt,
+	})
+	if err != nil {
+		return db.User{}, fmt.Errorf("consume email verification token: %w", err)
+	}
+
+	user, err := queries.MarkUserEmailVerified(ctx, db.MarkUserEmailVerifiedParams{
+		EmailVerifiedAt: sql.NullTime{Time: verifiedAt, Valid: true},
+		ID:              token.UserID,
+	})
+	if err != nil {
+		return db.User{}, fmt.Errorf("mark user email verified: %w", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return db.User{}, fmt.Errorf("commit verify email transaction: %w", err)
+	}
+
+	return user, nil
 }
 
 func isSQLiteUniqueConstraint(err error) bool {

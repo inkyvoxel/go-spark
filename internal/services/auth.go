@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
 	"errors"
@@ -17,22 +18,27 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-const DefaultPasswordMinLength = 12
+const (
+	DefaultPasswordMinLength             = 12
+	DefaultEmailVerificationTokenTimeout = 24 * time.Hour
+)
 
 var (
-	ErrEmailAlreadyRegistered = errors.New("email already registered")
-	ErrInvalidCredentials     = errors.New("invalid credentials")
-	ErrInvalidEmail           = errors.New("invalid email")
-	ErrInvalidPassword        = errors.New("invalid password")
-	ErrInvalidSession         = errors.New("invalid session")
+	ErrEmailAlreadyRegistered   = errors.New("email already registered")
+	ErrInvalidCredentials       = errors.New("invalid credentials")
+	ErrInvalidEmail             = errors.New("invalid email")
+	ErrInvalidPassword          = errors.New("invalid password")
+	ErrInvalidSession           = errors.New("invalid session")
+	ErrInvalidVerificationToken = errors.New("invalid verification token")
 )
 
 type AuthService struct {
-	store           AuthStore
-	sessionDuration time.Duration
-	bcryptCost      int
-	tokenBytes      int
-	passwordMinLen  int
+	store                          AuthStore
+	sessionDuration                time.Duration
+	emailVerificationTokenDuration time.Duration
+	bcryptCost                     int
+	tokenBytes                     int
+	passwordMinLen                 int
 }
 
 type AuthStore interface {
@@ -41,13 +47,16 @@ type AuthStore interface {
 	CreateSession(ctx context.Context, userID int64, token string, expiresAt time.Time) (db.Session, error)
 	GetUserBySessionToken(ctx context.Context, token string) (db.User, error)
 	DeleteSessionByToken(ctx context.Context, token string) error
+	CreateEmailVerificationToken(ctx context.Context, userID int64, tokenHash string, expiresAt time.Time) (db.EmailVerificationToken, error)
+	VerifyEmailByTokenHash(ctx context.Context, tokenHash string, verifiedAt time.Time) (db.User, error)
 }
 
 type AuthOptions struct {
-	SessionDuration time.Duration
-	BcryptCost      int
-	TokenBytes      int
-	PasswordMinLen  int
+	SessionDuration                time.Duration
+	BcryptCost                     int
+	TokenBytes                     int
+	PasswordMinLen                 int
+	EmailVerificationTokenDuration time.Duration
 }
 
 func NewAuthService(store AuthStore, opts AuthOptions) *AuthService {
@@ -71,12 +80,18 @@ func NewAuthService(store AuthStore, opts AuthOptions) *AuthService {
 		passwordMinLen = DefaultPasswordMinLength
 	}
 
+	emailVerificationTokenDuration := opts.EmailVerificationTokenDuration
+	if emailVerificationTokenDuration == 0 {
+		emailVerificationTokenDuration = DefaultEmailVerificationTokenTimeout
+	}
+
 	return &AuthService{
-		store:           store,
-		sessionDuration: sessionDuration,
-		bcryptCost:      bcryptCost,
-		tokenBytes:      tokenBytes,
-		passwordMinLen:  passwordMinLen,
+		store:                          store,
+		sessionDuration:                sessionDuration,
+		emailVerificationTokenDuration: emailVerificationTokenDuration,
+		bcryptCost:                     bcryptCost,
+		tokenBytes:                     tokenBytes,
+		passwordMinLen:                 passwordMinLen,
 	}
 }
 
@@ -161,6 +176,42 @@ func (s *AuthService) Logout(ctx context.Context, token string) error {
 	return nil
 }
 
+func (s *AuthService) CreateEmailVerificationToken(ctx context.Context, userID int64) (string, db.EmailVerificationToken, error) {
+	token, err := generateToken(s.tokenBytes)
+	if err != nil {
+		return "", db.EmailVerificationToken{}, fmt.Errorf("generate email verification token: %w", err)
+	}
+
+	verificationToken, err := s.store.CreateEmailVerificationToken(
+		ctx,
+		userID,
+		hashToken(token),
+		time.Now().UTC().Add(s.emailVerificationTokenDuration),
+	)
+	if err != nil {
+		return "", db.EmailVerificationToken{}, fmt.Errorf("create email verification token: %w", err)
+	}
+
+	return token, verificationToken, nil
+}
+
+func (s *AuthService) VerifyEmail(ctx context.Context, token string) (db.User, error) {
+	token = strings.TrimSpace(token)
+	if token == "" {
+		return db.User{}, ErrInvalidVerificationToken
+	}
+
+	user, err := s.store.VerifyEmailByTokenHash(ctx, hashToken(token), time.Now().UTC())
+	if errors.Is(err, sql.ErrNoRows) {
+		return db.User{}, ErrInvalidVerificationToken
+	}
+	if err != nil {
+		return db.User{}, fmt.Errorf("verify email: %w", err)
+	}
+
+	return user, nil
+}
+
 func normalizeEmail(email string) string {
 	return strings.ToLower(strings.TrimSpace(email))
 }
@@ -219,4 +270,9 @@ func generateToken(bytes int) (string, error) {
 	}
 
 	return hex.EncodeToString(buffer), nil
+}
+
+func hashToken(token string) string {
+	sum := sha256.Sum256([]byte(token))
+	return hex.EncodeToString(sum[:])
 }

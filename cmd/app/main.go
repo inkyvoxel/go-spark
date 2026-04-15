@@ -12,7 +12,6 @@ import (
 
 	"github.com/inkyvoxel/go-spark/internal/config"
 	"github.com/inkyvoxel/go-spark/internal/database"
-	dbgen "github.com/inkyvoxel/go-spark/internal/db/generated"
 	"github.com/inkyvoxel/go-spark/internal/server"
 	"github.com/inkyvoxel/go-spark/internal/services"
 )
@@ -33,7 +32,7 @@ func main() {
 	}
 	defer db.Close()
 
-	auth := services.NewAuthService(database.NewAuthStore(dbgen.New(db)), services.AuthOptions{
+	auth := services.NewAuthService(database.NewAuthStore(db), services.AuthOptions{
 		PasswordMinLen: cfg.PasswordMinLength,
 	})
 
