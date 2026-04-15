@@ -26,6 +26,7 @@ type templateData struct {
 	Authenticated     bool
 	User              db.User
 	PasswordMinLength int
+	ResendStatus      string
 }
 
 func newTemplateData(r *http.Request, title string) templateData {
@@ -147,7 +148,28 @@ func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) account(w http.ResponseWriter, r *http.Request) {
-	s.render(w, "account.html", s.newTemplateData(r, "Account"))
+	data := s.newTemplateData(r, "Account")
+	status := strings.TrimSpace(r.URL.Query().Get("resend"))
+	if status == "sent" || status == "error" {
+		data.ResendStatus = status
+	}
+	s.render(w, "account.html", data)
+}
+
+func (s *Server) resendVerification(w http.ResponseWriter, r *http.Request) {
+	user, ok := currentUser(r.Context())
+	if !ok {
+		http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+		return
+	}
+
+	if err := s.auth.ResendVerificationEmail(r.Context(), user); err != nil {
+		s.logger.Error("resend verification email", "user_id", user.ID, "err", err)
+		http.Redirect(w, r, "/account?resend=error", http.StatusSeeOther)
+		return
+	}
+
+	http.Redirect(w, r, "/account?resend=sent", http.StatusSeeOther)
 }
 
 func (s *Server) handleAuthFormError(w http.ResponseWriter, templateName string, data templateData, err error) {

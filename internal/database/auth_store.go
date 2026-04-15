@@ -140,6 +140,40 @@ func (s *AuthStore) CreateEmailVerificationToken(ctx context.Context, userID int
 	return token, nil
 }
 
+func (s *AuthStore) ResendEmailVerification(ctx context.Context, params services.ResendEmailVerificationParams) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin resend email verification transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	queries := s.queries.WithTx(tx)
+	if _, err := queries.CreateEmailVerificationToken(ctx, db.CreateEmailVerificationTokenParams{
+		UserID:    params.UserID,
+		TokenHash: params.TokenHash,
+		ExpiresAt: params.TokenExpiresAt,
+	}); err != nil {
+		return fmt.Errorf("create email verification token: %w", err)
+	}
+
+	if _, err := queries.EnqueueEmail(ctx, db.EnqueueEmailParams{
+		Sender:      params.ConfirmationEmail.From,
+		Recipient:   params.ConfirmationEmail.To,
+		Subject:     params.ConfirmationEmail.Subject,
+		TextBody:    params.ConfirmationEmail.TextBody,
+		HtmlBody:    params.ConfirmationEmail.HTMLBody,
+		AvailableAt: params.EmailAvailableAt,
+	}); err != nil {
+		return fmt.Errorf("enqueue confirmation email: %w", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit resend email verification transaction: %w", err)
+	}
+
+	return nil
+}
+
 func (s *AuthStore) VerifyEmailByTokenHash(ctx context.Context, tokenHash string, verifiedAt time.Time) (db.User, error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {

@@ -97,6 +97,7 @@ func (s *Server) Routes() http.Handler {
 	dynamic.Handle("POST /login", s.requireAnonymous(http.HandlerFunc(s.login)))
 	dynamic.Handle("POST /logout", s.requireAuth(http.HandlerFunc(s.logout)))
 	dynamic.Handle("GET /account", s.requireAuth(http.HandlerFunc(s.account)))
+	dynamic.Handle("POST /account/resend-verification", s.requireAuth(http.HandlerFunc(s.resendVerification)))
 	dynamic.HandleFunc("GET /", s.home)
 
 	mux.Handle("/", s.csrf(s.loadSession(dynamic)))

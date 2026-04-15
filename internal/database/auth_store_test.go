@@ -277,6 +277,96 @@ func TestAuthStoreEmailVerificationRejectsExpiredToken(t *testing.T) {
 	}
 }
 
+func TestAuthStoreResendEmailVerification(t *testing.T) {
+	store := newTestAuthStore(t)
+	now := time.Now().UTC()
+
+	user, err := store.CreateUser(context.Background(), "user@example.com", "hash")
+	if err != nil {
+		t.Fatalf("CreateUser() error = %v", err)
+	}
+
+	err = store.ResendEmailVerification(context.Background(), services.ResendEmailVerificationParams{
+		UserID:         user.ID,
+		TokenHash:      "resend-token-hash",
+		TokenExpiresAt: now.Add(time.Hour),
+		ConfirmationEmail: email.Message{
+			From:     "sender@example.com",
+			To:       "user@example.com",
+			Subject:  "Confirm your email address",
+			TextBody: "Confirm using this link.",
+			HTMLBody: "<p>Confirm</p>",
+		},
+		EmailAvailableAt: now,
+	})
+	if err != nil {
+		t.Fatalf("ResendEmailVerification() error = %v", err)
+	}
+
+	token, err := store.queries.ConsumeEmailVerificationToken(context.Background(), db.ConsumeEmailVerificationTokenParams{
+		ConsumedAt: sql.NullTime{Time: now, Valid: true},
+		TokenHash:  "resend-token-hash",
+		ExpiresAt:  now,
+	})
+	if err != nil {
+		t.Fatalf("ConsumeEmailVerificationToken() error = %v", err)
+	}
+	if token.UserID != user.ID {
+		t.Fatalf("verification token user ID = %d, want %d", token.UserID, user.ID)
+	}
+
+	claimed, err := store.queries.ClaimPendingEmails(context.Background(), db.ClaimPendingEmailsParams{
+		AvailableAt: now.Add(time.Second),
+		Limit:       1,
+	})
+	if err != nil {
+		t.Fatalf("ClaimPendingEmails() error = %v", err)
+	}
+	if len(claimed) != 1 {
+		t.Fatalf("claimed email count = %d, want 1", len(claimed))
+	}
+}
+
+func TestAuthStoreResendEmailVerificationRollsBackOnOutboxError(t *testing.T) {
+	conn := newAuthStoreTestDB(t)
+	store := NewAuthStore(conn)
+	now := time.Now().UTC()
+
+	user, err := store.CreateUser(context.Background(), "user@example.com", "hash")
+	if err != nil {
+		t.Fatalf("CreateUser() error = %v", err)
+	}
+
+	if _, err := conn.Exec("DROP TABLE email_outbox"); err != nil {
+		t.Fatalf("drop email_outbox: %v", err)
+	}
+
+	err = store.ResendEmailVerification(context.Background(), services.ResendEmailVerificationParams{
+		UserID:         user.ID,
+		TokenHash:      "resend-token-hash",
+		TokenExpiresAt: now.Add(time.Hour),
+		ConfirmationEmail: email.Message{
+			From:     "sender@example.com",
+			To:       "user@example.com",
+			Subject:  "Confirm your email address",
+			TextBody: "Confirm using this link.",
+		},
+		EmailAvailableAt: now,
+	})
+	if err == nil {
+		t.Fatal("ResendEmailVerification() error = nil, want error")
+	}
+
+	_, err = store.queries.ConsumeEmailVerificationToken(context.Background(), db.ConsumeEmailVerificationTokenParams{
+		ConsumedAt: sql.NullTime{Time: now, Valid: true},
+		TokenHash:  "resend-token-hash",
+		ExpiresAt:  now,
+	})
+	if !errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("ConsumeEmailVerificationToken() error = %v, want %v", err, sql.ErrNoRows)
+	}
+}
+
 func newTestAuthStore(t *testing.T) *AuthStore {
 	t.Helper()
 

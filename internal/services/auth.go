@@ -51,6 +51,7 @@ type AuthStore interface {
 	GetUserBySessionToken(ctx context.Context, token string) (db.User, error)
 	DeleteSessionByToken(ctx context.Context, token string) error
 	CreateEmailVerificationToken(ctx context.Context, userID int64, tokenHash string, expiresAt time.Time) (db.EmailVerificationToken, error)
+	ResendEmailVerification(ctx context.Context, params ResendEmailVerificationParams) error
 	VerifyEmailByTokenHash(ctx context.Context, tokenHash string, verifiedAt time.Time) (db.User, error)
 }
 
@@ -70,6 +71,14 @@ type AuthOptions struct {
 	PasswordMinLen                 int
 	EmailVerificationTokenDuration time.Duration
 	ConfirmationEmail              email.AccountConfirmationOptions
+}
+
+type ResendEmailVerificationParams struct {
+	UserID            int64
+	TokenHash         string
+	TokenExpiresAt    time.Time
+	ConfirmationEmail email.Message
+	EmailAvailableAt  time.Time
 }
 
 func NewAuthService(store AuthStore, opts AuthOptions) *AuthService {
@@ -245,6 +254,35 @@ func (s *AuthService) VerifyEmail(ctx context.Context, token string) (db.User, e
 	}
 
 	return user, nil
+}
+
+func (s *AuthService) ResendVerificationEmail(ctx context.Context, user db.User) error {
+	if user.EmailVerifiedAt.Valid {
+		return nil
+	}
+
+	token, err := generateToken(s.tokenBytes)
+	if err != nil {
+		return fmt.Errorf("generate email verification token: %w", err)
+	}
+
+	message, err := email.NewAccountConfirmationMessage(s.confirmationEmail, user.Email, token)
+	if err != nil {
+		return fmt.Errorf("build account confirmation email: %w", err)
+	}
+
+	now := time.Now().UTC()
+	if err := s.store.ResendEmailVerification(ctx, ResendEmailVerificationParams{
+		UserID:            user.ID,
+		TokenHash:         hashToken(token),
+		TokenExpiresAt:    now.Add(s.emailVerificationTokenDuration),
+		ConfirmationEmail: message,
+		EmailAvailableAt:  now,
+	}); err != nil {
+		return fmt.Errorf("resend email verification: %w", err)
+	}
+
+	return nil
 }
 
 func normalizeEmail(email string) string {
