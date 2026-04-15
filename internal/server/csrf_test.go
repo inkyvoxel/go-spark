@@ -25,7 +25,7 @@ func TestCSRFSetsTokenCookieOnSafeRequest(t *testing.T) {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusNoContent)
 	}
 
-	cookie := csrfCookieFromRecorder(t, rec)
+	cookie := cookieFromRecorder(t, rec, csrfCookieName)
 	if cookie.Value == "" {
 		t.Fatal("csrf cookie value is empty")
 	}
@@ -48,7 +48,7 @@ func TestCSRFSetsSecureCookieWhenConfigured(t *testing.T) {
 		w.WriteHeader(http.StatusNoContent)
 	})).ServeHTTP(rec, req)
 
-	cookie := csrfCookieFromRecorder(t, rec)
+	cookie := cookieFromRecorder(t, rec, csrfCookieName)
 	if !cookie.Secure {
 		t.Fatal("csrf cookie Secure = false, want true")
 	}
@@ -136,17 +136,4 @@ func TestIsUnsafeMethod(t *testing.T) {
 			t.Fatalf("isUnsafeMethod(%q) = false, want true", method)
 		}
 	}
-}
-
-func csrfCookieFromRecorder(t *testing.T, rec *httptest.ResponseRecorder) *http.Cookie {
-	t.Helper()
-
-	for _, cookie := range rec.Result().Cookies() {
-		if cookie.Name == csrfCookieName {
-			return cookie
-		}
-	}
-
-	t.Fatalf("missing %q cookie", csrfCookieName)
-	return nil
 }

@@ -63,11 +63,6 @@ func (s *Server) secureCookie(r *http.Request) bool {
 
 func (s *Server) loadSession(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if s.auth == nil {
-			next.ServeHTTP(w, r)
-			return
-		}
-
 		cookie, err := r.Cookie(sessionCookieName)
 		if errors.Is(err, http.ErrNoCookie) {
 			next.ServeHTTP(w, r)

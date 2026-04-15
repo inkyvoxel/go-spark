@@ -37,7 +37,3 @@ RETURNING id, user_id, token, expires_at, created_at;
 -- name: DeleteSessionByToken :exec
 DELETE FROM sessions
 WHERE token = ?;
-
--- name: DeleteExpiredSessions :exec
-DELETE FROM sessions
-WHERE expires_at <= CURRENT_TIMESTAMP;

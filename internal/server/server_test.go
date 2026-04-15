@@ -13,6 +13,16 @@ import (
 	_ "modernc.org/sqlite"
 )
 
+func TestNewRequiresAuthService(t *testing.T) {
+	defer func() {
+		if recover() == nil {
+			t.Fatal("New() did not panic")
+		}
+	}()
+
+	New(Options{DB: testDB(t)})
+}
+
 func TestRoutesHome(t *testing.T) {
 	srv := testServer(t)
 
@@ -61,7 +71,33 @@ func TestRoutesHealthzReturnsUnavailableWhenDatabaseIsClosed(t *testing.T) {
 	}
 }
 
+func TestRenderReturnsInternalServerErrorForTemplateError(t *testing.T) {
+	srv := testServer(t)
+
+	rec := httptest.NewRecorder()
+	srv.render(rec, "missing.html", templateData{Title: "Missing"})
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusInternalServerError)
+	}
+	if rec.Body.String() != http.StatusText(http.StatusInternalServerError)+"\n" {
+		t.Fatalf("body = %q, want internal server error", rec.Body.String())
+	}
+}
+
 func testServer(t *testing.T) *Server {
+	t.Helper()
+
+	return &Server{
+		db:     testDB(t),
+		logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
+		templates: testTemplates(t, map[string]string{
+			"home.html": `<h1>{{ .Title }}</h1>`,
+		}),
+	}
+}
+
+func testDB(t *testing.T) *sql.DB {
 	t.Helper()
 
 	db, err := sql.Open("sqlite", ":memory:")
@@ -72,13 +108,7 @@ func testServer(t *testing.T) *Server {
 		_ = db.Close()
 	})
 
-	return &Server{
-		db:     db,
-		logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
-		templates: testTemplates(t, map[string]string{
-			"home.html": `<h1>{{ .Title }}</h1>`,
-		}),
-	}
+	return db
 }
 
 func testTemplates(t *testing.T, pages map[string]string) map[string]*template.Template {

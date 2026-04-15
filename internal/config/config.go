@@ -1,11 +1,10 @@
 package config
 
 import (
+	"fmt"
 	"os"
 	"strconv"
 )
-
-const DefaultPasswordMinLength = 12
 
 type Config struct {
 	Addr              string
@@ -15,14 +14,24 @@ type Config struct {
 	PasswordMinLength int
 }
 
-func FromEnv() Config {
+func FromEnv(defaultPasswordMinLength int) (Config, error) {
+	cookieSecure, err := envBool("APP_COOKIE_SECURE")
+	if err != nil {
+		return Config{}, err
+	}
+
+	passwordMinLength, err := envIntOrDefault("AUTH_PASSWORD_MIN_LENGTH", defaultPasswordMinLength)
+	if err != nil {
+		return Config{}, err
+	}
+
 	return Config{
 		Addr:              envOrDefault("APP_ADDR", ":8080"),
 		Env:               envOrDefault("APP_ENV", "development"),
 		DatabasePath:      envOrDefault("DATABASE_PATH", "./data/app.db"),
-		CookieSecure:      envBool("APP_COOKIE_SECURE"),
-		PasswordMinLength: envIntOrDefault("AUTH_PASSWORD_MIN_LENGTH", DefaultPasswordMinLength),
-	}
+		CookieSecure:      cookieSecure,
+		PasswordMinLength: passwordMinLength,
+	}, nil
 }
 
 func envOrDefault(key, fallback string) string {
@@ -32,15 +41,33 @@ func envOrDefault(key, fallback string) string {
 	return fallback
 }
 
-func envBool(key string) bool {
-	value, err := strconv.ParseBool(os.Getenv(key))
-	return err == nil && value
+func envBool(key string) (bool, error) {
+	value := os.Getenv(key)
+	if value == "" {
+		return false, nil
+	}
+
+	parsed, err := strconv.ParseBool(value)
+	if err != nil {
+		return false, fmt.Errorf("%s must be a boolean: %w", key, err)
+	}
+
+	return parsed, nil
 }
 
-func envIntOrDefault(key string, fallback int) int {
-	value, err := strconv.Atoi(os.Getenv(key))
-	if err != nil || value <= 0 {
-		return fallback
+func envIntOrDefault(key string, fallback int) (int, error) {
+	raw := os.Getenv(key)
+	if raw == "" {
+		return fallback, nil
 	}
-	return value
+
+	value, err := strconv.Atoi(raw)
+	if err != nil {
+		return 0, fmt.Errorf("%s must be an integer: %w", key, err)
+	}
+	if value <= 0 {
+		return 0, fmt.Errorf("%s must be greater than zero", key)
+	}
+
+	return value, nil
 }

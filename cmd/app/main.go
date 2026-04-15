@@ -12,13 +12,19 @@ import (
 
 	"github.com/inkyvoxel/go-spark/internal/config"
 	"github.com/inkyvoxel/go-spark/internal/database"
+	dbgen "github.com/inkyvoxel/go-spark/internal/db/generated"
 	"github.com/inkyvoxel/go-spark/internal/server"
+	"github.com/inkyvoxel/go-spark/internal/services"
 )
 
 func main() {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 
-	cfg := config.FromEnv()
+	cfg, err := config.FromEnv(services.DefaultPasswordMinLength)
+	if err != nil {
+		logger.Error("load config", "err", err)
+		os.Exit(1)
+	}
 
 	db, err := database.Open(cfg.DatabasePath)
 	if err != nil {
@@ -27,9 +33,14 @@ func main() {
 	}
 	defer db.Close()
 
+	auth := services.NewAuthService(database.NewAuthStore(dbgen.New(db)), services.AuthOptions{
+		PasswordMinLen: cfg.PasswordMinLength,
+	})
+
 	app := server.New(server.Options{
 		Logger:            logger,
 		DB:                db,
+		Auth:              auth,
 		CookieSecure:      cfg.CookieSecure,
 		PasswordMinLength: cfg.PasswordMinLength,
 	})

@@ -41,7 +41,6 @@ type AuthStore interface {
 	CreateSession(ctx context.Context, userID int64, token string, expiresAt time.Time) (db.Session, error)
 	GetUserBySessionToken(ctx context.Context, token string) (db.User, error)
 	DeleteSessionByToken(ctx context.Context, token string) error
-	DeleteExpiredSessions(ctx context.Context) error
 }
 
 type AuthOptions struct {
@@ -157,14 +156,6 @@ func (s *AuthService) Logout(ctx context.Context, token string) error {
 
 	if err := s.store.DeleteSessionByToken(ctx, token); err != nil {
 		return fmt.Errorf("delete session: %w", err)
-	}
-
-	return nil
-}
-
-func (s *AuthService) DeleteExpiredSessions(ctx context.Context) error {
-	if err := s.store.DeleteExpiredSessions(ctx); err != nil {
-		return fmt.Errorf("delete expired sessions: %w", err)
 	}
 
 	return nil

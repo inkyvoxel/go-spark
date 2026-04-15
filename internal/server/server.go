@@ -7,8 +7,6 @@ import (
 	"net/http"
 	"path/filepath"
 
-	"github.com/inkyvoxel/go-spark/internal/database"
-	db "github.com/inkyvoxel/go-spark/internal/db/generated"
 	"github.com/inkyvoxel/go-spark/internal/services"
 )
 
@@ -23,6 +21,7 @@ type Server struct {
 
 type Options struct {
 	DB                *sql.DB
+	Auth              authService
 	Logger            *slog.Logger
 	CookieSecure      bool
 	PasswordMinLength int
@@ -33,6 +32,9 @@ func New(opts Options) *Server {
 	if logger == nil {
 		logger = slog.Default()
 	}
+	if opts.Auth == nil {
+		panic("server auth service is required")
+	}
 
 	passwordMinLength := opts.PasswordMinLength
 	if passwordMinLength == 0 {
@@ -40,10 +42,8 @@ func New(opts Options) *Server {
 	}
 
 	return &Server{
-		db: opts.DB,
-		auth: services.NewAuthService(database.NewAuthStore(db.New(opts.DB)), services.AuthOptions{
-			PasswordMinLen: passwordMinLength,
-		}),
+		db:                opts.DB,
+		auth:              opts.Auth,
 		logger:            logger,
 		templates:         mustParseTemplates(),
 		cookieSecure:      opts.CookieSecure,

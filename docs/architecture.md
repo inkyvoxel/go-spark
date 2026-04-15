@@ -13,7 +13,6 @@ The guiding philosophy is:
 This repository is intentionally structured to be:
 
 * Easy for humans to understand.
-* Easy for AI tools to navigate and modify.
 * Stable over time with minimal churn.
 
 ## Tech Stack
@@ -172,31 +171,20 @@ DROP TABLE users;
 
 Always write reversible migrations when practical.
 
-### Future AI Integration
-
-If a project built from this template adds AI features:
-
-* Keep all AI calls server-side.
-* Wrap provider calls behind a small internal interface.
-* Avoid calling external AI APIs directly from handlers.
-* Keep prompts versioned or structured.
-* Log inputs and outputs only with appropriate redaction.
-* Prefer structured outputs where possible.
-
 ## Authentication Strategy
 
-Authentication is planned as a simple, server-side session model implemented with Go's standard library and a few focused dependencies.
+Authentication uses a simple, server-side session model implemented with Go's standard library and a few focused dependencies.
 
 The goal is to keep authentication:
 
 * Easy to understand.
 * Secure by default.
 * Compatible with server-rendered HTML.
-* Maintainable by both humans and AI tools.
+* Maintainable without a large auth framework.
 
 ### Overview
 
-Authentication will use:
+Authentication uses:
 
 * Email and password login.
 * Server-side sessions stored in SQLite.
@@ -307,9 +295,9 @@ All state-changing requests should include CSRF protection.
 
 Recommended approach:
 
-* Generate a CSRF token per session.
+* Generate a CSRF token cookie.
 * Include the token in forms.
-* Validate the token on submission.
+* Validate submitted tokens against the cookie on unsafe requests.
 
 ### Token Generation
 
@@ -325,7 +313,7 @@ token := hex.EncodeToString(b)
 
 * Store `expires_at` in the database.
 * Enforce expiration on each request.
-* Optionally implement session rotation.
+* Optionally add session rotation.
 
 ### Optional Enhancements
 
@@ -374,7 +362,6 @@ Focus tests on service logic, database interactions, and route behavior. Avoid o
 * SaaS dashboards.
 * Internal tools.
 * Admin panels.
-* AI-backed workflows.
 * Content-driven apps.
 
 ## When To Reconsider
@@ -388,4 +375,4 @@ You may need a different architecture if the product requires:
 
 ## Summary
 
-This starter favors Go, SQL, HTML, server-first design, minimalism, and clarity. The goal is a codebase that scales in complexity slowly, remains understandable, and works well with both humans and AI-assisted development.
+This starter favors Go, SQL, HTML, server-first design, minimalism, and clarity. The goal is a codebase that scales in complexity slowly and remains understandable.

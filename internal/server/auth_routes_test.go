@@ -1,7 +1,6 @@
 package server
 
 import (
-	"database/sql"
 	"io"
 	"log/slog"
 	"net/http"
@@ -436,16 +435,8 @@ func TestRoutesAccountRejectsAnonymousUser(t *testing.T) {
 func newAuthRouteTestServer(t *testing.T, auth authService) *Server {
 	t.Helper()
 
-	conn, err := sql.Open("sqlite", ":memory:")
-	if err != nil {
-		t.Fatalf("sql.Open() error = %v", err)
-	}
-	t.Cleanup(func() {
-		_ = conn.Close()
-	})
-
 	return &Server{
-		db:     conn,
+		db:     testDB(t),
 		auth:   auth,
 		logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
 		templates: testTemplates(t, map[string]string{

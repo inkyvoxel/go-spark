@@ -23,7 +23,7 @@ Auth business logic is kept behind a small storage interface. The default storag
 * `goose`
 * `log/slog`
 
-See [docs/architecture.md](docs/architecture.md) for the longer rationale and planned authentication approach.
+See [docs/architecture.md](docs/architecture.md) for the longer rationale and authentication approach.
 
 ## Quick Start
 
@@ -70,6 +70,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) before opening pull requests, and [CHANGE
 /internal/database  SQLite connection setup
 /internal/db        SQL queries and generated sqlc package
 /internal/server    HTTP routes and handlers
+/internal/services  business logic
 /migrations         goose migrations
 /templates          server-rendered HTML
 /static             CSS and static assets

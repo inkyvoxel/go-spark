@@ -1,8 +1,10 @@
 package server
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 	"unicode/utf8"
@@ -59,8 +61,7 @@ func (s *Server) register(w http.ResponseWriter, r *http.Request) {
 		data.Email = strings.TrimSpace(email)
 		data.Error = "Check your details and try again."
 		data.FieldErrors = fieldErrors
-		w.WriteHeader(http.StatusBadRequest)
-		s.render(w, "register.html", data)
+		s.renderStatus(w, http.StatusBadRequest, "register.html", data)
 		return
 	}
 
@@ -133,30 +134,26 @@ func (s *Server) account(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleAuthFormError(w http.ResponseWriter, templateName string, data templateData, err error) {
 	if errors.Is(err, services.ErrInvalidEmail) {
-		w.WriteHeader(http.StatusBadRequest)
 		data.Error = "Check your details and try again."
 		data.FieldErrors = map[string]string{"email": "Enter a valid email address."}
-		s.render(w, templateName, data)
+		s.renderStatus(w, http.StatusBadRequest, templateName, data)
 		return
 	}
 	if errors.Is(err, services.ErrInvalidPassword) {
-		w.WriteHeader(http.StatusBadRequest)
 		data.Error = "Check your details and try again."
 		data.FieldErrors = map[string]string{"password": fmt.Sprintf("Use at least %d characters.", data.PasswordMinLength)}
-		s.render(w, templateName, data)
+		s.renderStatus(w, http.StatusBadRequest, templateName, data)
 		return
 	}
 	if errors.Is(err, services.ErrEmailAlreadyRegistered) {
-		w.WriteHeader(http.StatusBadRequest)
 		data.Error = "Check your details and try again."
 		data.FieldErrors = map[string]string{"email": "An account with this email already exists."}
-		s.render(w, templateName, data)
+		s.renderStatus(w, http.StatusBadRequest, templateName, data)
 		return
 	}
 	if errors.Is(err, services.ErrInvalidCredentials) {
-		w.WriteHeader(http.StatusBadRequest)
 		data.Error = "Email or password is not correct."
-		s.render(w, templateName, data)
+		s.renderStatus(w, http.StatusBadRequest, templateName, data)
 		return
 	}
 
@@ -196,14 +193,23 @@ func (s *Server) newTemplateData(r *http.Request, title string) templateData {
 }
 
 func (s *Server) render(w http.ResponseWriter, templateName string, data templateData) {
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := s.renderTemplate(w, templateName, data); err != nil {
-		s.logger.Error("render template", "template", templateName, "err", err)
-		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-	}
+	s.renderStatus(w, http.StatusOK, templateName, data)
 }
 
-func (s *Server) renderTemplate(w http.ResponseWriter, templateName string, data templateData) error {
+func (s *Server) renderStatus(w http.ResponseWriter, status int, templateName string, data templateData) {
+	var body bytes.Buffer
+	if err := s.renderTemplate(&body, templateName, data); err != nil {
+		s.logger.Error("render template", "template", templateName, "err", err)
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(status)
+	_, _ = w.Write(body.Bytes())
+}
+
+func (s *Server) renderTemplate(w io.Writer, templateName string, data templateData) error {
 	tmpl, ok := s.templates[templateName]
 	if !ok {
 		return fmt.Errorf("template %q not found", templateName)

@@ -77,14 +77,6 @@ func (s *AuthStore) DeleteSessionByToken(ctx context.Context, token string) erro
 	return nil
 }
 
-func (s *AuthStore) DeleteExpiredSessions(ctx context.Context) error {
-	if err := s.queries.DeleteExpiredSessions(ctx); err != nil {
-		return fmt.Errorf("delete expired sessions: %w", err)
-	}
-
-	return nil
-}
-
 func isSQLiteUniqueConstraint(err error) bool {
 	var sqliteErr *sqlite.Error
 	if !errors.As(err, &sqliteErr) {

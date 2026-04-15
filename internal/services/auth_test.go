@@ -222,14 +222,3 @@ func (s *fakeAuthStore) DeleteSessionByToken(ctx context.Context, token string) 
 	delete(s.sessions, token)
 	return nil
 }
-
-func (s *fakeAuthStore) DeleteExpiredSessions(ctx context.Context) error {
-	now := time.Now().UTC()
-	for token, session := range s.sessions {
-		if !session.ExpiresAt.After(now) {
-			delete(s.sessions, token)
-		}
-	}
-
-	return nil
-}
