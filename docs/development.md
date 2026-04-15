@@ -54,6 +54,8 @@ make migrate-status
 make tools
 ```
 
+`make run` starts the app with `go run ./cmd/app`. On startup, the app loads `.env` when the file exists. Existing shell environment variables take precedence over `.env` values.
+
 ## Frontend Assets
 
 PicoCSS and HTMX are vendored in:

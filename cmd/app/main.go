@@ -20,6 +20,11 @@ import (
 func main() {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 
+	if err := config.LoadDotEnv(".env"); err != nil {
+		logger.Error("load .env", "err", err)
+		os.Exit(1)
+	}
+
 	cfg, err := config.FromEnv(services.DefaultPasswordMinLength)
 	if err != nil {
 		logger.Error("load config", "err", err)

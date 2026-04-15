@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/inkyvoxel/go-spark/internal/email"
+	"github.com/joho/godotenv"
 )
 
 type Config struct {
@@ -21,6 +22,21 @@ type Config struct {
 	EmailFrom         string
 	EmailProvider     string
 	EmailLogBody      bool
+}
+
+func LoadDotEnv(path string) error {
+	if _, err := os.Stat(path); err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return fmt.Errorf("stat %s: %w", path, err)
+	}
+
+	if err := godotenv.Load(path); err != nil {
+		return fmt.Errorf("load %s: %w", path, err)
+	}
+
+	return nil
 }
 
 func FromEnv(defaultPasswordMinLength int) (Config, error) {

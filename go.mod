@@ -3,6 +3,7 @@ module github.com/inkyvoxel/go-spark
 go 1.26
 
 require (
+	github.com/joho/godotenv v1.5.1
 	golang.org/x/crypto v0.48.0
 	modernc.org/sqlite v1.46.1
 )
@@ -36,7 +37,6 @@ require (
 	github.com/jackc/pgx/v5 v5.8.0 // indirect
 	github.com/jackc/puddle/v2 v2.2.2 // indirect
 	github.com/jinzhu/inflection v1.0.0 // indirect
-	github.com/joho/godotenv v1.5.1 // indirect
 	github.com/jonboulle/clockwork v0.5.0 // indirect
 	github.com/klauspost/compress v1.18.4 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect

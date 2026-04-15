@@ -35,6 +35,8 @@ make run
 
 The app listens on `:8080` by default, stores its SQLite database at `./data/app.db`, and requires registration passwords to be at least 12 characters unless `AUTH_PASSWORD_MIN_LENGTH` is set.
 
+`make run` loads `.env` when the file exists. Environment variables already set in your shell take precedence over values in `.env`.
+
 Open:
 
 ```text

@@ -1,12 +1,75 @@
 package config
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/inkyvoxel/go-spark/internal/email"
 	"github.com/inkyvoxel/go-spark/internal/services"
 )
+
+func TestLoadDotEnvLoadsValuesWithoutOverridingEnvironment(t *testing.T) {
+	t.Setenv("APP_ENV", "shell")
+	unsetEnvForTest(t, "TEST_DOTENV_ONLY_VALUE")
+
+	path := filepath.Join(t.TempDir(), ".env")
+	if err := os.WriteFile(path, []byte("APP_ENV=dotenv\nTEST_DOTENV_ONLY_VALUE=loaded\n"), 0o600); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	if err := LoadDotEnv(path); err != nil {
+		t.Fatalf("LoadDotEnv() error = %v", err)
+	}
+
+	if got := os.Getenv("APP_ENV"); got != "shell" {
+		t.Fatalf("APP_ENV = %q, want existing shell value", got)
+	}
+	if got := os.Getenv("TEST_DOTENV_ONLY_VALUE"); got != "loaded" {
+		t.Fatalf("TEST_DOTENV_ONLY_VALUE = %q, want dotenv value", got)
+	}
+}
+
+func TestLoadDotEnvIgnoresMissingFile(t *testing.T) {
+	path := filepath.Join(t.TempDir(), ".env")
+
+	if err := LoadDotEnv(path); err != nil {
+		t.Fatalf("LoadDotEnv() error = %v, want nil", err)
+	}
+}
+
+func TestLoadDotEnvReturnsParseError(t *testing.T) {
+	path := filepath.Join(t.TempDir(), ".env")
+	if err := os.WriteFile(path, []byte(`APP_ENV="unterminated`), 0o600); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	err := LoadDotEnv(path)
+	if err == nil {
+		t.Fatal("LoadDotEnv() error = nil, want error")
+	}
+	if !strings.Contains(err.Error(), "load") {
+		t.Fatalf("LoadDotEnv() error = %v, want load context", err)
+	}
+}
+
+func unsetEnvForTest(t *testing.T, key string) {
+	t.Helper()
+
+	original, ok := os.LookupEnv(key)
+	if err := os.Unsetenv(key); err != nil {
+		t.Fatalf("Unsetenv() error = %v", err)
+	}
+
+	t.Cleanup(func() {
+		if ok {
+			_ = os.Setenv(key, original)
+			return
+		}
+		_ = os.Unsetenv(key)
+	})
+}
 
 func TestFromEnvUsesDefaults(t *testing.T) {
 	t.Setenv("APP_ADDR", "")
