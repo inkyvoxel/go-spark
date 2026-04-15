@@ -92,6 +92,7 @@ Add an email outbox:
 ```sql
 CREATE TABLE email_outbox (
     id INTEGER PRIMARY KEY,
+    sender TEXT NOT NULL,
     recipient TEXT NOT NULL,
     subject TEXT NOT NULL,
     text_body TEXT NOT NULL,

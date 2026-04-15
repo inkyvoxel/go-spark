@@ -238,6 +238,27 @@ CREATE TABLE email_verification_tokens (
 
 Only token hashes are stored. The raw token is generated once, sent to the user, and treated as a secret.
 
+### Email Outbox Table
+
+```sql
+CREATE TABLE email_outbox (
+    id INTEGER PRIMARY KEY,
+    sender TEXT NOT NULL,
+    recipient TEXT NOT NULL,
+    subject TEXT NOT NULL,
+    text_body TEXT NOT NULL,
+    html_body TEXT NOT NULL DEFAULT '',
+    status TEXT NOT NULL DEFAULT 'pending',
+    attempts INTEGER NOT NULL DEFAULT 0,
+    last_error TEXT NOT NULL DEFAULT '',
+    available_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    sent_at TIMESTAMP,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+The outbox stores email delivery intent durably. A worker can claim pending rows, send them through the configured email sender, and mark them sent or retryable.
+
 ### Login Flow
 
 1. User submits email and password.

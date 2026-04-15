@@ -9,6 +9,21 @@ import (
 	"time"
 )
 
+type EmailOutbox struct {
+	ID          int64
+	Sender      string
+	Recipient   string
+	Subject     string
+	TextBody    string
+	HtmlBody    string
+	Status      string
+	Attempts    int64
+	LastError   string
+	AvailableAt time.Time
+	SentAt      sql.NullTime
+	CreatedAt   time.Time
+}
+
 type EmailVerificationToken struct {
 	ID         int64
 	UserID     int64
