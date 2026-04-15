@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	db "github.com/inkyvoxel/go-spark/internal/db/generated"
 	"github.com/inkyvoxel/go-spark/internal/email"
 )
 
@@ -69,8 +70,11 @@ func TestEmailOutboxStoreEnqueueAndClaimPending(t *testing.T) {
 	if claimed[0].ID != ready.ID {
 		t.Fatalf("claimed ID = %d, want %d", claimed[0].ID, ready.ID)
 	}
-	if claimed[0].Status != "sending" {
-		t.Fatalf("claimed status = %q, want sending", claimed[0].Status)
+	if claimed[0].Message.From != "sender@example.com" {
+		t.Fatalf("claimed from = %q, want sender@example.com", claimed[0].Message.From)
+	}
+	if claimed[0].Message.To != "user@example.com" {
+		t.Fatalf("claimed to = %q, want user@example.com", claimed[0].Message.To)
 	}
 
 	claimedAgain, err := store.ClaimPending(context.Background(), now, 10)
@@ -97,14 +101,14 @@ func TestEmailOutboxStoreMarkSent(t *testing.T) {
 	}
 
 	sentAt := now.Add(time.Minute)
-	sent, err := store.MarkSent(context.Background(), row.ID, sentAt)
-	if err != nil {
+	if err := store.MarkSent(context.Background(), row.ID, sentAt); err != nil {
 		t.Fatalf("MarkSent() error = %v", err)
 	}
-	if sent.Status != "sent" {
-		t.Fatalf("sent status = %q, want sent", sent.Status)
+	got := getEmailOutboxRow(t, store, row.ID)
+	if got.Status != "sent" {
+		t.Fatalf("sent status = %q, want sent", got.Status)
 	}
-	if !sent.SentAt.Valid {
+	if !got.SentAt.Valid {
 		t.Fatal("SentAt.Valid = false, want true")
 	}
 }
@@ -127,18 +131,50 @@ func TestEmailOutboxStoreMarkFailed(t *testing.T) {
 	}
 
 	retryAt := now.Add(time.Minute)
-	failed, err := store.MarkFailed(context.Background(), row.ID, "provider unavailable", retryAt)
-	if err != nil {
+	if err := store.MarkFailed(context.Background(), row.ID, "provider unavailable", retryAt); err != nil {
 		t.Fatalf("MarkFailed() error = %v", err)
 	}
-	if failed.Status != "pending" {
-		t.Fatalf("failed status = %q, want pending", failed.Status)
+	got := getEmailOutboxRow(t, store, row.ID)
+	if got.Status != "pending" {
+		t.Fatalf("failed status = %q, want pending", got.Status)
 	}
-	if failed.Attempts != 1 {
-		t.Fatalf("failed attempts = %d, want 1", failed.Attempts)
+	if got.Attempts != 1 {
+		t.Fatalf("failed attempts = %d, want 1", got.Attempts)
 	}
-	if failed.LastError != "provider unavailable" {
-		t.Fatalf("failed last error = %q, want provider unavailable", failed.LastError)
+	if got.LastError != "provider unavailable" {
+		t.Fatalf("failed last error = %q, want provider unavailable", got.LastError)
+	}
+}
+
+func TestEmailOutboxStoreMarkFailedPermanently(t *testing.T) {
+	store := newTestEmailOutboxStore(t)
+	now := time.Now().UTC()
+
+	row, err := store.Enqueue(context.Background(), email.Message{
+		From:     "sender@example.com",
+		To:       "user@example.com",
+		Subject:  "Subject",
+		TextBody: "Text",
+	}, now)
+	if err != nil {
+		t.Fatalf("Enqueue() error = %v", err)
+	}
+	if _, err := store.ClaimPending(context.Background(), now, 1); err != nil {
+		t.Fatalf("ClaimPending() error = %v", err)
+	}
+
+	if err := store.MarkFailedPermanently(context.Background(), row.ID, "bad recipient", now.Add(time.Minute)); err != nil {
+		t.Fatalf("MarkFailedPermanently() error = %v", err)
+	}
+	got := getEmailOutboxRow(t, store, row.ID)
+	if got.Status != "failed" {
+		t.Fatalf("failed status = %q, want failed", got.Status)
+	}
+	if got.Attempts != 1 {
+		t.Fatalf("failed attempts = %d, want 1", got.Attempts)
+	}
+	if got.LastError != "bad recipient" {
+		t.Fatalf("failed last error = %q, want bad recipient", got.LastError)
 	}
 }
 
@@ -154,13 +190,28 @@ func TestEmailOutboxStoreRejectsInvalidClaimLimit(t *testing.T) {
 func TestEmailOutboxStoreMissingRowsReturnNoRows(t *testing.T) {
 	store := newTestEmailOutboxStore(t)
 
-	if _, err := store.MarkSent(context.Background(), 999, time.Now().UTC()); !errors.Is(err, sql.ErrNoRows) {
+	if err := store.MarkSent(context.Background(), 999, time.Now().UTC()); !errors.Is(err, sql.ErrNoRows) {
 		t.Fatalf("MarkSent() error = %v, want %v", err, sql.ErrNoRows)
 	}
 
-	if _, err := store.MarkFailed(context.Background(), 999, "missing", time.Now().UTC()); !errors.Is(err, sql.ErrNoRows) {
+	if err := store.MarkFailed(context.Background(), 999, "missing", time.Now().UTC()); !errors.Is(err, sql.ErrNoRows) {
 		t.Fatalf("MarkFailed() error = %v, want %v", err, sql.ErrNoRows)
 	}
+
+	if err := store.MarkFailedPermanently(context.Background(), 999, "missing", time.Now().UTC()); !errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("MarkFailedPermanently() error = %v, want %v", err, sql.ErrNoRows)
+	}
+}
+
+func getEmailOutboxRow(t *testing.T, store *EmailOutboxStore, id int64) db.EmailOutbox {
+	t.Helper()
+
+	row, err := store.queries.GetEmailOutboxRow(context.Background(), id)
+	if err != nil {
+		t.Fatalf("GetEmailOutboxRow() error = %v", err)
+	}
+
+	return row
 }
 
 func newTestEmailOutboxStore(t *testing.T) *EmailOutboxStore {

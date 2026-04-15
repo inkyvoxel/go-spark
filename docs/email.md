@@ -145,6 +145,7 @@ Start with an in-process worker:
 * Sends each message through the configured `email.Sender`.
 * Marks successful rows as sent.
 * Marks failed rows with `last_error`, increments `attempts`, and schedules retry using `available_at`.
+* Marks rows as permanently failed after a small maximum attempt count.
 * Stops cleanly when the app context is canceled.
 
 This worker is intentionally modest. It is enough for a starter app and keeps all local development in one process.
@@ -232,6 +233,7 @@ Add a small in-process worker that:
 * sends through `email.Sender`
 * records success and failure
 * retries with a simple delay
+* stops retrying after a small maximum attempt count
 * exits on context cancellation
 
 Start the worker from `cmd/app`.

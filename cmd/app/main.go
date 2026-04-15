@@ -12,6 +12,7 @@ import (
 
 	"github.com/inkyvoxel/go-spark/internal/config"
 	"github.com/inkyvoxel/go-spark/internal/database"
+	"github.com/inkyvoxel/go-spark/internal/email"
 	"github.com/inkyvoxel/go-spark/internal/server"
 	"github.com/inkyvoxel/go-spark/internal/services"
 )
@@ -35,6 +36,10 @@ func main() {
 	auth := services.NewAuthService(database.NewAuthStore(db), services.AuthOptions{
 		PasswordMinLen: cfg.PasswordMinLength,
 	})
+	emailSender := email.NewLogSender(logger)
+	emailWorker := email.NewWorker(database.NewEmailOutboxStore(db), emailSender, email.WorkerOptions{
+		Logger: logger,
+	})
 
 	app := server.New(server.Options{
 		Logger:            logger,
@@ -53,14 +58,20 @@ func main() {
 		IdleTimeout:       120 * time.Second,
 	}
 
-	errs := make(chan error, 1)
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	errs := make(chan error, 2)
 	go func() {
-		logger.Info("server listening", "addr", cfg.Addr, "env", cfg.Env)
+		logger.Info("server listening", "addr", cfg.Addr, "env", cfg.Env, "email_provider", cfg.EmailProvider)
 		errs <- httpServer.ListenAndServe()
 	}()
 
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
+	go func() {
+		if err := emailWorker.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
+			errs <- err
+		}
+	}()
 
 	select {
 	case <-ctx.Done():
@@ -74,7 +85,7 @@ func main() {
 		logger.Info("server stopped")
 	case err := <-errs:
 		if !errors.Is(err, http.ErrServerClosed) {
-			logger.Error("server failed", "err", err)
+			logger.Error("application failed", "err", err)
 			os.Exit(1)
 		}
 	}

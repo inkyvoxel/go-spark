@@ -16,6 +16,12 @@ INSERT INTO email_outbox (
 )
 RETURNING id, sender, recipient, subject, text_body, html_body, status, attempts, last_error, available_at, sent_at, created_at;
 
+-- name: GetEmailOutboxRow :one
+SELECT id, sender, recipient, subject, text_body, html_body, status, attempts, last_error, available_at, sent_at, created_at
+FROM email_outbox
+WHERE id = ?
+LIMIT 1;
+
 -- name: ClaimPendingEmails :many
 UPDATE email_outbox
 SET status = 'sending'
@@ -39,6 +45,15 @@ RETURNING id, sender, recipient, subject, text_body, html_body, status, attempts
 -- name: MarkEmailFailed :one
 UPDATE email_outbox
 SET status = 'pending',
+    attempts = attempts + 1,
+    last_error = ?,
+    available_at = ?
+WHERE id = ?
+RETURNING id, sender, recipient, subject, text_body, html_body, status, attempts, last_error, available_at, sent_at, created_at;
+
+-- name: MarkEmailFailedPermanently :one
+UPDATE email_outbox
+SET status = 'failed',
     attempts = attempts + 1,
     last_error = ?,
     available_at = ?

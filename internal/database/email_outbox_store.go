@@ -14,6 +14,8 @@ type EmailOutboxStore struct {
 	queries *db.Queries
 }
 
+var _ email.OutboxStore = (*EmailOutboxStore)(nil)
+
 func NewEmailOutboxStore(conn *sql.DB) *EmailOutboxStore {
 	return &EmailOutboxStore{queries: db.New(conn)}
 }
@@ -34,7 +36,7 @@ func (s *EmailOutboxStore) Enqueue(ctx context.Context, message email.Message, a
 	return row, nil
 }
 
-func (s *EmailOutboxStore) ClaimPending(ctx context.Context, now time.Time, limit int64) ([]db.EmailOutbox, error) {
+func (s *EmailOutboxStore) ClaimPending(ctx context.Context, now time.Time, limit int64) ([]email.OutboxEmail, error) {
 	if limit <= 0 {
 		return nil, fmt.Errorf("claim pending emails limit must be greater than zero")
 	}
@@ -47,30 +49,55 @@ func (s *EmailOutboxStore) ClaimPending(ctx context.Context, now time.Time, limi
 		return nil, fmt.Errorf("claim pending emails: %w", err)
 	}
 
-	return rows, nil
-}
-
-func (s *EmailOutboxStore) MarkSent(ctx context.Context, id int64, sentAt time.Time) (db.EmailOutbox, error) {
-	row, err := s.queries.MarkEmailSent(ctx, db.MarkEmailSentParams{
-		ID:     id,
-		SentAt: sql.NullTime{Time: sentAt, Valid: true},
-	})
-	if err != nil {
-		return db.EmailOutbox{}, fmt.Errorf("mark email sent: %w", err)
+	messages := make([]email.OutboxEmail, 0, len(rows))
+	for _, row := range rows {
+		messages = append(messages, email.OutboxEmail{
+			ID: row.ID,
+			Message: email.Message{
+				From:     row.Sender,
+				To:       row.Recipient,
+				Subject:  row.Subject,
+				TextBody: row.TextBody,
+				HTMLBody: row.HtmlBody,
+			},
+			Attempts: row.Attempts,
+		})
 	}
 
-	return row, nil
+	return messages, nil
 }
 
-func (s *EmailOutboxStore) MarkFailed(ctx context.Context, id int64, lastError string, availableAt time.Time) (db.EmailOutbox, error) {
-	row, err := s.queries.MarkEmailFailed(ctx, db.MarkEmailFailedParams{
+func (s *EmailOutboxStore) MarkSent(ctx context.Context, id int64, sentAt time.Time) error {
+	if _, err := s.queries.MarkEmailSent(ctx, db.MarkEmailSentParams{
+		ID:     id,
+		SentAt: sql.NullTime{Time: sentAt, Valid: true},
+	}); err != nil {
+		return fmt.Errorf("mark email sent: %w", err)
+	}
+
+	return nil
+}
+
+func (s *EmailOutboxStore) MarkFailed(ctx context.Context, id int64, lastError string, availableAt time.Time) error {
+	if _, err := s.queries.MarkEmailFailed(ctx, db.MarkEmailFailedParams{
 		ID:          id,
 		LastError:   lastError,
 		AvailableAt: availableAt,
-	})
-	if err != nil {
-		return db.EmailOutbox{}, fmt.Errorf("mark email failed: %w", err)
+	}); err != nil {
+		return fmt.Errorf("mark email failed: %w", err)
 	}
 
-	return row, nil
+	return nil
+}
+
+func (s *EmailOutboxStore) MarkFailedPermanently(ctx context.Context, id int64, lastError string, failedAt time.Time) error {
+	if _, err := s.queries.MarkEmailFailedPermanently(ctx, db.MarkEmailFailedPermanentlyParams{
+		ID:          id,
+		LastError:   lastError,
+		AvailableAt: failedAt,
+	}); err != nil {
+		return fmt.Errorf("mark email permanently failed: %w", err)
+	}
+
+	return nil
 }

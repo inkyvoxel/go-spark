@@ -121,6 +121,33 @@ func (q *Queries) EnqueueEmail(ctx context.Context, arg EnqueueEmailParams) (Ema
 	return i, err
 }
 
+const getEmailOutboxRow = `-- name: GetEmailOutboxRow :one
+SELECT id, sender, recipient, subject, text_body, html_body, status, attempts, last_error, available_at, sent_at, created_at
+FROM email_outbox
+WHERE id = ?
+LIMIT 1
+`
+
+func (q *Queries) GetEmailOutboxRow(ctx context.Context, id int64) (EmailOutbox, error) {
+	row := q.db.QueryRowContext(ctx, getEmailOutboxRow, id)
+	var i EmailOutbox
+	err := row.Scan(
+		&i.ID,
+		&i.Sender,
+		&i.Recipient,
+		&i.Subject,
+		&i.TextBody,
+		&i.HtmlBody,
+		&i.Status,
+		&i.Attempts,
+		&i.LastError,
+		&i.AvailableAt,
+		&i.SentAt,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const markEmailFailed = `-- name: MarkEmailFailed :one
 UPDATE email_outbox
 SET status = 'pending',
@@ -139,6 +166,42 @@ type MarkEmailFailedParams struct {
 
 func (q *Queries) MarkEmailFailed(ctx context.Context, arg MarkEmailFailedParams) (EmailOutbox, error) {
 	row := q.db.QueryRowContext(ctx, markEmailFailed, arg.LastError, arg.AvailableAt, arg.ID)
+	var i EmailOutbox
+	err := row.Scan(
+		&i.ID,
+		&i.Sender,
+		&i.Recipient,
+		&i.Subject,
+		&i.TextBody,
+		&i.HtmlBody,
+		&i.Status,
+		&i.Attempts,
+		&i.LastError,
+		&i.AvailableAt,
+		&i.SentAt,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const markEmailFailedPermanently = `-- name: MarkEmailFailedPermanently :one
+UPDATE email_outbox
+SET status = 'failed',
+    attempts = attempts + 1,
+    last_error = ?,
+    available_at = ?
+WHERE id = ?
+RETURNING id, sender, recipient, subject, text_body, html_body, status, attempts, last_error, available_at, sent_at, created_at
+`
+
+type MarkEmailFailedPermanentlyParams struct {
+	LastError   string
+	AvailableAt time.Time
+	ID          int64
+}
+
+func (q *Queries) MarkEmailFailedPermanently(ctx context.Context, arg MarkEmailFailedPermanentlyParams) (EmailOutbox, error) {
+	row := q.db.QueryRowContext(ctx, markEmailFailedPermanently, arg.LastError, arg.AvailableAt, arg.ID)
 	var i EmailOutbox
 	err := row.Scan(
 		&i.ID,
