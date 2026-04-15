@@ -90,6 +90,24 @@ func (s *Server) loginForm(w http.ResponseWriter, r *http.Request) {
 	s.render(w, "login.html", data)
 }
 
+func (s *Server) confirmEmail(w http.ResponseWriter, r *http.Request) {
+	data := s.newTemplateData(r, "Confirm Email")
+
+	if _, err := s.auth.VerifyEmail(r.Context(), r.URL.Query().Get("token")); err != nil {
+		if errors.Is(err, services.ErrInvalidVerificationToken) {
+			data.Error = "This confirmation link is invalid or has expired."
+			s.renderStatus(w, http.StatusBadRequest, "confirm_email.html", data)
+			return
+		}
+
+		s.logger.Error("confirm email", "err", err)
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		return
+	}
+
+	s.render(w, "confirm_email.html", data)
+}
+
 func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)

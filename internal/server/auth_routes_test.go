@@ -1,6 +1,7 @@
 package server
 
 import (
+	"errors"
 	"io"
 	"log/slog"
 	"net/http"
@@ -321,6 +322,66 @@ func TestRoutesRegisterShowsServiceValidationErrors(t *testing.T) {
 	}
 }
 
+func TestRoutesConfirmEmail(t *testing.T) {
+	auth := &fakeAuthLookup{
+		user: db.User{ID: 1, Email: "new@example.com"},
+	}
+	srv := newAuthRouteTestServer(t, auth)
+
+	req := httptest.NewRequest(http.MethodGet, "/confirm-email?token=raw-token", nil)
+	rec := httptest.NewRecorder()
+
+	srv.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	if auth.verifyToken != "raw-token" {
+		t.Fatalf("verify token = %q, want raw-token", auth.verifyToken)
+	}
+	if !strings.Contains(rec.Body.String(), "Email confirmed") {
+		t.Fatalf("body = %q, want confirmation success", rec.Body.String())
+	}
+}
+
+func TestRoutesConfirmEmailRejectsInvalidToken(t *testing.T) {
+	auth := &fakeAuthLookup{
+		verifyErr: services.ErrInvalidVerificationToken,
+	}
+	srv := newAuthRouteTestServer(t, auth)
+
+	req := httptest.NewRequest(http.MethodGet, "/confirm-email?token=bad-token", nil)
+	rec := httptest.NewRecorder()
+
+	srv.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+	}
+	if auth.verifyToken != "bad-token" {
+		t.Fatalf("verify token = %q, want bad-token", auth.verifyToken)
+	}
+	if !strings.Contains(rec.Body.String(), "invalid or has expired") {
+		t.Fatalf("body = %q, want invalid token message", rec.Body.String())
+	}
+}
+
+func TestRoutesConfirmEmailHandlesUnexpectedError(t *testing.T) {
+	auth := &fakeAuthLookup{
+		verifyErr: errors.New("database unavailable"),
+	}
+	srv := newAuthRouteTestServer(t, auth)
+
+	req := httptest.NewRequest(http.MethodGet, "/confirm-email?token=raw-token", nil)
+	rec := httptest.NewRecorder()
+
+	srv.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusInternalServerError)
+	}
+}
+
 func TestRoutesLogout(t *testing.T) {
 	auth := &fakeAuthLookup{}
 	srv := newAuthRouteTestServer(t, auth)
@@ -440,10 +501,11 @@ func newAuthRouteTestServer(t *testing.T, auth authService) *Server {
 		auth:   auth,
 		logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
 		templates: testTemplates(t, map[string]string{
-			"home.html":     `home {{ if .Authenticated }}Account Sign out {{ .User.Email }}{{ else }}Sign in Create account{{ end }}`,
-			"register.html": `register {{ .Error }} {{ with index .FieldErrors "email" }}{{ . }}{{ end }} {{ with index .FieldErrors "password" }}{{ . }}{{ end }} {{ with index .FieldErrors "confirm_password" }}{{ . }}{{ end }} {{ .Email }} {{ .PasswordMinLength }} {{ .CSRFToken }}`,
-			"login.html":    `login {{ .Error }} {{ .CSRFToken }} {{ .Next }}`,
-			"account.html":  `account {{ .User.Email }} {{ .CSRFToken }}`,
+			"home.html":          `home {{ if .Authenticated }}Account Sign out {{ .User.Email }}{{ else }}Sign in Create account{{ end }}`,
+			"register.html":      `register {{ .Error }} {{ with index .FieldErrors "email" }}{{ . }}{{ end }} {{ with index .FieldErrors "password" }}{{ . }}{{ end }} {{ with index .FieldErrors "confirm_password" }}{{ . }}{{ end }} {{ .Email }} {{ .PasswordMinLength }} {{ .CSRFToken }}`,
+			"login.html":         `login {{ .Error }} {{ .CSRFToken }} {{ .Next }}`,
+			"account.html":       `account {{ .User.Email }} {{ .CSRFToken }}`,
+			"confirm_email.html": `confirm {{ if .Error }}{{ .Error }}{{ else }}Email confirmed{{ end }}`,
 		}),
 		passwordMinLength: 8,
 	}

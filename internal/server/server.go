@@ -63,6 +63,7 @@ func mustParseTemplates() map[string]*template.Template {
 func parseTemplates() (map[string]*template.Template, error) {
 	pages := []string{
 		"account.html",
+		"confirm_email.html",
 		"home.html",
 		"login.html",
 		"register.html",
@@ -91,6 +92,7 @@ func (s *Server) Routes() http.Handler {
 	// Register new protected pages with requireAuth and anonymous-only pages with requireAnonymous.
 	dynamic.Handle("GET /register", s.requireAnonymous(http.HandlerFunc(s.registerForm)))
 	dynamic.Handle("POST /register", s.requireAnonymous(http.HandlerFunc(s.register)))
+	dynamic.HandleFunc("GET /confirm-email", s.confirmEmail)
 	dynamic.Handle("GET /login", s.requireAnonymous(http.HandlerFunc(s.loginForm)))
 	dynamic.Handle("POST /login", s.requireAnonymous(http.HandlerFunc(s.login)))
 	dynamic.Handle("POST /logout", s.requireAuth(http.HandlerFunc(s.logout)))

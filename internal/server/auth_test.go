@@ -234,6 +234,8 @@ type fakeAuthLookup struct {
 	loginErr      error
 	logoutToken   string
 	logoutErr     error
+	verifyToken   string
+	verifyErr     error
 }
 
 func (f *fakeAuthLookup) UserBySessionToken(ctx context.Context, token string) (db.User, error) {
@@ -260,6 +262,14 @@ func (f *fakeAuthLookup) Register(ctx context.Context, email string, password st
 	f.registerEmail = email
 	f.registerPass = password
 	return f.user, f.registerErr
+}
+
+func (f *fakeAuthLookup) VerifyEmail(ctx context.Context, token string) (db.User, error) {
+	f.verifyToken = token
+	if f.verifyErr != nil {
+		return db.User{}, f.verifyErr
+	}
+	return f.user, nil
 }
 
 func newAuthMiddlewareTestServer(auth authService) *Server {
