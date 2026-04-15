@@ -4,10 +4,12 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
 	db "github.com/inkyvoxel/go-spark/internal/db/generated"
+	"github.com/inkyvoxel/go-spark/internal/email"
 
 	"golang.org/x/crypto/bcrypt"
 )
@@ -28,6 +30,20 @@ func TestAuthServiceRegisterHashesPassword(t *testing.T) {
 	}
 	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte("correct horse battery staple")); err != nil {
 		t.Fatalf("CompareHashAndPassword() error = %v", err)
+	}
+
+	store := service.store.(*fakeAuthStore)
+	if len(store.verificationTokens) != 1 {
+		t.Fatalf("verification token count = %d, want 1", len(store.verificationTokens))
+	}
+	if len(store.outbox) != 1 {
+		t.Fatalf("outbox count = %d, want 1", len(store.outbox))
+	}
+	if store.outbox[0].To != "<user@example.com>" {
+		t.Fatalf("confirmation email recipient = %q, want <user@example.com>", store.outbox[0].To)
+	}
+	if !strings.Contains(store.outbox[0].TextBody, "http://localhost:8080/confirm-email?token=") {
+		t.Fatalf("confirmation email text = %q, want confirmation URL", store.outbox[0].TextBody)
 	}
 }
 
@@ -220,6 +236,10 @@ func newTestAuthService(t *testing.T) *AuthService {
 		SessionDuration: time.Hour,
 		BcryptCost:      bcrypt.MinCost,
 		PasswordMinLen:  8,
+		ConfirmationEmail: email.AccountConfirmationOptions{
+			AppBaseURL: "http://localhost:8080",
+			From:       "Go Spark <hello@example.com>",
+		},
 	})
 }
 
@@ -231,6 +251,7 @@ type fakeAuthStore struct {
 	usersByID               map[int64]db.User
 	sessions                map[string]db.Session
 	verificationTokens      map[string]db.EmailVerificationToken
+	outbox                  []email.Message
 }
 
 func newFakeAuthStore() *fakeAuthStore {
@@ -259,6 +280,21 @@ func (s *fakeAuthStore) CreateUser(ctx context.Context, email, passwordHash stri
 	s.nextUserID++
 	s.usersByEmail[email] = user
 	s.usersByID[user.ID] = user
+
+	return user, nil
+}
+
+func (s *fakeAuthStore) CreateUserWithEmailVerification(ctx context.Context, params CreateUserWithEmailVerificationParams) (db.User, error) {
+	user, err := s.CreateUser(ctx, params.Email, params.PasswordHash)
+	if err != nil {
+		return db.User{}, err
+	}
+	if _, err := s.CreateEmailVerificationToken(ctx, user.ID, params.TokenHash, params.TokenExpiresAt); err != nil {
+		delete(s.usersByEmail, user.Email)
+		delete(s.usersByID, user.ID)
+		return db.User{}, err
+	}
+	s.outbox = append(s.outbox, params.ConfirmationEmail)
 
 	return user, nil
 }

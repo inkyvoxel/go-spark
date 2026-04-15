@@ -35,6 +35,10 @@ func main() {
 
 	auth := services.NewAuthService(database.NewAuthStore(db), services.AuthOptions{
 		PasswordMinLen: cfg.PasswordMinLength,
+		ConfirmationEmail: email.AccountConfirmationOptions{
+			AppBaseURL: cfg.AppBaseURL,
+			From:       cfg.EmailFrom,
+		},
 	})
 	emailSender := email.NewLogSender(logger)
 	emailWorker := email.NewWorker(database.NewEmailOutboxStore(db), emailSender, email.WorkerOptions{

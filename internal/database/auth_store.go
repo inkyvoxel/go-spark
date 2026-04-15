@@ -43,6 +43,51 @@ func (s *AuthStore) CreateUser(ctx context.Context, email, passwordHash string) 
 	return user, nil
 }
 
+func (s *AuthStore) CreateUserWithEmailVerification(ctx context.Context, params services.CreateUserWithEmailVerificationParams) (db.User, error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return db.User{}, fmt.Errorf("begin register user transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	queries := s.queries.WithTx(tx)
+	user, err := queries.CreateUser(ctx, db.CreateUserParams{
+		Email:        params.Email,
+		PasswordHash: params.PasswordHash,
+	})
+	if err != nil {
+		if isSQLiteUniqueConstraint(err) {
+			return db.User{}, services.ErrEmailAlreadyRegistered
+		}
+		return db.User{}, fmt.Errorf("create user: %w", err)
+	}
+
+	if _, err := queries.CreateEmailVerificationToken(ctx, db.CreateEmailVerificationTokenParams{
+		UserID:    user.ID,
+		TokenHash: params.TokenHash,
+		ExpiresAt: params.TokenExpiresAt,
+	}); err != nil {
+		return db.User{}, fmt.Errorf("create email verification token: %w", err)
+	}
+
+	if _, err := queries.EnqueueEmail(ctx, db.EnqueueEmailParams{
+		Sender:      params.ConfirmationEmail.From,
+		Recipient:   params.ConfirmationEmail.To,
+		Subject:     params.ConfirmationEmail.Subject,
+		TextBody:    params.ConfirmationEmail.TextBody,
+		HtmlBody:    params.ConfirmationEmail.HTMLBody,
+		AvailableAt: params.EmailAvailableAt,
+	}); err != nil {
+		return db.User{}, fmt.Errorf("enqueue confirmation email: %w", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return db.User{}, fmt.Errorf("commit register user transaction: %w", err)
+	}
+
+	return user, nil
+}
+
 func (s *AuthStore) GetUserByEmail(ctx context.Context, email string) (db.User, error) {
 	user, err := s.queries.GetUserByEmail(ctx, email)
 	if err != nil {

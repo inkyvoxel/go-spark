@@ -14,6 +14,7 @@ import (
 	"unicode/utf8"
 
 	db "github.com/inkyvoxel/go-spark/internal/db/generated"
+	"github.com/inkyvoxel/go-spark/internal/email"
 
 	"golang.org/x/crypto/bcrypt"
 )
@@ -36,6 +37,7 @@ type AuthService struct {
 	store                          AuthStore
 	sessionDuration                time.Duration
 	emailVerificationTokenDuration time.Duration
+	confirmationEmail              email.AccountConfirmationOptions
 	bcryptCost                     int
 	tokenBytes                     int
 	passwordMinLen                 int
@@ -43,6 +45,7 @@ type AuthService struct {
 
 type AuthStore interface {
 	CreateUser(ctx context.Context, email, passwordHash string) (db.User, error)
+	CreateUserWithEmailVerification(ctx context.Context, params CreateUserWithEmailVerificationParams) (db.User, error)
 	GetUserByEmail(ctx context.Context, email string) (db.User, error)
 	CreateSession(ctx context.Context, userID int64, token string, expiresAt time.Time) (db.Session, error)
 	GetUserBySessionToken(ctx context.Context, token string) (db.User, error)
@@ -51,12 +54,22 @@ type AuthStore interface {
 	VerifyEmailByTokenHash(ctx context.Context, tokenHash string, verifiedAt time.Time) (db.User, error)
 }
 
+type CreateUserWithEmailVerificationParams struct {
+	Email             string
+	PasswordHash      string
+	TokenHash         string
+	TokenExpiresAt    time.Time
+	ConfirmationEmail email.Message
+	EmailAvailableAt  time.Time
+}
+
 type AuthOptions struct {
 	SessionDuration                time.Duration
 	BcryptCost                     int
 	TokenBytes                     int
 	PasswordMinLen                 int
 	EmailVerificationTokenDuration time.Duration
+	ConfirmationEmail              email.AccountConfirmationOptions
 }
 
 func NewAuthService(store AuthStore, opts AuthOptions) *AuthService {
@@ -89,15 +102,16 @@ func NewAuthService(store AuthStore, opts AuthOptions) *AuthService {
 		store:                          store,
 		sessionDuration:                sessionDuration,
 		emailVerificationTokenDuration: emailVerificationTokenDuration,
+		confirmationEmail:              opts.ConfirmationEmail,
 		bcryptCost:                     bcryptCost,
 		tokenBytes:                     tokenBytes,
 		passwordMinLen:                 passwordMinLen,
 	}
 }
 
-func (s *AuthService) Register(ctx context.Context, email, password string) (db.User, error) {
-	email = normalizeEmail(email)
-	if !isValidEmail(email) {
+func (s *AuthService) Register(ctx context.Context, emailAddress, password string) (db.User, error) {
+	emailAddress = normalizeEmail(emailAddress)
+	if !isValidEmail(emailAddress) {
 		return db.User{}, ErrInvalidEmail
 	}
 	if utf8.RuneCountInString(password) < s.passwordMinLen {
@@ -109,7 +123,28 @@ func (s *AuthService) Register(ctx context.Context, email, password string) (db.
 		return db.User{}, fmt.Errorf("hash password: %w", err)
 	}
 
-	user, err := s.store.CreateUser(ctx, email, string(hash))
+	token, err := generateToken(s.tokenBytes)
+	if err != nil {
+		return db.User{}, fmt.Errorf("generate email verification token: %w", err)
+	}
+
+	message, err := email.NewAccountConfirmationMessage(s.confirmationEmail, emailAddress, token)
+	if err != nil {
+		return db.User{}, fmt.Errorf("build account confirmation email: %w", err)
+	}
+
+	now := time.Now().UTC()
+	user, err := s.store.CreateUserWithEmailVerification(
+		ctx,
+		CreateUserWithEmailVerificationParams{
+			Email:             emailAddress,
+			PasswordHash:      string(hash),
+			TokenHash:         hashToken(token),
+			TokenExpiresAt:    now.Add(s.emailVerificationTokenDuration),
+			ConfirmationEmail: message,
+			EmailAvailableAt:  now,
+		},
+	)
 	if err != nil {
 		if errors.Is(err, ErrEmailAlreadyRegistered) {
 			return db.User{}, ErrEmailAlreadyRegistered
