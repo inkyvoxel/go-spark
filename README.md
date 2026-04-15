@@ -58,7 +58,7 @@ make tools
 
 `sqlc` and `goose` are pinned as Go tool dependencies in `go.mod`, so the Makefile runs them through `go tool`. You do not need separate global installs.
 
-See [docs/development.md](docs/development.md) for tool and workflow details.
+See [docs/development.md](docs/development.md) for tool and workflow details. See [docs/email.md](docs/email.md) for the staged email and account-confirmation plan.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) before opening pull requests, and [CHANGELOG.md](CHANGELOG.md) for notable changes.
 

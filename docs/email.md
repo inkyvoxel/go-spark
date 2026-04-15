@@ -53,6 +53,7 @@ type Sender interface {
 }
 
 type Message struct {
+	From     string
 	To       string
 	Subject  string
 	TextBody string
@@ -250,7 +251,7 @@ Use focused tests at each boundary:
 * Route tests assert user-facing behavior and redirects, not provider calls.
 * Provider adapter tests should avoid real network calls by default.
 
-For local development, the log sender should make the confirmation URL visible in application logs.
+For local development, the log sender should make email delivery attempts visible in application logs without logging message bodies or raw confirmation tokens.
 
 ## Error Handling
 

@@ -2,8 +2,13 @@ package config
 
 import (
 	"fmt"
+	"net/mail"
+	"net/url"
 	"os"
 	"strconv"
+	"strings"
+
+	"github.com/inkyvoxel/go-spark/internal/email"
 )
 
 type Config struct {
@@ -12,6 +17,9 @@ type Config struct {
 	DatabasePath      string
 	CookieSecure      bool
 	PasswordMinLength int
+	AppBaseURL        string
+	EmailFrom         string
+	EmailProvider     string
 }
 
 func FromEnv(defaultPasswordMinLength int) (Config, error) {
@@ -25,12 +33,30 @@ func FromEnv(defaultPasswordMinLength int) (Config, error) {
 		return Config{}, err
 	}
 
+	appBaseURL, err := envURL("APP_BASE_URL", "http://localhost:8080")
+	if err != nil {
+		return Config{}, err
+	}
+
+	emailFrom, err := envEmailAddress("EMAIL_FROM", "Go Spark <hello@example.com>")
+	if err != nil {
+		return Config{}, err
+	}
+
+	emailProvider, err := envEmailProvider("EMAIL_PROVIDER", email.ProviderLog)
+	if err != nil {
+		return Config{}, err
+	}
+
 	return Config{
 		Addr:              envOrDefault("APP_ADDR", ":8080"),
 		Env:               envOrDefault("APP_ENV", "development"),
 		DatabasePath:      envOrDefault("DATABASE_PATH", "./data/app.db"),
 		CookieSecure:      cookieSecure,
 		PasswordMinLength: passwordMinLength,
+		AppBaseURL:        appBaseURL,
+		EmailFrom:         emailFrom,
+		EmailProvider:     emailProvider,
 	}, nil
 }
 
@@ -70,4 +96,42 @@ func envIntOrDefault(key string, fallback int) (int, error) {
 	}
 
 	return value, nil
+}
+
+func envURL(key, fallback string) (string, error) {
+	raw := envOrDefault(key, fallback)
+	parsed, err := url.Parse(raw)
+	if err != nil {
+		return "", fmt.Errorf("%s must be a URL: %w", key, err)
+	}
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return "", fmt.Errorf("%s must use http or https", key)
+	}
+	if parsed.Host == "" {
+		return "", fmt.Errorf("%s must include a host", key)
+	}
+	if parsed.RawQuery != "" || parsed.Fragment != "" {
+		return "", fmt.Errorf("%s must not include query or fragment", key)
+	}
+
+	return strings.TrimRight(parsed.String(), "/"), nil
+}
+
+func envEmailAddress(key, fallback string) (string, error) {
+	raw := envOrDefault(key, fallback)
+	address, err := mail.ParseAddress(raw)
+	if err != nil {
+		return "", fmt.Errorf("%s must be an email address: %w", key, err)
+	}
+
+	return address.String(), nil
+}
+
+func envEmailProvider(key, fallback string) (string, error) {
+	provider := strings.ToLower(strings.TrimSpace(envOrDefault(key, fallback)))
+	if provider != email.ProviderLog {
+		return "", fmt.Errorf("%s must be %q", key, email.ProviderLog)
+	}
+
+	return provider, nil
 }
