@@ -40,7 +40,9 @@ func main() {
 			From:       cfg.EmailFrom,
 		},
 	})
-	emailSender := email.NewLogSender(logger)
+	emailSender := email.NewLogSender(logger, email.LogSenderOptions{
+		LogBody: cfg.EmailLogBody,
+	})
 	emailWorker := email.NewWorker(database.NewEmailOutboxStore(db), emailSender, email.WorkerOptions{
 		Logger: logger,
 	})

@@ -26,15 +26,23 @@ type Sender interface {
 }
 
 type LogSender struct {
-	logger *slog.Logger
+	logger  *slog.Logger
+	logBody bool
 }
 
-func NewLogSender(logger *slog.Logger) *LogSender {
+type LogSenderOptions struct {
+	LogBody bool
+}
+
+func NewLogSender(logger *slog.Logger, opts LogSenderOptions) *LogSender {
 	if logger == nil {
 		logger = slog.Default()
 	}
 
-	return &LogSender{logger: logger}
+	return &LogSender{
+		logger:  logger,
+		logBody: opts.LogBody,
+	}
 }
 
 func (s *LogSender) Send(ctx context.Context, message Message) error {
@@ -42,13 +50,17 @@ func (s *LogSender) Send(ctx context.Context, message Message) error {
 		return err
 	}
 
-	s.logger.Info(
-		"email queued for delivery",
+	attrs := []any{
 		"provider", ProviderLog,
 		"from", message.From,
 		"to", message.To,
 		"subject", message.Subject,
-	)
+	}
+	if s.logBody {
+		attrs = append(attrs, "text_body", message.TextBody, "html_body", message.HTMLBody)
+	}
+
+	s.logger.Info("email sent with log provider", attrs...)
 	return nil
 }
 

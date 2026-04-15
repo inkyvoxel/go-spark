@@ -20,6 +20,7 @@ type Config struct {
 	AppBaseURL        string
 	EmailFrom         string
 	EmailProvider     string
+	EmailLogBody      bool
 }
 
 func FromEnv(defaultPasswordMinLength int) (Config, error) {
@@ -48,6 +49,11 @@ func FromEnv(defaultPasswordMinLength int) (Config, error) {
 		return Config{}, err
 	}
 
+	emailLogBody, err := envBool("EMAIL_LOG_BODY")
+	if err != nil {
+		return Config{}, err
+	}
+
 	return Config{
 		Addr:              envOrDefault("APP_ADDR", ":8080"),
 		Env:               envOrDefault("APP_ENV", "development"),
@@ -57,6 +63,7 @@ func FromEnv(defaultPasswordMinLength int) (Config, error) {
 		AppBaseURL:        appBaseURL,
 		EmailFrom:         emailFrom,
 		EmailProvider:     emailProvider,
+		EmailLogBody:      emailLogBody,
 	}, nil
 }
 

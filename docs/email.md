@@ -162,6 +162,7 @@ Initial config:
 APP_BASE_URL=http://localhost:8080
 EMAIL_FROM=Go Spark <hello@example.com>
 EMAIL_PROVIDER=log
+EMAIL_LOG_BODY=false
 ```
 
 SMTP config can be added in the provider slice:
@@ -254,7 +255,7 @@ Use focused tests at each boundary:
 * Route tests assert user-facing behavior and redirects, not provider calls.
 * Provider adapter tests should avoid real network calls by default.
 
-For local development, the log sender should make email delivery attempts visible in application logs without logging message bodies or raw confirmation tokens.
+For local development, the log sender makes email delivery attempts visible in application logs. By default it does not log message bodies or raw confirmation tokens. Set `EMAIL_LOG_BODY=true` locally when you want clickable confirmation links in the logs.
 
 ## Error Handling
 

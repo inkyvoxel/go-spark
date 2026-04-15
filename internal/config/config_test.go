@@ -17,6 +17,7 @@ func TestFromEnvUsesDefaults(t *testing.T) {
 	t.Setenv("APP_BASE_URL", "")
 	t.Setenv("EMAIL_FROM", "")
 	t.Setenv("EMAIL_PROVIDER", "")
+	t.Setenv("EMAIL_LOG_BODY", "")
 
 	cfg, err := FromEnv(services.DefaultPasswordMinLength)
 	if err != nil {
@@ -47,6 +48,9 @@ func TestFromEnvUsesDefaults(t *testing.T) {
 	if cfg.EmailProvider != email.ProviderLog {
 		t.Fatalf("EmailProvider = %q, want %q", cfg.EmailProvider, email.ProviderLog)
 	}
+	if cfg.EmailLogBody {
+		t.Fatal("EmailLogBody = true, want false")
+	}
 }
 
 func TestFromEnvUsesEnvironment(t *testing.T) {
@@ -58,6 +62,7 @@ func TestFromEnvUsesEnvironment(t *testing.T) {
 	t.Setenv("APP_BASE_URL", "https://app.example.com/")
 	t.Setenv("EMAIL_FROM", "Example <mail@example.com>")
 	t.Setenv("EMAIL_PROVIDER", "LOG")
+	t.Setenv("EMAIL_LOG_BODY", "true")
 
 	cfg, err := FromEnv(services.DefaultPasswordMinLength)
 	if err != nil {
@@ -87,6 +92,9 @@ func TestFromEnvUsesEnvironment(t *testing.T) {
 	}
 	if cfg.EmailProvider != email.ProviderLog {
 		t.Fatalf("EmailProvider = %q, want %q", cfg.EmailProvider, email.ProviderLog)
+	}
+	if !cfg.EmailLogBody {
+		t.Fatal("EmailLogBody = false, want true")
 	}
 }
 
@@ -172,5 +180,17 @@ func TestFromEnvRejectsUnknownEmailProvider(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "EMAIL_PROVIDER") {
 		t.Fatalf("FromEnv() error = %v, want EMAIL_PROVIDER", err)
+	}
+}
+
+func TestFromEnvRejectsInvalidEmailLogBodyBool(t *testing.T) {
+	t.Setenv("EMAIL_LOG_BODY", "sometimes")
+
+	_, err := FromEnv(services.DefaultPasswordMinLength)
+	if err == nil {
+		t.Fatal("FromEnv() error = nil, want error")
+	}
+	if !strings.Contains(err.Error(), "EMAIL_LOG_BODY") {
+		t.Fatalf("FromEnv() error = %v, want EMAIL_LOG_BODY", err)
 	}
 }

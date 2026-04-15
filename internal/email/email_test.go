@@ -102,7 +102,7 @@ func TestNewAccountConfirmationMessageValidatesInputs(t *testing.T) {
 func TestLogSenderDoesNotLogMessageBodies(t *testing.T) {
 	var output bytes.Buffer
 	logger := slog.New(slog.NewTextHandler(&output, nil))
-	sender := NewLogSender(logger)
+	sender := NewLogSender(logger, LogSenderOptions{})
 
 	err := sender.Send(context.Background(), Message{
 		From:     "hello@example.com",
@@ -124,11 +124,33 @@ func TestLogSenderDoesNotLogMessageBodies(t *testing.T) {
 	}
 }
 
+func TestLogSenderLogsMessageBodiesWhenEnabled(t *testing.T) {
+	var output bytes.Buffer
+	logger := slog.New(slog.NewTextHandler(&output, nil))
+	sender := NewLogSender(logger, LogSenderOptions{LogBody: true})
+
+	err := sender.Send(context.Background(), Message{
+		From:     "hello@example.com",
+		To:       "user@example.com",
+		Subject:  "Confirm your email address",
+		TextBody: "Confirm here: http://localhost:8080/confirm-email?token=secret",
+		HTMLBody: `<a href="http://localhost:8080/confirm-email?token=secret">Confirm</a>`,
+	})
+	if err != nil {
+		t.Fatalf("Send() error = %v", err)
+	}
+
+	logged := output.String()
+	if !strings.Contains(logged, "token=secret") {
+		t.Fatalf("log output = %q, want message body", logged)
+	}
+}
+
 func TestLogSenderReturnsContextError(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	err := NewLogSender(nil).Send(ctx, Message{})
+	err := NewLogSender(nil, LogSenderOptions{}).Send(ctx, Message{})
 	if err == nil {
 		t.Fatal("Send() error = nil, want context error")
 	}
