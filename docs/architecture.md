@@ -71,8 +71,11 @@ Instead:
 * SQL queries live in `.sql` files.
 * `sqlc` generates strongly typed Go code.
 * Queries are explicit, readable, and easy to optimize.
+* Storage adapters wrap generated queries and translate driver-specific errors into service-level errors.
 
 The goal is to keep performance, debugging, and data access behavior visible.
+
+Business logic should not import database drivers. For example, auth registration treats duplicate email as a domain error, while the SQLite-backed auth store is responsible for recognizing SQLite's unique constraint error and returning that domain error.
 
 ### Minimal Dependencies
 
@@ -111,7 +114,8 @@ Guidelines:
 
 * Handlers own HTTP request and response concerns.
 * Services own business logic.
-* The DB layer owns persistence.
+* Services define the small storage interfaces they need.
+* The DB layer owns persistence, generated queries, and database-driver error translation.
 * Templates render data and avoid business rules.
 
 ### Thin Templates
@@ -148,6 +152,8 @@ Important notes:
 * If scaling to multiple instances, consider migrating to Postgres.
 * Keep schema simple and well-indexed.
 * Treat database backups as part of production readiness.
+
+Database-specific behavior should stay inside database adapters. If a project moves to Postgres, keep the service interfaces stable, port the migrations and SQL queries, regenerate `sqlc` code for Postgres, and add Postgres-backed adapters that translate Postgres errors such as unique violations into the same service errors.
 
 ### Migrations
 
@@ -353,7 +359,7 @@ These can be added later if a project needs them:
 1. Add a migration if schema changes are needed.
 2. Add or update SQL queries.
 3. Generate code via `sqlc`.
-4. Add service logic.
+4. Add or update a focused storage interface and database adapter if service logic needs persistence.
 5. Add a handler.
 6. Add a template or partial.
 7. Add focused tests for the behavior.

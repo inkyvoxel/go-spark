@@ -15,8 +15,6 @@ import (
 	db "github.com/inkyvoxel/go-spark/internal/db/generated"
 
 	"golang.org/x/crypto/bcrypt"
-	"modernc.org/sqlite"
-	sqlite3 "modernc.org/sqlite/lib"
 )
 
 const DefaultPasswordMinLength = 12
@@ -30,11 +28,20 @@ var (
 )
 
 type AuthService struct {
-	queries         *db.Queries
+	store           AuthStore
 	sessionDuration time.Duration
 	bcryptCost      int
 	tokenBytes      int
 	passwordMinLen  int
+}
+
+type AuthStore interface {
+	CreateUser(ctx context.Context, email, passwordHash string) (db.User, error)
+	GetUserByEmail(ctx context.Context, email string) (db.User, error)
+	CreateSession(ctx context.Context, userID int64, token string, expiresAt time.Time) (db.Session, error)
+	GetUserBySessionToken(ctx context.Context, token string) (db.User, error)
+	DeleteSessionByToken(ctx context.Context, token string) error
+	DeleteExpiredSessions(ctx context.Context) error
 }
 
 type AuthOptions struct {
@@ -44,7 +51,7 @@ type AuthOptions struct {
 	PasswordMinLen  int
 }
 
-func NewAuthService(queries *db.Queries, opts AuthOptions) *AuthService {
+func NewAuthService(store AuthStore, opts AuthOptions) *AuthService {
 	sessionDuration := opts.SessionDuration
 	if sessionDuration == 0 {
 		sessionDuration = 7 * 24 * time.Hour
@@ -66,7 +73,7 @@ func NewAuthService(queries *db.Queries, opts AuthOptions) *AuthService {
 	}
 
 	return &AuthService{
-		queries:         queries,
+		store:           store,
 		sessionDuration: sessionDuration,
 		bcryptCost:      bcryptCost,
 		tokenBytes:      tokenBytes,
@@ -88,12 +95,9 @@ func (s *AuthService) Register(ctx context.Context, email, password string) (db.
 		return db.User{}, fmt.Errorf("hash password: %w", err)
 	}
 
-	user, err := s.queries.CreateUser(ctx, db.CreateUserParams{
-		Email:        email,
-		PasswordHash: string(hash),
-	})
+	user, err := s.store.CreateUser(ctx, email, string(hash))
 	if err != nil {
-		if isUniqueConstraintError(err) {
+		if errors.Is(err, ErrEmailAlreadyRegistered) {
 			return db.User{}, ErrEmailAlreadyRegistered
 		}
 		return db.User{}, fmt.Errorf("create user: %w", err)
@@ -103,7 +107,7 @@ func (s *AuthService) Register(ctx context.Context, email, password string) (db.
 }
 
 func (s *AuthService) Login(ctx context.Context, email, password string) (db.User, db.Session, error) {
-	user, err := s.queries.GetUserByEmail(ctx, normalizeEmail(email))
+	user, err := s.store.GetUserByEmail(ctx, normalizeEmail(email))
 	if errors.Is(err, sql.ErrNoRows) {
 		return db.User{}, db.Session{}, ErrInvalidCredentials
 	}
@@ -120,11 +124,7 @@ func (s *AuthService) Login(ctx context.Context, email, password string) (db.Use
 		return db.User{}, db.Session{}, fmt.Errorf("generate session token: %w", err)
 	}
 
-	session, err := s.queries.CreateSession(ctx, db.CreateSessionParams{
-		UserID:    user.ID,
-		Token:     token,
-		ExpiresAt: time.Now().UTC().Add(s.sessionDuration),
-	})
+	session, err := s.store.CreateSession(ctx, user.ID, token, time.Now().UTC().Add(s.sessionDuration))
 	if err != nil {
 		return db.User{}, db.Session{}, fmt.Errorf("create session: %w", err)
 	}
@@ -138,7 +138,7 @@ func (s *AuthService) UserBySessionToken(ctx context.Context, token string) (db.
 		return db.User{}, ErrInvalidSession
 	}
 
-	user, err := s.queries.GetUserBySessionToken(ctx, token)
+	user, err := s.store.GetUserBySessionToken(ctx, token)
 	if errors.Is(err, sql.ErrNoRows) {
 		return db.User{}, ErrInvalidSession
 	}
@@ -155,7 +155,7 @@ func (s *AuthService) Logout(ctx context.Context, token string) error {
 		return ErrInvalidSession
 	}
 
-	if err := s.queries.DeleteSessionByToken(ctx, token); err != nil {
+	if err := s.store.DeleteSessionByToken(ctx, token); err != nil {
 		return fmt.Errorf("delete session: %w", err)
 	}
 
@@ -163,7 +163,7 @@ func (s *AuthService) Logout(ctx context.Context, token string) error {
 }
 
 func (s *AuthService) DeleteExpiredSessions(ctx context.Context) error {
-	if err := s.queries.DeleteExpiredSessions(ctx); err != nil {
+	if err := s.store.DeleteExpiredSessions(ctx); err != nil {
 		return fmt.Errorf("delete expired sessions: %w", err)
 	}
 
@@ -215,11 +215,6 @@ func isValidEmail(email string) bool {
 		}
 	}
 	return false
-}
-
-func isUniqueConstraintError(err error) bool {
-	var sqliteErr *sqlite.Error
-	return errors.As(err, &sqliteErr) && sqliteErr.Code() == sqlite3.SQLITE_CONSTRAINT_UNIQUE
 }
 
 func generateToken(bytes int) (string, error) {

@@ -10,30 +10,7 @@ import (
 	db "github.com/inkyvoxel/go-spark/internal/db/generated"
 
 	"golang.org/x/crypto/bcrypt"
-	_ "modernc.org/sqlite"
 )
-
-const authTestSchema = `
-CREATE TABLE users (
-    id INTEGER PRIMARY KEY,
-    email TEXT NOT NULL UNIQUE,
-    password_hash TEXT NOT NULL,
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE sessions (
-    id INTEGER PRIMARY KEY,
-    user_id INTEGER NOT NULL,
-    token TEXT NOT NULL UNIQUE,
-    expires_at TIMESTAMP NOT NULL,
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES users(id)
-);
-
-CREATE INDEX sessions_user_id_idx ON sessions(user_id);
-CREATE INDEX sessions_token_idx ON sessions(token);
-CREATE INDEX sessions_expires_at_idx ON sessions(expires_at);
-`
 
 func TestAuthServiceRegisterHashesPassword(t *testing.T) {
 	service := newTestAuthService(t)
@@ -161,21 +138,98 @@ func TestAuthServiceUserBySessionTokenAndLogout(t *testing.T) {
 func newTestAuthService(t *testing.T) *AuthService {
 	t.Helper()
 
-	conn, err := sql.Open("sqlite", ":memory:")
-	if err != nil {
-		t.Fatalf("sql.Open() error = %v", err)
-	}
-	t.Cleanup(func() {
-		_ = conn.Close()
-	})
-
-	if _, err := conn.Exec(authTestSchema); err != nil {
-		t.Fatalf("create schema: %v", err)
-	}
-
-	return NewAuthService(db.New(conn), AuthOptions{
+	return NewAuthService(newFakeAuthStore(), AuthOptions{
 		SessionDuration: time.Hour,
 		BcryptCost:      bcrypt.MinCost,
 		PasswordMinLen:  8,
 	})
+}
+
+type fakeAuthStore struct {
+	nextUserID    int64
+	nextSessionID int64
+	usersByEmail  map[string]db.User
+	usersByID     map[int64]db.User
+	sessions      map[string]db.Session
+}
+
+func newFakeAuthStore() *fakeAuthStore {
+	return &fakeAuthStore{
+		nextUserID:    1,
+		nextSessionID: 1,
+		usersByEmail:  make(map[string]db.User),
+		usersByID:     make(map[int64]db.User),
+		sessions:      make(map[string]db.Session),
+	}
+}
+
+func (s *fakeAuthStore) CreateUser(ctx context.Context, email, passwordHash string) (db.User, error) {
+	if _, ok := s.usersByEmail[email]; ok {
+		return db.User{}, ErrEmailAlreadyRegistered
+	}
+
+	user := db.User{
+		ID:           s.nextUserID,
+		Email:        email,
+		PasswordHash: passwordHash,
+		CreatedAt:    time.Now().UTC(),
+	}
+	s.nextUserID++
+	s.usersByEmail[email] = user
+	s.usersByID[user.ID] = user
+
+	return user, nil
+}
+
+func (s *fakeAuthStore) GetUserByEmail(ctx context.Context, email string) (db.User, error) {
+	user, ok := s.usersByEmail[email]
+	if !ok {
+		return db.User{}, sql.ErrNoRows
+	}
+
+	return user, nil
+}
+
+func (s *fakeAuthStore) CreateSession(ctx context.Context, userID int64, token string, expiresAt time.Time) (db.Session, error) {
+	session := db.Session{
+		ID:        s.nextSessionID,
+		UserID:    userID,
+		Token:     token,
+		ExpiresAt: expiresAt,
+		CreatedAt: time.Now().UTC(),
+	}
+	s.nextSessionID++
+	s.sessions[token] = session
+
+	return session, nil
+}
+
+func (s *fakeAuthStore) GetUserBySessionToken(ctx context.Context, token string) (db.User, error) {
+	session, ok := s.sessions[token]
+	if !ok || !session.ExpiresAt.After(time.Now().UTC()) {
+		return db.User{}, sql.ErrNoRows
+	}
+
+	user, ok := s.usersByID[session.UserID]
+	if !ok {
+		return db.User{}, sql.ErrNoRows
+	}
+
+	return user, nil
+}
+
+func (s *fakeAuthStore) DeleteSessionByToken(ctx context.Context, token string) error {
+	delete(s.sessions, token)
+	return nil
+}
+
+func (s *fakeAuthStore) DeleteExpiredSessions(ctx context.Context) error {
+	now := time.Now().UTC()
+	for token, session := range s.sessions {
+		if !session.ExpiresAt.After(now) {
+			delete(s.sessions, token)
+		}
+	}
+
+	return nil
 }

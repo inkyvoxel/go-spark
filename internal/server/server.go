@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"path/filepath"
 
+	"github.com/inkyvoxel/go-spark/internal/database"
 	db "github.com/inkyvoxel/go-spark/internal/db/generated"
 	"github.com/inkyvoxel/go-spark/internal/services"
 )
@@ -40,7 +41,7 @@ func New(opts Options) *Server {
 
 	return &Server{
 		db: opts.DB,
-		auth: services.NewAuthService(db.New(opts.DB), services.AuthOptions{
+		auth: services.NewAuthService(database.NewAuthStore(db.New(opts.DB)), services.AuthOptions{
 			PasswordMinLen: passwordMinLength,
 		}),
 		logger:            logger,

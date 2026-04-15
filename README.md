@@ -8,6 +8,8 @@ It includes a runnable app, SQLite setup, migrations, generated SQL code, CSRF p
 
 Frontend assets are vendored under `static/vendor` so the starter works without runtime CDN dependencies.
 
+Auth business logic is kept behind a small storage interface. The default storage adapter uses SQLite and `sqlc`, but database-specific driver behavior stays out of services and HTTP handlers.
+
 ## Tech Stack
 
 * Go
@@ -110,12 +112,14 @@ SQLite is a good default for a simple starter because it keeps local development
 The intended migration path is:
 
 1. Add a Postgres driver.
-2. Update database config.
-3. Update `sqlc.yaml` to use the Postgres engine.
-4. Port migrations and SQL queries.
-5. Run the test suite against the new database.
+2. Add or switch the database opener and config.
+3. Port migrations and SQL queries.
+4. Update `sqlc.yaml` to use the Postgres engine and regenerate generated code.
+5. Implement storage adapters that satisfy the service-owned interfaces, such as the auth store.
+6. Translate Postgres driver errors, such as unique violations, inside those adapters.
+7. Run adapter, service, route, and migration tests against the new database.
 
-Keeping database access behind explicit SQL and small service boundaries should make that move easier.
+Services own business rules, while storage adapters own SQL and database-driver details. Keeping that boundary small should make a database switch possible without rewriting HTTP handlers or auth business logic.
 
 ## Removing Example Code
 
