@@ -37,6 +37,8 @@ The app listens on `:8080` by default, stores its SQLite database at `./data/app
 
 `make run` loads `.env` when the file exists. Environment variables already set in your shell take precedence over values in `.env`.
 
+Email delivery defaults to `EMAIL_PROVIDER=log` for safe local development. Set `EMAIL_PROVIDER=smtp` with `SMTP_*` values to send real mail.
+
 Open:
 
 ```text

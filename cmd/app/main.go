@@ -3,10 +3,12 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -42,12 +44,16 @@ func main() {
 		PasswordMinLen: cfg.PasswordMinLength,
 		ConfirmationEmail: email.AccountConfirmationOptions{
 			AppBaseURL: cfg.AppBaseURL,
-			From:       cfg.EmailFrom,
+			From:       authSenderFrom(cfg),
 		},
 	})
-	emailSender := email.NewLogSender(logger, email.LogSenderOptions{
-		LogBody: cfg.EmailLogBody,
-	})
+
+	emailSender, err := newEmailSender(cfg, logger)
+	if err != nil {
+		logger.Error("configure email sender", "err", err)
+		os.Exit(1)
+	}
+
 	emailWorker := email.NewWorker(database.NewEmailOutboxStore(db), emailSender, email.WorkerOptions{
 		Logger: logger,
 	})
@@ -100,4 +106,32 @@ func main() {
 			os.Exit(1)
 		}
 	}
+}
+
+func newEmailSender(cfg config.Config, logger *slog.Logger) (email.Sender, error) {
+	switch cfg.EmailProvider {
+	case email.ProviderLog:
+		return email.NewLogSender(logger, email.LogSenderOptions{
+			LogBody: cfg.EmailLogBody,
+		}), nil
+	case email.ProviderSMTP:
+		return email.NewSMTPSender(email.SMTPSenderOptions{
+			Logger:   logger,
+			Host:     cfg.SMTPHost,
+			Port:     cfg.SMTPPort,
+			Username: cfg.SMTPUsername,
+			Password: cfg.SMTPPassword,
+			From:     cfg.SMTPFrom,
+			UseTLS:   cfg.SMTPTLS,
+		})
+	default:
+		return nil, fmt.Errorf("unsupported email provider %q", cfg.EmailProvider)
+	}
+}
+
+func authSenderFrom(cfg config.Config) string {
+	if cfg.EmailProvider == email.ProviderSMTP && strings.TrimSpace(cfg.SMTPFrom) != "" {
+		return cfg.SMTPFrom
+	}
+	return cfg.EmailFrom
 }

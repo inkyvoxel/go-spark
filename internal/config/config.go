@@ -22,6 +22,12 @@ type Config struct {
 	EmailFrom         string
 	EmailProvider     string
 	EmailLogBody      bool
+	SMTPHost          string
+	SMTPPort          int
+	SMTPUsername      string
+	SMTPPassword      string
+	SMTPFrom          string
+	SMTPTLS           bool
 }
 
 func LoadDotEnv(path string) error {
@@ -70,7 +76,7 @@ func FromEnv(defaultPasswordMinLength int) (Config, error) {
 		return Config{}, err
 	}
 
-	return Config{
+	cfg := Config{
 		Addr:              envOrDefault("APP_ADDR", ":8080"),
 		Env:               envOrDefault("APP_ENV", "development"),
 		DatabasePath:      envOrDefault("DATABASE_PATH", "./data/app.db"),
@@ -80,7 +86,48 @@ func FromEnv(defaultPasswordMinLength int) (Config, error) {
 		EmailFrom:         emailFrom,
 		EmailProvider:     emailProvider,
 		EmailLogBody:      emailLogBody,
-	}, nil
+	}
+
+	if emailProvider != email.ProviderSMTP {
+		return cfg, nil
+	}
+
+	smtpHost := strings.TrimSpace(os.Getenv("SMTP_HOST"))
+	if smtpHost == "" {
+		return Config{}, fmt.Errorf("SMTP_HOST is required when EMAIL_PROVIDER=%q", email.ProviderSMTP)
+	}
+
+	smtpPort, err := envInt("SMTP_PORT")
+	if err != nil {
+		return Config{}, err
+	}
+	if smtpPort <= 0 {
+		return Config{}, fmt.Errorf("SMTP_PORT must be greater than zero")
+	}
+
+	smtpTLS, err := envBoolOrDefault("SMTP_TLS", true)
+	if err != nil {
+		return Config{}, err
+	}
+
+	smtpFrom, err := envEmailAddress("SMTP_FROM", emailFrom)
+	if err != nil {
+		return Config{}, err
+	}
+
+	smtpUsername := strings.TrimSpace(os.Getenv("SMTP_USERNAME"))
+	smtpPassword := os.Getenv("SMTP_PASSWORD")
+	if (smtpUsername == "") != (smtpPassword == "") {
+		return Config{}, fmt.Errorf("SMTP_USERNAME and SMTP_PASSWORD must both be set when using SMTP authentication")
+	}
+
+	cfg.SMTPHost = smtpHost
+	cfg.SMTPPort = smtpPort
+	cfg.SMTPUsername = smtpUsername
+	cfg.SMTPPassword = smtpPassword
+	cfg.SMTPFrom = smtpFrom
+	cfg.SMTPTLS = smtpTLS
+	return cfg, nil
 }
 
 func envOrDefault(key, fallback string) string {
@@ -104,6 +151,19 @@ func envBool(key string) (bool, error) {
 	return parsed, nil
 }
 
+func envBoolOrDefault(key string, fallback bool) (bool, error) {
+	value := os.Getenv(key)
+	if value == "" {
+		return fallback, nil
+	}
+
+	parsed, err := strconv.ParseBool(value)
+	if err != nil {
+		return false, fmt.Errorf("%s must be a boolean: %w", key, err)
+	}
+	return parsed, nil
+}
+
 func envIntOrDefault(key string, fallback int) (int, error) {
 	raw := os.Getenv(key)
 	if raw == "" {
@@ -118,6 +178,19 @@ func envIntOrDefault(key string, fallback int) (int, error) {
 		return 0, fmt.Errorf("%s must be greater than zero", key)
 	}
 
+	return value, nil
+}
+
+func envInt(key string) (int, error) {
+	raw := os.Getenv(key)
+	if raw == "" {
+		return 0, fmt.Errorf("%s is required", key)
+	}
+
+	value, err := strconv.Atoi(raw)
+	if err != nil {
+		return 0, fmt.Errorf("%s must be an integer: %w", key, err)
+	}
 	return value, nil
 }
 
@@ -152,8 +225,8 @@ func envEmailAddress(key, fallback string) (string, error) {
 
 func envEmailProvider(key, fallback string) (string, error) {
 	provider := strings.ToLower(strings.TrimSpace(envOrDefault(key, fallback)))
-	if provider != email.ProviderLog {
-		return "", fmt.Errorf("%s must be %q", key, email.ProviderLog)
+	if provider != email.ProviderLog && provider != email.ProviderSMTP {
+		return "", fmt.Errorf("%s must be %q or %q", key, email.ProviderLog, email.ProviderSMTP)
 	}
 
 	return provider, nil

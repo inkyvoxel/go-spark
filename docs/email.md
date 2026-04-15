@@ -169,9 +169,10 @@ SMTP config can be added in the provider slice:
 
 ```text
 SMTP_HOST=
-SMTP_PORT=
+SMTP_PORT=587
 SMTP_USERNAME=
 SMTP_PASSWORD=
+SMTP_FROM=
 SMTP_TLS=true
 ```
 
