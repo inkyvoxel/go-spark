@@ -47,6 +47,34 @@ UPDATE users
 SET password_hash = ?
 WHERE id = ?;
 
+-- name: CreatePasswordResetToken :one
+INSERT INTO password_reset_tokens (
+    user_id,
+    token_hash,
+    expires_at
+) VALUES (
+    ?,
+    ?,
+    ?
+)
+RETURNING id, user_id, token_hash, expires_at, consumed_at, created_at;
+
+-- name: GetValidPasswordResetTokenByHash :one
+SELECT id, user_id, token_hash, expires_at, consumed_at, created_at
+FROM password_reset_tokens
+WHERE token_hash = ?
+  AND consumed_at IS NULL
+  AND expires_at > ?
+LIMIT 1;
+
+-- name: ConsumePasswordResetToken :one
+UPDATE password_reset_tokens
+SET consumed_at = ?
+WHERE token_hash = ?
+  AND consumed_at IS NULL
+  AND expires_at > ?
+RETURNING id, user_id, token_hash, expires_at, consumed_at, created_at;
+
 -- name: CreateEmailVerificationToken :one
 INSERT INTO email_verification_tokens (
     user_id,

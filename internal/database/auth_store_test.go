@@ -48,6 +48,19 @@ CREATE TABLE email_verification_tokens (
 CREATE INDEX email_verification_tokens_user_id_idx ON email_verification_tokens(user_id);
 CREATE INDEX email_verification_tokens_token_hash_idx ON email_verification_tokens(token_hash);
 
+CREATE TABLE password_reset_tokens (
+    id INTEGER PRIMARY KEY,
+    user_id INTEGER NOT NULL,
+    token_hash TEXT NOT NULL UNIQUE,
+    expires_at TIMESTAMP NOT NULL,
+    consumed_at TIMESTAMP,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
+CREATE INDEX password_reset_tokens_user_id_idx ON password_reset_tokens(user_id);
+CREATE INDEX password_reset_tokens_token_hash_idx ON password_reset_tokens(token_hash);
+
 CREATE TABLE email_outbox (
     id INTEGER PRIMARY KEY,
     sender TEXT NOT NULL,
@@ -342,6 +355,119 @@ func TestAuthStoreEmailVerificationRejectsExpiredToken(t *testing.T) {
 	_, err = store.VerifyEmailByTokenHash(context.Background(), "token-hash", time.Now().UTC())
 	if !errors.Is(err, sql.ErrNoRows) {
 		t.Fatalf("VerifyEmailByTokenHash() error = %v, want %v", err, sql.ErrNoRows)
+	}
+}
+
+func TestAuthStorePasswordResetTokenFlow(t *testing.T) {
+	store := newTestAuthStore(t)
+
+	user, err := store.CreateUser(context.Background(), "user@example.com", "hash")
+	if err != nil {
+		t.Fatalf("CreateUser() error = %v", err)
+	}
+
+	expiresAt := time.Now().UTC().Add(time.Hour)
+	token, err := store.CreatePasswordResetToken(context.Background(), user.ID, "token-hash", expiresAt)
+	if err != nil {
+		t.Fatalf("CreatePasswordResetToken() error = %v", err)
+	}
+	if token.UserID != user.ID {
+		t.Fatalf("password reset token user ID = %d, want %d", token.UserID, user.ID)
+	}
+
+	valid, err := store.GetValidPasswordResetTokenByHash(context.Background(), "token-hash", time.Now().UTC())
+	if err != nil {
+		t.Fatalf("GetValidPasswordResetTokenByHash() error = %v", err)
+	}
+	if valid.UserID != user.ID {
+		t.Fatalf("valid token user ID = %d, want %d", valid.UserID, user.ID)
+	}
+
+	consumed, err := store.ConsumePasswordResetToken(context.Background(), "token-hash", time.Now().UTC())
+	if err != nil {
+		t.Fatalf("ConsumePasswordResetToken() error = %v", err)
+	}
+	if !consumed.ConsumedAt.Valid {
+		t.Fatal("ConsumedAt.Valid = false, want true")
+	}
+
+	_, err = store.GetValidPasswordResetTokenByHash(context.Background(), "token-hash", time.Now().UTC())
+	if !errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("GetValidPasswordResetTokenByHash() error = %v, want %v", err, sql.ErrNoRows)
+	}
+}
+
+func TestAuthStorePasswordResetTokenRejectsExpiredToken(t *testing.T) {
+	store := newTestAuthStore(t)
+
+	user, err := store.CreateUser(context.Background(), "user@example.com", "hash")
+	if err != nil {
+		t.Fatalf("CreateUser() error = %v", err)
+	}
+	if _, err := store.CreatePasswordResetToken(context.Background(), user.ID, "token-hash", time.Now().UTC().Add(-time.Hour)); err != nil {
+		t.Fatalf("CreatePasswordResetToken() error = %v", err)
+	}
+
+	_, err = store.GetValidPasswordResetTokenByHash(context.Background(), "token-hash", time.Now().UTC())
+	if !errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("GetValidPasswordResetTokenByHash() error = %v, want %v", err, sql.ErrNoRows)
+	}
+	_, err = store.ConsumePasswordResetToken(context.Background(), "token-hash", time.Now().UTC())
+	if !errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("ConsumePasswordResetToken() error = %v, want %v", err, sql.ErrNoRows)
+	}
+}
+
+func TestAuthStoreRequestPasswordReset(t *testing.T) {
+	store := newTestAuthStore(t)
+	now := time.Now().UTC()
+
+	user, err := store.CreateUser(context.Background(), "user@example.com", "hash")
+	if err != nil {
+		t.Fatalf("CreateUser() error = %v", err)
+	}
+
+	err = store.RequestPasswordReset(context.Background(), services.RequestPasswordResetParams{
+		UserID:         user.ID,
+		TokenHash:      "reset-token-hash",
+		TokenExpiresAt: now.Add(time.Hour),
+		PasswordResetEmail: email.Message{
+			From:     "sender@example.com",
+			To:       "user@example.com",
+			Subject:  "Reset your password",
+			TextBody: "Reset using this link.",
+			HTMLBody: "<p>Reset</p>",
+		},
+		EmailAvailableAt: now,
+	})
+	if err != nil {
+		t.Fatalf("RequestPasswordReset() error = %v", err)
+	}
+
+	token, err := store.queries.ConsumePasswordResetToken(context.Background(), db.ConsumePasswordResetTokenParams{
+		ConsumedAt: sql.NullTime{Time: now, Valid: true},
+		TokenHash:  "reset-token-hash",
+		ExpiresAt:  now,
+	})
+	if err != nil {
+		t.Fatalf("ConsumePasswordResetToken() error = %v", err)
+	}
+	if token.UserID != user.ID {
+		t.Fatalf("password reset token user ID = %d, want %d", token.UserID, user.ID)
+	}
+
+	claimed, err := store.queries.ClaimPendingEmails(context.Background(), db.ClaimPendingEmailsParams{
+		AvailableAt: now.Add(time.Second),
+		Limit:       1,
+	})
+	if err != nil {
+		t.Fatalf("ClaimPendingEmails() error = %v", err)
+	}
+	if len(claimed) != 1 {
+		t.Fatalf("claimed email count = %d, want 1", len(claimed))
+	}
+	if claimed[0].Recipient != "user@example.com" {
+		t.Fatalf("claimed recipient = %q, want user@example.com", claimed[0].Recipient)
 	}
 }
 

@@ -64,8 +64,10 @@ func parseTemplates() (map[string]*template.Template, error) {
 	pages := []string{
 		"account.html",
 		"confirm_email.html",
+		"forgot_password.html",
 		"home.html",
 		"login.html",
+		"reset_password.html",
 		"register.html",
 		"resend_verification.html",
 	}
@@ -94,8 +96,12 @@ func (s *Server) Routes() http.Handler {
 	dynamic.Handle("GET /register", s.requireAnonymous(http.HandlerFunc(s.registerForm)))
 	dynamic.Handle("POST /register", s.requireAnonymous(http.HandlerFunc(s.register)))
 	dynamic.HandleFunc("GET /confirm-email", s.confirmEmail)
+	dynamic.Handle("GET /forgot-password", s.requireAnonymous(http.HandlerFunc(s.forgotPasswordForm)))
+	dynamic.Handle("POST /forgot-password", s.requireAnonymous(http.HandlerFunc(s.forgotPassword)))
 	dynamic.Handle("GET /login", s.requireAnonymous(http.HandlerFunc(s.loginForm)))
 	dynamic.Handle("POST /login", s.requireAnonymous(http.HandlerFunc(s.login)))
+	dynamic.Handle("GET /reset-password", s.requireAnonymous(http.HandlerFunc(s.resetPasswordForm)))
+	dynamic.Handle("POST /reset-password", s.requireAnonymous(http.HandlerFunc(s.resetPassword)))
 	dynamic.Handle("GET /resend-verification", s.requireAnonymous(http.HandlerFunc(s.resendVerificationForm)))
 	dynamic.Handle("POST /resend-verification", s.requireAnonymous(http.HandlerFunc(s.resendVerificationPublic)))
 	dynamic.Handle("POST /logout", s.requireAuth(http.HandlerFunc(s.logout)))

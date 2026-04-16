@@ -146,6 +146,78 @@ func (s *AuthStore) UpdateUserPasswordHash(ctx context.Context, userID int64, pa
 	return nil
 }
 
+func (s *AuthStore) CreatePasswordResetToken(ctx context.Context, userID int64, tokenHash string, expiresAt time.Time) (db.PasswordResetToken, error) {
+	token, err := s.queries.CreatePasswordResetToken(ctx, db.CreatePasswordResetTokenParams{
+		UserID:    userID,
+		TokenHash: tokenHash,
+		ExpiresAt: expiresAt,
+	})
+	if err != nil {
+		return db.PasswordResetToken{}, fmt.Errorf("create password reset token: %w", err)
+	}
+
+	return token, nil
+}
+
+func (s *AuthStore) GetValidPasswordResetTokenByHash(ctx context.Context, tokenHash string, now time.Time) (db.PasswordResetToken, error) {
+	token, err := s.queries.GetValidPasswordResetTokenByHash(ctx, db.GetValidPasswordResetTokenByHashParams{
+		TokenHash: tokenHash,
+		ExpiresAt: now,
+	})
+	if err != nil {
+		return db.PasswordResetToken{}, fmt.Errorf("get valid password reset token by hash: %w", err)
+	}
+
+	return token, nil
+}
+
+func (s *AuthStore) ConsumePasswordResetToken(ctx context.Context, tokenHash string, consumedAt time.Time) (db.PasswordResetToken, error) {
+	token, err := s.queries.ConsumePasswordResetToken(ctx, db.ConsumePasswordResetTokenParams{
+		ConsumedAt: sql.NullTime{Time: consumedAt, Valid: true},
+		TokenHash:  tokenHash,
+		ExpiresAt:  consumedAt,
+	})
+	if err != nil {
+		return db.PasswordResetToken{}, fmt.Errorf("consume password reset token: %w", err)
+	}
+
+	return token, nil
+}
+
+func (s *AuthStore) RequestPasswordReset(ctx context.Context, params services.RequestPasswordResetParams) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin password reset request transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	queries := s.queries.WithTx(tx)
+	if _, err := queries.CreatePasswordResetToken(ctx, db.CreatePasswordResetTokenParams{
+		UserID:    params.UserID,
+		TokenHash: params.TokenHash,
+		ExpiresAt: params.TokenExpiresAt,
+	}); err != nil {
+		return fmt.Errorf("create password reset token: %w", err)
+	}
+
+	if _, err := queries.EnqueueEmail(ctx, db.EnqueueEmailParams{
+		Sender:      params.PasswordResetEmail.From,
+		Recipient:   params.PasswordResetEmail.To,
+		Subject:     params.PasswordResetEmail.Subject,
+		TextBody:    params.PasswordResetEmail.TextBody,
+		HtmlBody:    params.PasswordResetEmail.HTMLBody,
+		AvailableAt: params.EmailAvailableAt,
+	}); err != nil {
+		return fmt.Errorf("enqueue password reset email: %w", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit password reset request transaction: %w", err)
+	}
+
+	return nil
+}
+
 func (s *AuthStore) CreateEmailVerificationToken(ctx context.Context, userID int64, tokenHash string, expiresAt time.Time) (db.EmailVerificationToken, error) {
 	token, err := s.queries.CreateEmailVerificationToken(ctx, db.CreateEmailVerificationTokenParams{
 		UserID:    userID,

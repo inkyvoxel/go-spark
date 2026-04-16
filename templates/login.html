@@ -1,7 +1,7 @@
 {{ define "content" }}
 <article>
   <h1>Sign in</h1>
-  {{ if eq .LoginStatus "password-changed" }}<p role="status">Your password has been changed. Sign in again.</p>{{ end }}
+  {{ if eq .LoginStatus "password-changed" }}<p role="status">Your password has changed. Sign in with your new password.</p>{{ end }}
   {{ if .Error }}<p role="alert">{{ .Error }}</p>{{ end }}
   <form method="post" action="/login">
     <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
@@ -23,6 +23,7 @@
     <button type="submit">Sign in</button>
   </form>
   <p><a href="/register">Create an account</a></p>
+  <p><a href="/forgot-password">Forgot your password?</a></p>
   <p><a href="/resend-verification">Resend verification email</a></p>
 </article>
 {{ end }}

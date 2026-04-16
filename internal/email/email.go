@@ -69,6 +69,11 @@ type AccountConfirmationOptions struct {
 	From       string
 }
 
+type PasswordResetOptions struct {
+	AppBaseURL string
+	From       string
+}
+
 func NewAccountConfirmationMessage(opts AccountConfirmationOptions, to, token string) (Message, error) {
 	from, err := normalizeAddress("from", opts.From)
 	if err != nil {
@@ -80,7 +85,7 @@ func NewAccountConfirmationMessage(opts AccountConfirmationOptions, to, token st
 		return Message{}, err
 	}
 
-	confirmURL, err := confirmationURL(opts.AppBaseURL, token)
+	confirmURL, err := tokenURL(opts.AppBaseURL, "confirm-email", token, "confirmation")
 	if err != nil {
 		return Message{}, err
 	}
@@ -99,6 +104,36 @@ func NewAccountConfirmationMessage(opts AccountConfirmationOptions, to, token st
 	}, nil
 }
 
+func NewPasswordResetMessage(opts PasswordResetOptions, to, token string) (Message, error) {
+	from, err := normalizeAddress("from", opts.From)
+	if err != nil {
+		return Message{}, err
+	}
+
+	recipient, err := normalizeAddress("to", to)
+	if err != nil {
+		return Message{}, err
+	}
+
+	resetURL, err := tokenURL(opts.AppBaseURL, "reset-password", token, "password reset")
+	if err != nil {
+		return Message{}, err
+	}
+
+	htmlBody, err := renderPasswordResetHTML(resetURL)
+	if err != nil {
+		return Message{}, err
+	}
+
+	return Message{
+		From:     from,
+		To:       recipient,
+		Subject:  "Reset your password",
+		TextBody: "Reset your password by opening this link:\n\n" + resetURL,
+		HTMLBody: htmlBody,
+	}, nil
+}
+
 func normalizeAddress(field, address string) (string, error) {
 	parsed, err := mail.ParseAddress(strings.TrimSpace(address))
 	if err != nil {
@@ -108,10 +143,10 @@ func normalizeAddress(field, address string) (string, error) {
 	return parsed.String(), nil
 }
 
-func confirmationURL(appBaseURL, token string) (string, error) {
+func tokenURL(appBaseURL, path, token, tokenLabel string) (string, error) {
 	token = strings.TrimSpace(token)
 	if token == "" {
-		return "", fmt.Errorf("confirmation token is required")
+		return "", fmt.Errorf("%s token is required", tokenLabel)
 	}
 
 	base, err := url.Parse(strings.TrimSpace(appBaseURL))
@@ -125,12 +160,12 @@ func confirmationURL(appBaseURL, token string) (string, error) {
 		return "", fmt.Errorf("app base URL must include a host")
 	}
 
-	confirm := base.JoinPath("confirm-email")
-	query := confirm.Query()
+	target := base.JoinPath(path)
+	query := target.Query()
 	query.Set("token", token)
-	confirm.RawQuery = query.Encode()
+	target.RawQuery = query.Encode()
 
-	return confirm.String(), nil
+	return target.String(), nil
 }
 
 func renderConfirmationHTML(confirmURL string) (string, error) {
@@ -139,6 +174,17 @@ func renderConfirmationHTML(confirmURL string) (string, error) {
 	var rendered bytes.Buffer
 	if err := template.Must(template.New("confirmation").Parse(body)).Execute(&rendered, confirmURL); err != nil {
 		return "", fmt.Errorf("render confirmation email: %w", err)
+	}
+
+	return rendered.String(), nil
+}
+
+func renderPasswordResetHTML(resetURL string) (string, error) {
+	const body = `<p>Reset your password by opening this link:</p><p><a href="{{ . }}">Reset password</a></p>`
+
+	var rendered bytes.Buffer
+	if err := template.Must(template.New("password-reset").Parse(body)).Execute(&rendered, resetURL); err != nil {
+		return "", fmt.Errorf("render password reset email: %w", err)
 	}
 
 	return rendered.String(), nil

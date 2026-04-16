@@ -33,6 +33,15 @@ type EmailVerificationToken struct {
 	CreatedAt  time.Time
 }
 
+type PasswordResetToken struct {
+	ID         int64
+	UserID     int64
+	TokenHash  string
+	ExpiresAt  time.Time
+	ConsumedAt sql.NullTime
+	CreatedAt  time.Time
+}
+
 type Session struct {
 	ID        int64
 	UserID    int64

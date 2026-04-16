@@ -18,10 +18,13 @@ type authService interface {
 	ChangePassword(context.Context, db.User, string, string) error
 	Login(context.Context, string, string) (db.User, db.Session, error)
 	Logout(context.Context, string) error
+	RequestPasswordReset(context.Context, string) error
 	Register(context.Context, string, string) (db.User, error)
+	ResetPasswordWithToken(context.Context, string, string) error
 	ResendVerificationEmailByAddress(context.Context, string) error
 	ResendVerificationEmail(context.Context, db.User) error
 	UserBySessionToken(context.Context, string) (db.User, error)
+	ValidatePasswordResetToken(context.Context, string) error
 	VerifyEmail(context.Context, string) (db.User, error)
 }
 

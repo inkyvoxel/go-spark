@@ -46,6 +46,10 @@ func main() {
 			AppBaseURL: cfg.AppBaseURL,
 			From:       authSenderFrom(cfg),
 		},
+		PasswordResetEmail: email.PasswordResetOptions{
+			AppBaseURL: cfg.AppBaseURL,
+			From:       authSenderFrom(cfg),
+		},
 	})
 
 	emailSender, err := newEmailSender(cfg, logger)

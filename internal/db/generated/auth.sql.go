@@ -40,6 +40,35 @@ func (q *Queries) ConsumeEmailVerificationToken(ctx context.Context, arg Consume
 	return i, err
 }
 
+const consumePasswordResetToken = `-- name: ConsumePasswordResetToken :one
+UPDATE password_reset_tokens
+SET consumed_at = ?
+WHERE token_hash = ?
+  AND consumed_at IS NULL
+  AND expires_at > ?
+RETURNING id, user_id, token_hash, expires_at, consumed_at, created_at
+`
+
+type ConsumePasswordResetTokenParams struct {
+	ConsumedAt sql.NullTime
+	TokenHash  string
+	ExpiresAt  time.Time
+}
+
+func (q *Queries) ConsumePasswordResetToken(ctx context.Context, arg ConsumePasswordResetTokenParams) (PasswordResetToken, error) {
+	row := q.db.QueryRowContext(ctx, consumePasswordResetToken, arg.ConsumedAt, arg.TokenHash, arg.ExpiresAt)
+	var i PasswordResetToken
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.TokenHash,
+		&i.ExpiresAt,
+		&i.ConsumedAt,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const createEmailVerificationToken = `-- name: CreateEmailVerificationToken :one
 INSERT INTO email_verification_tokens (
     user_id,
@@ -62,6 +91,39 @@ type CreateEmailVerificationTokenParams struct {
 func (q *Queries) CreateEmailVerificationToken(ctx context.Context, arg CreateEmailVerificationTokenParams) (EmailVerificationToken, error) {
 	row := q.db.QueryRowContext(ctx, createEmailVerificationToken, arg.UserID, arg.TokenHash, arg.ExpiresAt)
 	var i EmailVerificationToken
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.TokenHash,
+		&i.ExpiresAt,
+		&i.ConsumedAt,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const createPasswordResetToken = `-- name: CreatePasswordResetToken :one
+INSERT INTO password_reset_tokens (
+    user_id,
+    token_hash,
+    expires_at
+) VALUES (
+    ?,
+    ?,
+    ?
+)
+RETURNING id, user_id, token_hash, expires_at, consumed_at, created_at
+`
+
+type CreatePasswordResetTokenParams struct {
+	UserID    int64
+	TokenHash string
+	ExpiresAt time.Time
+}
+
+func (q *Queries) CreatePasswordResetToken(ctx context.Context, arg CreatePasswordResetTokenParams) (PasswordResetToken, error) {
+	row := q.db.QueryRowContext(ctx, createPasswordResetToken, arg.UserID, arg.TokenHash, arg.ExpiresAt)
+	var i PasswordResetToken
 	err := row.Scan(
 		&i.ID,
 		&i.UserID,
@@ -192,6 +254,34 @@ func (q *Queries) GetUserBySessionToken(ctx context.Context, token string) (User
 		&i.PasswordHash,
 		&i.CreatedAt,
 		&i.EmailVerifiedAt,
+	)
+	return i, err
+}
+
+const getValidPasswordResetTokenByHash = `-- name: GetValidPasswordResetTokenByHash :one
+SELECT id, user_id, token_hash, expires_at, consumed_at, created_at
+FROM password_reset_tokens
+WHERE token_hash = ?
+  AND consumed_at IS NULL
+  AND expires_at > ?
+LIMIT 1
+`
+
+type GetValidPasswordResetTokenByHashParams struct {
+	TokenHash string
+	ExpiresAt time.Time
+}
+
+func (q *Queries) GetValidPasswordResetTokenByHash(ctx context.Context, arg GetValidPasswordResetTokenByHashParams) (PasswordResetToken, error) {
+	row := q.db.QueryRowContext(ctx, getValidPasswordResetTokenByHash, arg.TokenHash, arg.ExpiresAt)
+	var i PasswordResetToken
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.TokenHash,
+		&i.ExpiresAt,
+		&i.ConsumedAt,
+		&i.CreatedAt,
 	)
 	return i, err
 }

@@ -460,6 +460,124 @@ func TestAuthServiceResendVerificationEmailByAddressWrapsLookupError(t *testing.
 	}
 }
 
+func TestAuthServiceRequestPasswordReset(t *testing.T) {
+	service := newTestAuthService(t)
+	store := service.store.(*fakeAuthStore)
+
+	if _, err := service.Register(context.Background(), "user@example.com", "password"); err != nil {
+		t.Fatalf("Register() error = %v", err)
+	}
+	initialOutbox := len(store.outbox)
+
+	if err := service.RequestPasswordReset(context.Background(), "USER@example.com"); err != nil {
+		t.Fatalf("RequestPasswordReset() error = %v", err)
+	}
+	if len(store.outbox) != initialOutbox+1 {
+		t.Fatalf("outbox count = %d, want %d", len(store.outbox), initialOutbox+1)
+	}
+	if len(store.passwordResetTokens) != 1 {
+		t.Fatalf("password reset token count = %d, want 1", len(store.passwordResetTokens))
+	}
+}
+
+func TestAuthServiceRequestPasswordResetNoOpForMissingUser(t *testing.T) {
+	service := newTestAuthService(t)
+	store := service.store.(*fakeAuthStore)
+	initialOutbox := len(store.outbox)
+
+	if err := service.RequestPasswordReset(context.Background(), "missing@example.com"); err != nil {
+		t.Fatalf("RequestPasswordReset() error = %v", err)
+	}
+	if len(store.outbox) != initialOutbox {
+		t.Fatalf("outbox count = %d, want %d", len(store.outbox), initialOutbox)
+	}
+	if len(store.passwordResetTokens) != 0 {
+		t.Fatalf("password reset token count = %d, want 0", len(store.passwordResetTokens))
+	}
+}
+
+func TestAuthServiceRequestPasswordResetRejectsInvalidEmail(t *testing.T) {
+	service := newTestAuthService(t)
+
+	err := service.RequestPasswordReset(context.Background(), "not-an-email")
+	if !errors.Is(err, ErrInvalidEmail) {
+		t.Fatalf("RequestPasswordReset() error = %v, want %v", err, ErrInvalidEmail)
+	}
+}
+
+func TestAuthServiceValidatePasswordResetToken(t *testing.T) {
+	service := newTestAuthService(t)
+	store := service.store.(*fakeAuthStore)
+
+	user, err := service.Register(context.Background(), "user@example.com", "password")
+	if err != nil {
+		t.Fatalf("Register() error = %v", err)
+	}
+	if _, err := store.CreatePasswordResetToken(context.Background(), user.ID, hashToken("raw-token"), time.Now().UTC().Add(time.Hour)); err != nil {
+		t.Fatalf("CreatePasswordResetToken() error = %v", err)
+	}
+
+	if err := service.ValidatePasswordResetToken(context.Background(), "raw-token"); err != nil {
+		t.Fatalf("ValidatePasswordResetToken() error = %v", err)
+	}
+
+	if err := service.ValidatePasswordResetToken(context.Background(), ""); !errors.Is(err, ErrInvalidPasswordResetToken) {
+		t.Fatalf("ValidatePasswordResetToken() error = %v, want %v", err, ErrInvalidPasswordResetToken)
+	}
+	if err := service.ValidatePasswordResetToken(context.Background(), "missing"); !errors.Is(err, ErrInvalidPasswordResetToken) {
+		t.Fatalf("ValidatePasswordResetToken() error = %v, want %v", err, ErrInvalidPasswordResetToken)
+	}
+}
+
+func TestAuthServiceResetPasswordWithToken(t *testing.T) {
+	service := newTestAuthService(t)
+	store := service.store.(*fakeAuthStore)
+
+	user, err := service.Register(context.Background(), "user@example.com", "password")
+	if err != nil {
+		t.Fatalf("Register() error = %v", err)
+	}
+	_, session, err := service.Login(context.Background(), user.Email, "password")
+	if err != nil {
+		t.Fatalf("Login() error = %v", err)
+	}
+	if _, err := store.CreatePasswordResetToken(context.Background(), user.ID, hashToken("raw-token"), time.Now().UTC().Add(time.Hour)); err != nil {
+		t.Fatalf("CreatePasswordResetToken() error = %v", err)
+	}
+
+	if err := service.ResetPasswordWithToken(context.Background(), "raw-token", "new-password"); err != nil {
+		t.Fatalf("ResetPasswordWithToken() error = %v", err)
+	}
+	if _, _, err := service.Login(context.Background(), user.Email, "password"); !errors.Is(err, ErrInvalidCredentials) {
+		t.Fatalf("Login() old password error = %v, want %v", err, ErrInvalidCredentials)
+	}
+	if _, _, err := service.Login(context.Background(), user.Email, "new-password"); err != nil {
+		t.Fatalf("Login() new password error = %v", err)
+	}
+	if _, err := service.UserBySessionToken(context.Background(), session.Token); !errors.Is(err, ErrInvalidSession) {
+		t.Fatalf("UserBySessionToken() old session error = %v, want %v", err, ErrInvalidSession)
+	}
+}
+
+func TestAuthServiceResetPasswordWithTokenRejectsInvalidToken(t *testing.T) {
+	service := newTestAuthService(t)
+
+	if err := service.ResetPasswordWithToken(context.Background(), "", "new-password"); !errors.Is(err, ErrInvalidPasswordResetToken) {
+		t.Fatalf("ResetPasswordWithToken() error = %v, want %v", err, ErrInvalidPasswordResetToken)
+	}
+	if err := service.ResetPasswordWithToken(context.Background(), "missing", "new-password"); !errors.Is(err, ErrInvalidPasswordResetToken) {
+		t.Fatalf("ResetPasswordWithToken() error = %v, want %v", err, ErrInvalidPasswordResetToken)
+	}
+}
+
+func TestAuthServiceResetPasswordWithTokenRejectsShortPassword(t *testing.T) {
+	service := newTestAuthService(t)
+
+	if err := service.ResetPasswordWithToken(context.Background(), "raw-token", "short"); !errors.Is(err, ErrInvalidPassword) {
+		t.Fatalf("ResetPasswordWithToken() error = %v, want %v", err, ErrInvalidPassword)
+	}
+}
+
 func newTestAuthService(t *testing.T) *AuthService {
 	t.Helper()
 
@@ -478,26 +596,31 @@ type fakeAuthStore struct {
 	nextUserID                int64
 	nextSessionID             int64
 	nextVerificationTokenID   int64
+	nextPasswordResetTokenID  int64
 	usersByEmail              map[string]db.User
 	usersByID                 map[int64]db.User
 	sessions                  map[string]db.Session
 	verificationTokens        map[string]db.EmailVerificationToken
+	passwordResetTokens       map[string]db.PasswordResetToken
 	outbox                    []email.Message
 	getUserByEmailErr         error
 	resendErr                 error
 	updateUserPasswordHashErr error
 	deleteSessionsByUserIDErr error
+	passwordResetRequestErr   error
 }
 
 func newFakeAuthStore() *fakeAuthStore {
 	return &fakeAuthStore{
-		nextUserID:              1,
-		nextSessionID:           1,
-		nextVerificationTokenID: 1,
-		usersByEmail:            make(map[string]db.User),
-		usersByID:               make(map[int64]db.User),
-		sessions:                make(map[string]db.Session),
-		verificationTokens:      make(map[string]db.EmailVerificationToken),
+		nextUserID:               1,
+		nextSessionID:            1,
+		nextVerificationTokenID:  1,
+		nextPasswordResetTokenID: 1,
+		usersByEmail:             make(map[string]db.User),
+		usersByID:                make(map[int64]db.User),
+		sessions:                 make(map[string]db.Session),
+		verificationTokens:       make(map[string]db.EmailVerificationToken),
+		passwordResetTokens:      make(map[string]db.PasswordResetToken),
 	}
 }
 
@@ -622,6 +745,51 @@ func (s *fakeAuthStore) CreateEmailVerificationToken(ctx context.Context, userID
 	s.verificationTokens[tokenHash] = token
 
 	return token, nil
+}
+
+func (s *fakeAuthStore) CreatePasswordResetToken(ctx context.Context, userID int64, tokenHash string, expiresAt time.Time) (db.PasswordResetToken, error) {
+	token := db.PasswordResetToken{
+		ID:        s.nextPasswordResetTokenID,
+		UserID:    userID,
+		TokenHash: tokenHash,
+		ExpiresAt: expiresAt,
+		CreatedAt: time.Now().UTC(),
+	}
+	s.nextPasswordResetTokenID++
+	s.passwordResetTokens[tokenHash] = token
+
+	return token, nil
+}
+
+func (s *fakeAuthStore) GetValidPasswordResetTokenByHash(ctx context.Context, tokenHash string, now time.Time) (db.PasswordResetToken, error) {
+	token, ok := s.passwordResetTokens[tokenHash]
+	if !ok || token.ConsumedAt.Valid || !token.ExpiresAt.After(now) {
+		return db.PasswordResetToken{}, sql.ErrNoRows
+	}
+
+	return token, nil
+}
+
+func (s *fakeAuthStore) ConsumePasswordResetToken(ctx context.Context, tokenHash string, consumedAt time.Time) (db.PasswordResetToken, error) {
+	token, ok := s.passwordResetTokens[tokenHash]
+	if !ok || token.ConsumedAt.Valid || !token.ExpiresAt.After(consumedAt) {
+		return db.PasswordResetToken{}, sql.ErrNoRows
+	}
+	token.ConsumedAt = sql.NullTime{Time: consumedAt, Valid: true}
+	s.passwordResetTokens[tokenHash] = token
+
+	return token, nil
+}
+
+func (s *fakeAuthStore) RequestPasswordReset(ctx context.Context, params RequestPasswordResetParams) error {
+	if s.passwordResetRequestErr != nil {
+		return s.passwordResetRequestErr
+	}
+	if _, err := s.CreatePasswordResetToken(ctx, params.UserID, params.TokenHash, params.TokenExpiresAt); err != nil {
+		return err
+	}
+	s.outbox = append(s.outbox, params.PasswordResetEmail)
+	return nil
 }
 
 func (s *fakeAuthStore) VerifyEmailByTokenHash(ctx context.Context, tokenHash string, verifiedAt time.Time) (db.User, error) {

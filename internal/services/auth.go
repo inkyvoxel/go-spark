@@ -22,24 +22,28 @@ import (
 const (
 	DefaultPasswordMinLength             = 12
 	DefaultEmailVerificationTokenTimeout = 24 * time.Hour
+	DefaultPasswordResetTokenTimeout     = time.Hour
 )
 
 var (
-	ErrEmailAlreadyRegistered   = errors.New("email already registered")
-	ErrCurrentPasswordIncorrect = errors.New("current password incorrect")
-	ErrInvalidCredentials       = errors.New("invalid credentials")
-	ErrInvalidEmail             = errors.New("invalid email")
-	ErrInvalidPassword          = errors.New("invalid password")
-	ErrPasswordUnchanged        = errors.New("password unchanged")
-	ErrInvalidSession           = errors.New("invalid session")
-	ErrInvalidVerificationToken = errors.New("invalid verification token")
+	ErrEmailAlreadyRegistered    = errors.New("email already registered")
+	ErrCurrentPasswordIncorrect  = errors.New("current password incorrect")
+	ErrInvalidCredentials        = errors.New("invalid credentials")
+	ErrInvalidEmail              = errors.New("invalid email")
+	ErrInvalidPassword           = errors.New("invalid password")
+	ErrPasswordUnchanged         = errors.New("password unchanged")
+	ErrInvalidPasswordResetToken = errors.New("invalid password reset token")
+	ErrInvalidSession            = errors.New("invalid session")
+	ErrInvalidVerificationToken  = errors.New("invalid verification token")
 )
 
 type AuthService struct {
 	store                          AuthStore
 	sessionDuration                time.Duration
 	emailVerificationTokenDuration time.Duration
+	passwordResetTokenDuration     time.Duration
 	confirmationEmail              email.AccountConfirmationOptions
+	passwordResetEmail             email.PasswordResetOptions
 	bcryptCost                     int
 	tokenBytes                     int
 	passwordMinLen                 int
@@ -54,6 +58,10 @@ type AuthStore interface {
 	DeleteSessionByToken(ctx context.Context, token string) error
 	DeleteSessionsByUserID(ctx context.Context, userID int64) error
 	UpdateUserPasswordHash(ctx context.Context, userID int64, passwordHash string) error
+	CreatePasswordResetToken(ctx context.Context, userID int64, tokenHash string, expiresAt time.Time) (db.PasswordResetToken, error)
+	GetValidPasswordResetTokenByHash(ctx context.Context, tokenHash string, now time.Time) (db.PasswordResetToken, error)
+	ConsumePasswordResetToken(ctx context.Context, tokenHash string, consumedAt time.Time) (db.PasswordResetToken, error)
+	RequestPasswordReset(ctx context.Context, params RequestPasswordResetParams) error
 	CreateEmailVerificationToken(ctx context.Context, userID int64, tokenHash string, expiresAt time.Time) (db.EmailVerificationToken, error)
 	ResendEmailVerification(ctx context.Context, params ResendEmailVerificationParams) error
 	VerifyEmailByTokenHash(ctx context.Context, tokenHash string, verifiedAt time.Time) (db.User, error)
@@ -74,7 +82,9 @@ type AuthOptions struct {
 	TokenBytes                     int
 	PasswordMinLen                 int
 	EmailVerificationTokenDuration time.Duration
+	PasswordResetTokenDuration     time.Duration
 	ConfirmationEmail              email.AccountConfirmationOptions
+	PasswordResetEmail             email.PasswordResetOptions
 }
 
 type ResendEmailVerificationParams struct {
@@ -83,6 +93,14 @@ type ResendEmailVerificationParams struct {
 	TokenExpiresAt    time.Time
 	ConfirmationEmail email.Message
 	EmailAvailableAt  time.Time
+}
+
+type RequestPasswordResetParams struct {
+	UserID             int64
+	TokenHash          string
+	TokenExpiresAt     time.Time
+	PasswordResetEmail email.Message
+	EmailAvailableAt   time.Time
 }
 
 func NewAuthService(store AuthStore, opts AuthOptions) *AuthService {
@@ -111,11 +129,26 @@ func NewAuthService(store AuthStore, opts AuthOptions) *AuthService {
 		emailVerificationTokenDuration = DefaultEmailVerificationTokenTimeout
 	}
 
+	passwordResetTokenDuration := opts.PasswordResetTokenDuration
+	if passwordResetTokenDuration == 0 {
+		passwordResetTokenDuration = DefaultPasswordResetTokenTimeout
+	}
+
+	passwordResetEmail := opts.PasswordResetEmail
+	if strings.TrimSpace(passwordResetEmail.AppBaseURL) == "" {
+		passwordResetEmail.AppBaseURL = opts.ConfirmationEmail.AppBaseURL
+	}
+	if strings.TrimSpace(passwordResetEmail.From) == "" {
+		passwordResetEmail.From = opts.ConfirmationEmail.From
+	}
+
 	return &AuthService{
 		store:                          store,
 		sessionDuration:                sessionDuration,
 		emailVerificationTokenDuration: emailVerificationTokenDuration,
+		passwordResetTokenDuration:     passwordResetTokenDuration,
 		confirmationEmail:              opts.ConfirmationEmail,
+		passwordResetEmail:             passwordResetEmail,
 		bcryptCost:                     bcryptCost,
 		tokenBytes:                     tokenBytes,
 		passwordMinLen:                 passwordMinLen,
@@ -229,27 +262,122 @@ func (s *AuthService) ChangePassword(ctx context.Context, user db.User, currentP
 		return ErrCurrentPasswordIncorrect
 	}
 
-	if utf8.RuneCountInString(newPassword) < s.passwordMinLen {
-		return ErrInvalidPassword
+	if err := s.validatePassword(newPassword); err != nil {
+		return err
 	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(newPassword)); err == nil {
 		return ErrPasswordUnchanged
 	}
 
+	if err := s.setPasswordAndRevokeSessions(ctx, user.ID, newPassword); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (s *AuthService) RequestPasswordReset(ctx context.Context, emailAddress string) error {
+	emailAddress = normalizeEmail(emailAddress)
+	if !isValidEmail(emailAddress) {
+		return ErrInvalidEmail
+	}
+
+	user, err := s.store.GetUserByEmail(ctx, emailAddress)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("get user by email: %w", err)
+	}
+
+	token, err := generateToken(s.tokenBytes)
+	if err != nil {
+		return fmt.Errorf("generate password reset token: %w", err)
+	}
+
+	message, err := email.NewPasswordResetMessage(s.passwordResetEmail, user.Email, token)
+	if err != nil {
+		return fmt.Errorf("build password reset email: %w", err)
+	}
+
+	now := time.Now().UTC()
+	if err := s.store.RequestPasswordReset(ctx, RequestPasswordResetParams{
+		UserID:             user.ID,
+		TokenHash:          hashToken(token),
+		TokenExpiresAt:     now.Add(s.passwordResetTokenDuration),
+		PasswordResetEmail: message,
+		EmailAvailableAt:   now,
+	}); err != nil {
+		return fmt.Errorf("request password reset: %w", err)
+	}
+
+	return nil
+}
+
+func (s *AuthService) ValidatePasswordResetToken(ctx context.Context, token string) error {
+	token = strings.TrimSpace(token)
+	if token == "" {
+		return ErrInvalidPasswordResetToken
+	}
+
+	_, err := s.store.GetValidPasswordResetTokenByHash(ctx, hashToken(token), time.Now().UTC())
+	if errors.Is(err, sql.ErrNoRows) {
+		return ErrInvalidPasswordResetToken
+	}
+	if err != nil {
+		return fmt.Errorf("get password reset token: %w", err)
+	}
+
+	return nil
+}
+
+func (s *AuthService) ResetPasswordWithToken(ctx context.Context, token, newPassword string) error {
+	token = strings.TrimSpace(token)
+	if token == "" {
+		return ErrInvalidPasswordResetToken
+	}
+
+	if err := s.validatePassword(newPassword); err != nil {
+		return err
+	}
+
+	resetToken, err := s.store.ConsumePasswordResetToken(ctx, hashToken(token), time.Now().UTC())
+	if errors.Is(err, sql.ErrNoRows) {
+		return ErrInvalidPasswordResetToken
+	}
+	if err != nil {
+		return fmt.Errorf("consume password reset token: %w", err)
+	}
+
+	if err := s.setPasswordAndRevokeSessions(ctx, resetToken.UserID, newPassword); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (s *AuthService) validatePassword(password string) error {
+	if utf8.RuneCountInString(password) < s.passwordMinLen {
+		return ErrInvalidPassword
+	}
+
+	return nil
+}
+
+func (s *AuthService) setPasswordAndRevokeSessions(ctx context.Context, userID int64, newPassword string) error {
 	hash, err := bcrypt.GenerateFromPassword([]byte(newPassword), s.bcryptCost)
 	if err != nil {
 		return fmt.Errorf("hash password: %w", err)
 	}
 
-	if err := s.store.UpdateUserPasswordHash(ctx, user.ID, string(hash)); err != nil {
+	if err := s.store.UpdateUserPasswordHash(ctx, userID, string(hash)); err != nil {
 		return fmt.Errorf("update user password: %w", err)
 	}
 
-	if err := s.store.DeleteSessionsByUserID(ctx, user.ID); err != nil {
+	if err := s.store.DeleteSessionsByUserID(ctx, userID); err != nil {
 		return fmt.Errorf("delete sessions by user ID: %w", err)
 	}
-
 	return nil
 }
 

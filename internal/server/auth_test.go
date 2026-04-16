@@ -247,6 +247,13 @@ type fakeAuthLookup struct {
 	changePasswordNew    string
 	changePasswordErr    error
 	changePasswordCalled bool
+	requestResetEmail    string
+	requestResetErr      error
+	validateResetToken   string
+	validateResetErr     error
+	resetToken           string
+	resetNewPassword     string
+	resetErr             error
 }
 
 func (f *fakeAuthLookup) UserBySessionToken(ctx context.Context, token string) (db.User, error) {
@@ -301,6 +308,22 @@ func (f *fakeAuthLookup) ChangePassword(ctx context.Context, user db.User, curre
 	f.changePasswordOld = currentPassword
 	f.changePasswordNew = newPassword
 	return f.changePasswordErr
+}
+
+func (f *fakeAuthLookup) RequestPasswordReset(ctx context.Context, email string) error {
+	f.requestResetEmail = email
+	return f.requestResetErr
+}
+
+func (f *fakeAuthLookup) ValidatePasswordResetToken(ctx context.Context, token string) error {
+	f.validateResetToken = token
+	return f.validateResetErr
+}
+
+func (f *fakeAuthLookup) ResetPasswordWithToken(ctx context.Context, token, newPassword string) error {
+	f.resetToken = token
+	f.resetNewPassword = newPassword
+	return f.resetErr
 }
 
 func newAuthMiddlewareTestServer(auth authService) *Server {

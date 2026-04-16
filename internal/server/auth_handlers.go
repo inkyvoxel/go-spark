@@ -16,18 +16,21 @@ import (
 const emailPattern = `[^@\s]+@[^@\s]+\.[^@\s]+`
 
 type templateData struct {
-	Title             string
-	CSRFToken         string
-	Error             string
-	FieldErrors       map[string]string
-	Email             string
-	EmailPattern      string
-	LoginStatus       string
-	Next              string
-	Authenticated     bool
-	User              db.User
-	PasswordMinLength int
-	ResendStatus      string
+	Title                string
+	CSRFToken            string
+	Error                string
+	FieldErrors          map[string]string
+	Email                string
+	EmailPattern         string
+	ForgotPasswordStatus string
+	LoginStatus          string
+	Next                 string
+	ResetToken           string
+	ResetTokenInvalid    bool
+	Authenticated        bool
+	User                 db.User
+	PasswordMinLength    int
+	ResendStatus         string
 }
 
 func newTemplateData(r *http.Request, title string) templateData {
@@ -94,6 +97,60 @@ func (s *Server) loginForm(w http.ResponseWriter, r *http.Request) {
 		data.LoginStatus = status
 	}
 	s.render(w, "login.html", data)
+}
+
+func (s *Server) forgotPasswordForm(w http.ResponseWriter, r *http.Request) {
+	data := s.newTemplateData(r, "Forgot Password")
+	status := strings.TrimSpace(r.URL.Query().Get("status"))
+	if status == "sent" || status == "error" {
+		data.ForgotPasswordStatus = status
+	}
+	s.render(w, "forgot_password.html", data)
+}
+
+func (s *Server) forgotPassword(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+		return
+	}
+
+	emailAddress := r.FormValue("email")
+	if err := s.auth.RequestPasswordReset(r.Context(), emailAddress); err != nil {
+		if errors.Is(err, services.ErrInvalidEmail) {
+			data := s.newTemplateData(r, "Forgot Password")
+			data.Email = strings.TrimSpace(emailAddress)
+			data.Error = "Check your details and try again."
+			data.FieldErrors = map[string]string{"email": "Enter a valid email address."}
+			s.renderStatus(w, http.StatusBadRequest, "forgot_password.html", data)
+			return
+		}
+
+		s.logger.Error("request password reset", "err", err)
+		http.Redirect(w, r, "/forgot-password?status=error", http.StatusSeeOther)
+		return
+	}
+
+	http.Redirect(w, r, "/forgot-password?status=sent", http.StatusSeeOther)
+}
+
+func (s *Server) resetPasswordForm(w http.ResponseWriter, r *http.Request) {
+	data := s.newTemplateData(r, "Reset Password")
+	data.ResetToken = strings.TrimSpace(r.URL.Query().Get("token"))
+
+	if err := s.auth.ValidatePasswordResetToken(r.Context(), data.ResetToken); err != nil {
+		if errors.Is(err, services.ErrInvalidPasswordResetToken) {
+			data.Error = "This password reset link is invalid or has expired."
+			data.ResetTokenInvalid = true
+			s.renderStatus(w, http.StatusBadRequest, "reset_password.html", data)
+			return
+		}
+
+		s.logger.Error("validate password reset token", "err", err)
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		return
+	}
+
+	s.render(w, "reset_password.html", data)
 }
 
 func (s *Server) resendVerificationForm(w http.ResponseWriter, r *http.Request) {
@@ -241,6 +298,50 @@ func (s *Server) changePassword(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.clearSessionCookie(w, r)
+	http.Redirect(w, r, "/login?status=password-changed", http.StatusSeeOther)
+}
+
+func (s *Server) resetPassword(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+		return
+	}
+
+	token := strings.TrimSpace(r.FormValue("token"))
+	newPassword := r.FormValue("new_password")
+	confirmPassword := r.FormValue("confirm_password")
+
+	fieldErrors := s.validatePasswordPair(newPassword, confirmPassword, "new_password", "confirm_password")
+	if len(fieldErrors) > 0 {
+		data := s.newTemplateData(r, "Reset Password")
+		data.ResetToken = token
+		data.Error = "Check your details and try again."
+		data.FieldErrors = fieldErrors
+		s.renderStatus(w, http.StatusBadRequest, "reset_password.html", data)
+		return
+	}
+
+	if err := s.auth.ResetPasswordWithToken(r.Context(), token, newPassword); err != nil {
+		data := s.newTemplateData(r, "Reset Password")
+		data.ResetToken = token
+		data.Error = "Check your details and try again."
+		switch {
+		case errors.Is(err, services.ErrInvalidPasswordResetToken):
+			data.Error = "This password reset link is invalid or has expired."
+			data.ResetTokenInvalid = true
+			s.renderStatus(w, http.StatusBadRequest, "reset_password.html", data)
+			return
+		case errors.Is(err, services.ErrInvalidPassword):
+			data.FieldErrors = map[string]string{"new_password": fmt.Sprintf("Use at least %d characters.", data.PasswordMinLength)}
+			s.renderStatus(w, http.StatusBadRequest, "reset_password.html", data)
+			return
+		default:
+			s.logger.Error("reset password", "err", err)
+			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+			return
+		}
+	}
+
 	http.Redirect(w, r, "/login?status=password-changed", http.StatusSeeOther)
 }
 
