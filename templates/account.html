@@ -4,9 +4,13 @@
   <p>You are signed in as {{ .User.Email }} {{ if .User.EmailVerifiedAt.Valid }}(verified){{ else }}(unverified){{ end
     }}.</p>
   {{ if not .User.EmailVerifiedAt.Valid }}
+  {{ if eq .ResendStatus "error" }}
+  <p role="alert">We couldn't send a verification email right now. Please try again.</p>
+  {{ else if eq .ResendStatus "sent" }}
+  <p role="status">Check your email to confirm your account. We sent a new verification email.</p>
+  {{ else }}
   <p role="status">Check your email to confirm your account.</p>
-  {{ if eq .ResendStatus "sent" }}<p role="status">Verification email sent. Check your inbox.</p>{{ end }}
-  {{ if eq .ResendStatus "error" }}<p role="alert">We couldn't send a verification email right now. Please try again.</p>{{ end }}
+  {{ end }}
   <form method="post" action="/account/resend-verification">
     <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
     <button type="submit">Resend verification email</button>
