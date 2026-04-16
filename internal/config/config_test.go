@@ -78,6 +78,7 @@ func TestFromEnvUsesDefaults(t *testing.T) {
 	t.Setenv("DATABASE_PATH", "")
 	t.Setenv("APP_COOKIE_SECURE", "")
 	t.Setenv("AUTH_PASSWORD_MIN_LENGTH", "")
+	t.Setenv("AUTH_PASSWORD_PEPPER", "")
 	t.Setenv("APP_BASE_URL", "")
 	t.Setenv("EMAIL_FROM", "")
 	t.Setenv("EMAIL_PROVIDER", "")
@@ -103,6 +104,9 @@ func TestFromEnvUsesDefaults(t *testing.T) {
 	if cfg.PasswordMinLength != services.DefaultPasswordMinLength {
 		t.Fatalf("PasswordMinLength = %d, want %d", cfg.PasswordMinLength, services.DefaultPasswordMinLength)
 	}
+	if cfg.PasswordPepper != "" {
+		t.Fatalf("PasswordPepper = %q, want empty", cfg.PasswordPepper)
+	}
 	if cfg.AppBaseURL != "http://localhost:8080" {
 		t.Fatalf("AppBaseURL = %q, want %q", cfg.AppBaseURL, "http://localhost:8080")
 	}
@@ -124,6 +128,7 @@ func TestFromEnvUsesEnvironment(t *testing.T) {
 	t.Setenv("APP_COOKIE_SECURE", "true")
 	t.Setenv("AUTH_PASSWORD_MIN_LENGTH", "16")
 	t.Setenv("APP_BASE_URL", "https://app.example.com/")
+	t.Setenv("AUTH_PASSWORD_PEPPER", "super-secret-pepper")
 	t.Setenv("EMAIL_FROM", "Example <mail@example.com>")
 	t.Setenv("EMAIL_PROVIDER", "LOG")
 	t.Setenv("EMAIL_LOG_BODY", "true")
@@ -149,6 +154,9 @@ func TestFromEnvUsesEnvironment(t *testing.T) {
 	}
 	if cfg.PasswordMinLength != 16 {
 		t.Fatalf("PasswordMinLength = %d, want %d", cfg.PasswordMinLength, 16)
+	}
+	if cfg.PasswordPepper != "super-secret-pepper" {
+		t.Fatalf("PasswordPepper = %q, want %q", cfg.PasswordPepper, "super-secret-pepper")
 	}
 	if cfg.AppBaseURL != "https://app.example.com" {
 		t.Fatalf("AppBaseURL = %q, want %q", cfg.AppBaseURL, "https://app.example.com")
@@ -180,6 +188,18 @@ func TestFromEnvParsesCookieSecureBool(t *testing.T) {
 
 	if !cfg.CookieSecure {
 		t.Fatal("CookieSecure = false, want true")
+	}
+}
+
+func TestFromEnvAllowsBlankPasswordPepper(t *testing.T) {
+	t.Setenv("AUTH_PASSWORD_PEPPER", "")
+
+	cfg, err := FromEnv(services.DefaultPasswordMinLength)
+	if err != nil {
+		t.Fatalf("FromEnv() error = %v", err)
+	}
+	if cfg.PasswordPepper != "" {
+		t.Fatalf("PasswordPepper = %q, want empty", cfg.PasswordPepper)
 	}
 }
 

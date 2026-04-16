@@ -104,6 +104,43 @@ func TestAuthServiceLoginCreatesSession(t *testing.T) {
 	}
 }
 
+func TestAuthServiceWithPepperSupportsRegisterLoginAndPasswordChange(t *testing.T) {
+	service := NewAuthService(newFakeAuthStore(), AuthOptions{
+		SessionDuration:     time.Hour,
+		PasswordMinLen:      8,
+		Argon2idMemoryKiB:   64,
+		Argon2idIterations:  1,
+		Argon2idParallelism: 1,
+		Argon2idSaltLength:  16,
+		Argon2idKeyLength:   32,
+		PasswordPepper:      "test-pepper",
+		ConfirmationEmail: email.AccountConfirmationOptions{
+			AppBaseURL: "http://localhost:8080",
+			From:       "Go Spark <hello@example.com>",
+		},
+	})
+
+	user, err := service.Register(context.Background(), "user@example.com", "password")
+	if err != nil {
+		t.Fatalf("Register() error = %v", err)
+	}
+
+	if _, _, err := service.Login(context.Background(), "user@example.com", "password"); err != nil {
+		t.Fatalf("Login() error = %v", err)
+	}
+
+	if err := service.ChangePassword(context.Background(), user, "password", "new-password"); err != nil {
+		t.Fatalf("ChangePassword() error = %v", err)
+	}
+
+	if _, _, err := service.Login(context.Background(), "user@example.com", "password"); !errors.Is(err, ErrInvalidCredentials) {
+		t.Fatalf("Login() old password error = %v, want %v", err, ErrInvalidCredentials)
+	}
+	if _, _, err := service.Login(context.Background(), "user@example.com", "new-password"); err != nil {
+		t.Fatalf("Login() new password error = %v", err)
+	}
+}
+
 func TestAuthServiceLoginRejectsInvalidCredentials(t *testing.T) {
 	service := newTestAuthService(t)
 

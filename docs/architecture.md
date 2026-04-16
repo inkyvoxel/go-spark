@@ -306,6 +306,7 @@ Logout deletes the session from the database and clears the cookie.
 ### Password Security
 
 * Passwords are hashed using Argon2id in PHC format.
+* When configured, an application-level pepper is applied as an HMAC-SHA256 pre-hash before Argon2id.
 * Plaintext passwords are never stored.
 * Defaults follow OWASP's recommended Argon2id baseline (`m=19456`, `t=2`, `p=1`).
 

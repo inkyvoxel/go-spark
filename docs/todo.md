@@ -12,6 +12,5 @@ What is still not implemented:
 
 ## Security
 
-- Consider adding an application-level pepper stored outside the database for defense in depth.
 - Review email verification token. Is SHA-256 OK?
 - Audit code

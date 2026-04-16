@@ -1,7 +1,9 @@
 package services
 
 import (
+	"crypto/hmac"
 	"crypto/rand"
+	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/base64"
 	"errors"
@@ -35,6 +37,7 @@ type argon2idHasher struct {
 	threads    uint8
 	saltLength uint32
 	keyLength  uint32
+	pepper     string
 }
 
 func newArgon2idHasher(opts AuthOptions) *argon2idHasher {
@@ -69,6 +72,7 @@ func newArgon2idHasher(opts AuthOptions) *argon2idHasher {
 		threads:    threads,
 		saltLength: saltLength,
 		keyLength:  keyLength,
+		pepper:     opts.PasswordPepper,
 	}
 }
 
@@ -78,7 +82,7 @@ func (h *argon2idHasher) Hash(password string) (string, error) {
 		return "", fmt.Errorf("generate salt: %w", err)
 	}
 
-	hash := argon2.IDKey([]byte(password), salt, h.iterations, h.memoryKiB, h.threads, h.keyLength)
+	hash := argon2.IDKey(h.passwordInput(password), salt, h.iterations, h.memoryKiB, h.threads, h.keyLength)
 	encodedSalt := base64.RawStdEncoding.EncodeToString(salt)
 	encodedHash := base64.RawStdEncoding.EncodeToString(hash)
 
@@ -99,8 +103,18 @@ func (h *argon2idHasher) Verify(encodedHash, password string) (bool, error) {
 		return false, err
 	}
 
-	comparisonHash := argon2.IDKey([]byte(password), salt, params.iterations, params.memoryKiB, params.threads, uint32(len(hash)))
+	comparisonHash := argon2.IDKey(h.passwordInput(password), salt, params.iterations, params.memoryKiB, params.threads, uint32(len(hash)))
 	return subtle.ConstantTimeCompare(hash, comparisonHash) == 1, nil
+}
+
+func (h *argon2idHasher) passwordInput(password string) []byte {
+	if h.pepper == "" {
+		return []byte(password)
+	}
+
+	mac := hmac.New(sha256.New, []byte(h.pepper))
+	_, _ = mac.Write([]byte(password))
+	return mac.Sum(nil)
 }
 
 type argon2idHashParams struct {

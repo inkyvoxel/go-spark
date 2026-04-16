@@ -32,6 +32,9 @@ func main() {
 		logger.Error("load config", "err", err)
 		os.Exit(1)
 	}
+	if cfg.Env == "production" && cfg.PasswordPepper == "" {
+		logger.Warn("AUTH_PASSWORD_PEPPER is blank; password hashing pepper is disabled")
+	}
 
 	db, err := database.Open(cfg.DatabasePath)
 	if err != nil {
@@ -42,6 +45,7 @@ func main() {
 
 	auth := services.NewAuthService(database.NewAuthStore(db), services.AuthOptions{
 		PasswordMinLen: cfg.PasswordMinLength,
+		PasswordPepper: cfg.PasswordPepper,
 		ConfirmationEmail: email.AccountConfirmationOptions{
 			AppBaseURL: cfg.AppBaseURL,
 			From:       authSenderFrom(cfg),

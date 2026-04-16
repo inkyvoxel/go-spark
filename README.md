@@ -46,6 +46,8 @@ The app listens on `:8080` by default, stores its SQLite database at `./data/app
 
 `make run` loads `.env` when the file exists. Environment variables already set in your shell take precedence over values in `.env`.
 
+`AUTH_PASSWORD_PEPPER` is optional. When set, the app uses it as an application-level secret in password hashing by applying an HMAC-SHA256 pre-hash before Argon2id. When blank, no pepper is applied.
+
 ## Emails
 
 Built-in email functionality includes:
@@ -167,6 +169,8 @@ Before deploying an app based on this template:
 * Set file permissions so the app can read and write the database path, but does not expose it publicly.
 * Set `APP_COOKIE_SECURE=true` when the app is served over HTTPS by a reverse proxy or load balancer.
 * Keep `AUTH_PASSWORD_MIN_LENGTH` at 12 or higher unless you have a clear compatibility reason.
+* Set `AUTH_PASSWORD_PEPPER` in production for defense in depth.
+* Plan pepper rotation carefully: changing `AUTH_PASSWORD_PEPPER` invalidates existing password verification until users reset passwords.
 * Add request timeouts and deployment-specific logging/metrics as the app grows.
 
 ## Replacing SQLite

@@ -81,6 +81,7 @@ type AuthOptions struct {
 	Argon2idParallelism            uint8
 	Argon2idSaltLength             uint32
 	Argon2idKeyLength              uint32
+	PasswordPepper                 string
 	TokenBytes                     int
 	PasswordMinLen                 int
 	EmailVerificationTokenDuration time.Duration

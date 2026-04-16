@@ -32,6 +32,7 @@ type Config struct {
 	DatabasePath      string
 	CookieSecure      bool
 	PasswordMinLength int
+	PasswordPepper    string
 	AppBaseURL        string
 	EmailFrom         string
 	EmailProvider     string
@@ -97,6 +98,7 @@ func FromEnv(defaultPasswordMinLength int) (Config, error) {
 		DatabasePath:      envOrDefault("DATABASE_PATH", "./data/app.db"),
 		CookieSecure:      cookieSecure,
 		PasswordMinLength: passwordMinLength,
+		PasswordPepper:    os.Getenv("AUTH_PASSWORD_PEPPER"),
 		AppBaseURL:        appBaseURL,
 		EmailFrom:         emailFrom,
 		EmailProvider:     emailProvider,
