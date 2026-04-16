@@ -264,7 +264,7 @@ The outbox stores email delivery intent durably. A worker can claim pending rows
 
 1. User submits email and password.
 2. Application looks up the user by email.
-3. Application compares the password using `bcrypt`.
+3. Application compares the password using Argon2id.
 4. If valid, the application generates a secure random session token, stores it in the `sessions` table, and sets a cookie with the session token.
 
 ### Session Handling
@@ -305,9 +305,9 @@ Logout deletes the session from the database and clears the cookie.
 
 ### Password Security
 
-* Passwords are hashed using `bcrypt`.
+* Passwords are hashed using Argon2id in PHC format.
 * Plaintext passwords are never stored.
-* The default cost factor is fine to start.
+* Defaults follow OWASP's recommended Argon2id baseline (`m=19456`, `t=2`, `p=1`).
 
 ### Cookie Configuration
 

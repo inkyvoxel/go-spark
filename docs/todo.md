@@ -12,6 +12,6 @@ What is still not implemented:
 
 ## Security
 
-- Review use of bcrypt. It seems to be `2a`. Should it be `2b`? Should we switch to Argon2?
+- Consider adding an application-level pepper stored outside the database for defense in depth.
 - Review email verification token. Is SHA-256 OK?
 - Audit code

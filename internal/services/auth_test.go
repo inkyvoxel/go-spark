@@ -10,8 +10,6 @@ import (
 
 	db "github.com/inkyvoxel/go-spark/internal/db/generated"
 	"github.com/inkyvoxel/go-spark/internal/email"
-
-	"golang.org/x/crypto/bcrypt"
 )
 
 func TestAuthServiceRegisterHashesPassword(t *testing.T) {
@@ -28,8 +26,12 @@ func TestAuthServiceRegisterHashesPassword(t *testing.T) {
 	if user.PasswordHash == "correct horse battery staple" {
 		t.Fatal("PasswordHash stores plaintext password")
 	}
-	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte("correct horse battery staple")); err != nil {
-		t.Fatalf("CompareHashAndPassword() error = %v", err)
+	matches, err := service.passwordHasher.Verify(user.PasswordHash, "correct horse battery staple")
+	if err != nil {
+		t.Fatalf("Verify() error = %v", err)
+	}
+	if !matches {
+		t.Fatal("Verify() = false, want true")
 	}
 
 	store := service.store.(*fakeAuthStore)
@@ -582,9 +584,13 @@ func newTestAuthService(t *testing.T) *AuthService {
 	t.Helper()
 
 	return NewAuthService(newFakeAuthStore(), AuthOptions{
-		SessionDuration: time.Hour,
-		BcryptCost:      bcrypt.MinCost,
-		PasswordMinLen:  8,
+		SessionDuration:     time.Hour,
+		PasswordMinLen:      8,
+		Argon2idMemoryKiB:   64,
+		Argon2idIterations:  1,
+		Argon2idParallelism: 1,
+		Argon2idSaltLength:  16,
+		Argon2idKeyLength:   32,
 		ConfirmationEmail: email.AccountConfirmationOptions{
 			AppBaseURL: "http://localhost:8080",
 			From:       "Go Spark <hello@example.com>",

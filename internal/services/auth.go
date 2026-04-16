@@ -15,8 +15,6 @@ import (
 
 	db "github.com/inkyvoxel/go-spark/internal/db/generated"
 	"github.com/inkyvoxel/go-spark/internal/email"
-
-	"golang.org/x/crypto/bcrypt"
 )
 
 const (
@@ -44,7 +42,7 @@ type AuthService struct {
 	passwordResetTokenDuration     time.Duration
 	confirmationEmail              email.AccountConfirmationOptions
 	passwordResetEmail             email.PasswordResetOptions
-	bcryptCost                     int
+	passwordHasher                 passwordHasher
 	tokenBytes                     int
 	passwordMinLen                 int
 }
@@ -78,7 +76,11 @@ type CreateUserWithEmailVerificationParams struct {
 
 type AuthOptions struct {
 	SessionDuration                time.Duration
-	BcryptCost                     int
+	Argon2idMemoryKiB              uint32
+	Argon2idIterations             uint32
+	Argon2idParallelism            uint8
+	Argon2idSaltLength             uint32
+	Argon2idKeyLength              uint32
 	TokenBytes                     int
 	PasswordMinLen                 int
 	EmailVerificationTokenDuration time.Duration
@@ -107,11 +109,6 @@ func NewAuthService(store AuthStore, opts AuthOptions) *AuthService {
 	sessionDuration := opts.SessionDuration
 	if sessionDuration == 0 {
 		sessionDuration = 7 * 24 * time.Hour
-	}
-
-	bcryptCost := opts.BcryptCost
-	if bcryptCost == 0 {
-		bcryptCost = bcrypt.DefaultCost
 	}
 
 	tokenBytes := opts.TokenBytes
@@ -149,7 +146,7 @@ func NewAuthService(store AuthStore, opts AuthOptions) *AuthService {
 		passwordResetTokenDuration:     passwordResetTokenDuration,
 		confirmationEmail:              opts.ConfirmationEmail,
 		passwordResetEmail:             passwordResetEmail,
-		bcryptCost:                     bcryptCost,
+		passwordHasher:                 newArgon2idHasher(opts),
 		tokenBytes:                     tokenBytes,
 		passwordMinLen:                 passwordMinLen,
 	}
@@ -164,7 +161,7 @@ func (s *AuthService) Register(ctx context.Context, emailAddress, password strin
 		return db.User{}, ErrInvalidPassword
 	}
 
-	hash, err := bcrypt.GenerateFromPassword([]byte(password), s.bcryptCost)
+	hash, err := s.passwordHasher.Hash(password)
 	if err != nil {
 		return db.User{}, fmt.Errorf("hash password: %w", err)
 	}
@@ -184,7 +181,7 @@ func (s *AuthService) Register(ctx context.Context, emailAddress, password strin
 		ctx,
 		CreateUserWithEmailVerificationParams{
 			Email:             emailAddress,
-			PasswordHash:      string(hash),
+			PasswordHash:      hash,
 			TokenHash:         hashToken(token),
 			TokenExpiresAt:    now.Add(s.emailVerificationTokenDuration),
 			ConfirmationEmail: message,
@@ -210,7 +207,11 @@ func (s *AuthService) Login(ctx context.Context, email, password string) (db.Use
 		return db.User{}, db.Session{}, fmt.Errorf("get user by email: %w", err)
 	}
 
-	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(password)); err != nil {
+	matches, err := s.passwordHasher.Verify(user.PasswordHash, password)
+	if err != nil {
+		return db.User{}, db.Session{}, ErrInvalidCredentials
+	}
+	if !matches {
 		return db.User{}, db.Session{}, ErrInvalidCredentials
 	}
 
@@ -258,7 +259,8 @@ func (s *AuthService) Logout(ctx context.Context, token string) error {
 }
 
 func (s *AuthService) ChangePassword(ctx context.Context, user db.User, currentPassword, newPassword string) error {
-	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(currentPassword)); err != nil {
+	currentMatches, err := s.passwordHasher.Verify(user.PasswordHash, currentPassword)
+	if err != nil || !currentMatches {
 		return ErrCurrentPasswordIncorrect
 	}
 
@@ -266,7 +268,8 @@ func (s *AuthService) ChangePassword(ctx context.Context, user db.User, currentP
 		return err
 	}
 
-	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(newPassword)); err == nil {
+	unchanged, err := s.passwordHasher.Verify(user.PasswordHash, newPassword)
+	if err == nil && unchanged {
 		return ErrPasswordUnchanged
 	}
 
@@ -366,12 +369,12 @@ func (s *AuthService) validatePassword(password string) error {
 }
 
 func (s *AuthService) setPasswordAndRevokeSessions(ctx context.Context, userID int64, newPassword string) error {
-	hash, err := bcrypt.GenerateFromPassword([]byte(newPassword), s.bcryptCost)
+	hash, err := s.passwordHasher.Hash(newPassword)
 	if err != nil {
 		return fmt.Errorf("hash password: %w", err)
 	}
 
-	if err := s.store.UpdateUserPasswordHash(ctx, userID, string(hash)); err != nil {
+	if err := s.store.UpdateUserPasswordHash(ctx, userID, hash); err != nil {
 		return fmt.Errorf("update user password: %w", err)
 	}
 
