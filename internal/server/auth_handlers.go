@@ -91,6 +91,15 @@ func (s *Server) loginForm(w http.ResponseWriter, r *http.Request) {
 	s.render(w, "login.html", data)
 }
 
+func (s *Server) resendVerificationForm(w http.ResponseWriter, r *http.Request) {
+	data := s.newTemplateData(r, "Resend Verification Email")
+	status := strings.TrimSpace(r.URL.Query().Get("status"))
+	if status == "sent" || status == "error" {
+		data.ResendStatus = status
+	}
+	s.render(w, "resend_verification.html", data)
+}
+
 func (s *Server) confirmEmail(w http.ResponseWriter, r *http.Request) {
 	data := s.newTemplateData(r, "Confirm Email")
 
@@ -170,6 +179,31 @@ func (s *Server) resendVerification(w http.ResponseWriter, r *http.Request) {
 	}
 
 	http.Redirect(w, r, "/account?resend=sent", http.StatusSeeOther)
+}
+
+func (s *Server) resendVerificationPublic(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+		return
+	}
+
+	emailAddress := r.FormValue("email")
+	if err := s.auth.ResendVerificationEmailByAddress(r.Context(), emailAddress); err != nil {
+		if errors.Is(err, services.ErrInvalidEmail) {
+			data := s.newTemplateData(r, "Resend Verification Email")
+			data.Email = strings.TrimSpace(emailAddress)
+			data.Error = "Check your details and try again."
+			data.FieldErrors = map[string]string{"email": "Enter a valid email address."}
+			s.renderStatus(w, http.StatusBadRequest, "resend_verification.html", data)
+			return
+		}
+
+		s.logger.Error("resend verification email (public)", "err", err)
+		http.Redirect(w, r, "/resend-verification?status=error", http.StatusSeeOther)
+		return
+	}
+
+	http.Redirect(w, r, "/resend-verification?status=sent", http.StatusSeeOther)
 }
 
 func (s *Server) handleAuthFormError(w http.ResponseWriter, templateName string, data templateData, err error) {

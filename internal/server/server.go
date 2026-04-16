@@ -67,6 +67,7 @@ func parseTemplates() (map[string]*template.Template, error) {
 		"home.html",
 		"login.html",
 		"register.html",
+		"resend_verification.html",
 	}
 	templates := make(map[string]*template.Template, len(pages))
 	layout := filepath.Join("templates", "layout.html")
@@ -95,6 +96,8 @@ func (s *Server) Routes() http.Handler {
 	dynamic.HandleFunc("GET /confirm-email", s.confirmEmail)
 	dynamic.Handle("GET /login", s.requireAnonymous(http.HandlerFunc(s.loginForm)))
 	dynamic.Handle("POST /login", s.requireAnonymous(http.HandlerFunc(s.login)))
+	dynamic.Handle("GET /resend-verification", s.requireAnonymous(http.HandlerFunc(s.resendVerificationForm)))
+	dynamic.Handle("POST /resend-verification", s.requireAnonymous(http.HandlerFunc(s.resendVerificationPublic)))
 	dynamic.Handle("POST /logout", s.requireAuth(http.HandlerFunc(s.logout)))
 	dynamic.Handle("GET /account", s.requireAuth(http.HandlerFunc(s.account)))
 	dynamic.Handle("POST /account/resend-verification", s.requireAuth(http.HandlerFunc(s.resendVerification)))

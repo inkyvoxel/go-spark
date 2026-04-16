@@ -221,24 +221,27 @@ func TestCurrentUserReturnsFalseWhenMissing(t *testing.T) {
 }
 
 type fakeAuthLookup struct {
-	user          db.User
-	token         string
-	err           error
-	registered    bool
-	registerEmail string
-	registerPass  string
-	registerErr   error
-	loginEmail    string
-	loginPass     string
-	loginSession  db.Session
-	loginErr      error
-	logoutToken   string
-	logoutErr     error
-	verifyToken   string
-	verifyErr     error
-	resendUser    db.User
-	resendErr     error
-	resendCalled  bool
+	user              db.User
+	token             string
+	err               error
+	registered        bool
+	registerEmail     string
+	registerPass      string
+	registerErr       error
+	loginEmail        string
+	loginPass         string
+	loginSession      db.Session
+	loginErr          error
+	logoutToken       string
+	logoutErr         error
+	verifyToken       string
+	verifyErr         error
+	publicResendEmail string
+	publicResendErr   error
+	publicResendCalls int
+	resendUser        db.User
+	resendErr         error
+	resendCalled      bool
 }
 
 func (f *fakeAuthLookup) UserBySessionToken(ctx context.Context, token string) (db.User, error) {
@@ -273,6 +276,12 @@ func (f *fakeAuthLookup) VerifyEmail(ctx context.Context, token string) (db.User
 		return db.User{}, f.verifyErr
 	}
 	return f.user, nil
+}
+
+func (f *fakeAuthLookup) ResendVerificationEmailByAddress(ctx context.Context, email string) error {
+	f.publicResendCalls++
+	f.publicResendEmail = email
+	return f.publicResendErr
 }
 
 func (f *fakeAuthLookup) ResendVerificationEmail(ctx context.Context, user db.User) error {

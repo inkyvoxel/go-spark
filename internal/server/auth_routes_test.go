@@ -181,6 +181,22 @@ func TestRoutesLoginFormOmitsUnsafeNextPath(t *testing.T) {
 	}
 }
 
+func TestRoutesLoginFormShowsResendVerificationLink(t *testing.T) {
+	srv := newAuthRouteTestServer(t, &fakeAuthLookup{})
+
+	req := httptest.NewRequest(http.MethodGet, "/login", nil)
+	rec := httptest.NewRecorder()
+
+	srv.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	if !strings.Contains(rec.Body.String(), "/resend-verification") {
+		t.Fatalf("body = %q, want resend verification link", rec.Body.String())
+	}
+}
+
 func TestRoutesLoginRedirectsAuthenticatedUserToAccount(t *testing.T) {
 	auth := &fakeAuthLookup{
 		user: db.User{ID: 1, Email: "user@example.com"},
@@ -614,6 +630,137 @@ func TestRoutesResendVerificationRequiresAuth(t *testing.T) {
 	}
 }
 
+func TestRoutesPublicResendVerificationForm(t *testing.T) {
+	srv := newAuthRouteTestServer(t, &fakeAuthLookup{})
+
+	req := httptest.NewRequest(http.MethodGet, "/resend-verification", nil)
+	rec := httptest.NewRecorder()
+
+	srv.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, "resend-form") {
+		t.Fatalf("body = %q, want resend form marker", body)
+	}
+}
+
+func TestRoutesPublicResendVerification(t *testing.T) {
+	auth := &fakeAuthLookup{}
+	srv := newAuthRouteTestServer(t, auth)
+
+	form := url.Values{
+		"email":       []string{"user@example.com"},
+		csrfFieldName: []string{"csrf"},
+	}
+	req := httptest.NewRequest(http.MethodPost, "/resend-verification", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: "csrf"})
+	rec := httptest.NewRecorder()
+
+	srv.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusSeeOther)
+	}
+	if location := rec.Header().Get("Location"); location != "/resend-verification?status=sent" {
+		t.Fatalf("Location = %q, want %q", location, "/resend-verification?status=sent")
+	}
+	if auth.publicResendCalls != 1 {
+		t.Fatalf("public resend calls = %d, want 1", auth.publicResendCalls)
+	}
+	if auth.publicResendEmail != "user@example.com" {
+		t.Fatalf("public resend email = %q, want %q", auth.publicResendEmail, "user@example.com")
+	}
+}
+
+func TestRoutesPublicResendVerificationRejectsInvalidEmail(t *testing.T) {
+	auth := &fakeAuthLookup{
+		publicResendErr: services.ErrInvalidEmail,
+	}
+	srv := newAuthRouteTestServer(t, auth)
+
+	form := url.Values{
+		"email":       []string{"not-an-email"},
+		csrfFieldName: []string{"csrf"},
+	}
+	req := httptest.NewRequest(http.MethodPost, "/resend-verification", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: "csrf"})
+	rec := httptest.NewRecorder()
+
+	srv.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+	}
+	if !strings.Contains(rec.Body.String(), "Enter a valid email address.") {
+		t.Fatalf("body = %q, want invalid email message", rec.Body.String())
+	}
+}
+
+func TestRoutesPublicResendVerificationHandlesError(t *testing.T) {
+	auth := &fakeAuthLookup{
+		publicResendErr: errors.New("database unavailable"),
+	}
+	srv := newAuthRouteTestServer(t, auth)
+
+	form := url.Values{
+		"email":       []string{"user@example.com"},
+		csrfFieldName: []string{"csrf"},
+	}
+	req := httptest.NewRequest(http.MethodPost, "/resend-verification", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: "csrf"})
+	rec := httptest.NewRecorder()
+
+	srv.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusSeeOther)
+	}
+	if location := rec.Header().Get("Location"); location != "/resend-verification?status=error" {
+		t.Fatalf("Location = %q, want %q", location, "/resend-verification?status=error")
+	}
+}
+
+func TestRoutesPublicResendVerificationRequiresCSRF(t *testing.T) {
+	srv := newAuthRouteTestServer(t, &fakeAuthLookup{})
+
+	form := url.Values{"email": []string{"user@example.com"}}
+	req := httptest.NewRequest(http.MethodPost, "/resend-verification", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+
+	srv.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusForbidden)
+	}
+}
+
+func TestRoutesPublicResendVerificationRedirectsAuthenticatedUser(t *testing.T) {
+	auth := &fakeAuthLookup{
+		user: db.User{ID: 1, Email: "user@example.com"},
+	}
+	srv := newAuthRouteTestServer(t, auth)
+
+	req := httptest.NewRequest(http.MethodGet, "/resend-verification", nil)
+	req.AddCookie(&http.Cookie{Name: sessionCookieName, Value: "session-token"})
+	rec := httptest.NewRecorder()
+
+	srv.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusSeeOther)
+	}
+	if location := rec.Header().Get("Location"); location != "/account" {
+		t.Fatalf("Location = %q, want %q", location, "/account")
+	}
+}
+
 func TestRoutesAccountRejectsAnonymousUser(t *testing.T) {
 	srv := newAuthRouteTestServer(t, &fakeAuthLookup{})
 
@@ -638,11 +785,12 @@ func newAuthRouteTestServer(t *testing.T, auth authService) *Server {
 		auth:   auth,
 		logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
 		templates: testTemplates(t, map[string]string{
-			"home.html":          `home {{ if .Authenticated }}Account Sign out {{ .User.Email }}{{ else }}Sign in Create account{{ end }}`,
-			"register.html":      `register {{ .Error }} {{ with index .FieldErrors "email" }}{{ . }}{{ end }} {{ with index .FieldErrors "password" }}{{ . }}{{ end }} {{ with index .FieldErrors "confirm_password" }}{{ . }}{{ end }} {{ .Email }} {{ .PasswordMinLength }} {{ .CSRFToken }}`,
-			"login.html":         `login {{ .Error }} {{ .CSRFToken }} {{ .Next }}`,
-			"account.html":       `account {{ .User.Email }} {{ .CSRFToken }} {{ if not .User.EmailVerifiedAt.Valid }}resend-visible {{ end }} resend-status={{ .ResendStatus }}`,
-			"confirm_email.html": `confirm {{ if .Error }}{{ .Error }}{{ else }}Email confirmed{{ end }}`,
+			"home.html":                `home {{ if .Authenticated }}Account Sign out {{ .User.Email }}{{ else }}Sign in Create account{{ end }}`,
+			"register.html":            `register {{ .Error }} {{ with index .FieldErrors "email" }}{{ . }}{{ end }} {{ with index .FieldErrors "password" }}{{ . }}{{ end }} {{ with index .FieldErrors "confirm_password" }}{{ . }}{{ end }} {{ .Email }} {{ .PasswordMinLength }} {{ .CSRFToken }}`,
+			"login.html":               `login {{ .Error }} {{ .CSRFToken }} {{ .Next }} /resend-verification`,
+			"account.html":             `account {{ .User.Email }} {{ .CSRFToken }} {{ if not .User.EmailVerifiedAt.Valid }}resend-visible {{ end }} resend-status={{ .ResendStatus }}`,
+			"confirm_email.html":       `confirm {{ if .Error }}{{ .Error }}{{ else }}Email confirmed{{ end }}`,
+			"resend_verification.html": `resend-form {{ .Error }} {{ with index .FieldErrors "email" }}{{ . }}{{ end }} {{ .Email }} resend-status={{ .ResendStatus }} {{ .CSRFToken }}`,
 		}),
 		passwordMinLength: 8,
 	}

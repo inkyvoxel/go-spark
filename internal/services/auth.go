@@ -285,6 +285,31 @@ func (s *AuthService) ResendVerificationEmail(ctx context.Context, user db.User)
 	return nil
 }
 
+func (s *AuthService) ResendVerificationEmailByAddress(ctx context.Context, emailAddress string) error {
+	emailAddress = normalizeEmail(emailAddress)
+	if !isValidEmail(emailAddress) {
+		return ErrInvalidEmail
+	}
+
+	user, err := s.store.GetUserByEmail(ctx, emailAddress)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("get user by email: %w", err)
+	}
+
+	if user.EmailVerifiedAt.Valid {
+		return nil
+	}
+
+	if err := s.ResendVerificationEmail(ctx, user); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func normalizeEmail(email string) string {
 	return strings.ToLower(strings.TrimSpace(email))
 }

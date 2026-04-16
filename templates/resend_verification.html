@@ -1,0 +1,26 @@
+{{ define "content" }}
+<article>
+  <h1>Resend verification email</h1>
+  <p>Enter your email address and we will send a new confirmation link if needed.</p>
+  {{ if eq .ResendStatus "sent" }}<p role="status">If that email can be verified, we sent a confirmation link.</p>{{ end }}
+  {{ if eq .ResendStatus "error" }}<p role="alert">We couldn't send a verification email right now. Please try again.</p>{{ end }}
+  {{ if .Error }}<p role="alert">{{ .Error }}</p>{{ end }}
+  <form method="post" action="/resend-verification">
+    <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
+    <label>
+      Email
+      <input
+        type="email"
+        name="email"
+        value="{{ .Email }}"
+        autocomplete="email"
+        pattern="{{ .EmailPattern }}"
+        {{ if index .FieldErrors "email" }}aria-invalid="true"{{ end }}
+        required>
+      {{ with index .FieldErrors "email" }}<small role="alert">{{ . }}</small>{{ end }}
+    </label>
+    <button type="submit">Send verification email</button>
+  </form>
+  <p><a href="/login">Back to sign in</a></p>
+</article>
+{{ end }}

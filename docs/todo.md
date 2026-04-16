@@ -1,7 +1,6 @@
 ## Email features
 
 What is still not implemented:
-- A public resend confirmation flow for users who are not signed in.
 - Blocking login or account access until email is verified.
 - UI text after registration telling the user to check their email.
 - Admin/ops visibility for failed outbox rows.

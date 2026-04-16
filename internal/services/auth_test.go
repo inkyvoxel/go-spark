@@ -285,6 +285,80 @@ func TestAuthServiceResendVerificationEmailWrapsStoreError(t *testing.T) {
 	}
 }
 
+func TestAuthServiceResendVerificationEmailByAddressForUnverifiedUser(t *testing.T) {
+	service := newTestAuthService(t)
+	store := service.store.(*fakeAuthStore)
+
+	if _, err := service.Register(context.Background(), "user@example.com", "password"); err != nil {
+		t.Fatalf("Register() error = %v", err)
+	}
+	initialOutbox := len(store.outbox)
+
+	if err := service.ResendVerificationEmailByAddress(context.Background(), "USER@example.com"); err != nil {
+		t.Fatalf("ResendVerificationEmailByAddress() error = %v", err)
+	}
+	if len(store.outbox) != initialOutbox+1 {
+		t.Fatalf("outbox count = %d, want %d", len(store.outbox), initialOutbox+1)
+	}
+}
+
+func TestAuthServiceResendVerificationEmailByAddressNoOpForMissingUser(t *testing.T) {
+	service := newTestAuthService(t)
+	store := service.store.(*fakeAuthStore)
+	initialOutbox := len(store.outbox)
+
+	if err := service.ResendVerificationEmailByAddress(context.Background(), "missing@example.com"); err != nil {
+		t.Fatalf("ResendVerificationEmailByAddress() error = %v", err)
+	}
+	if len(store.outbox) != initialOutbox {
+		t.Fatalf("outbox count = %d, want %d", len(store.outbox), initialOutbox)
+	}
+}
+
+func TestAuthServiceResendVerificationEmailByAddressNoOpForVerifiedUser(t *testing.T) {
+	service := newTestAuthService(t)
+	store := service.store.(*fakeAuthStore)
+
+	user, err := service.Register(context.Background(), "user@example.com", "password")
+	if err != nil {
+		t.Fatalf("Register() error = %v", err)
+	}
+	user.EmailVerifiedAt = sql.NullTime{Time: time.Now().UTC(), Valid: true}
+	store.usersByID[user.ID] = user
+	store.usersByEmail[user.Email] = user
+	initialOutbox := len(store.outbox)
+
+	if err := service.ResendVerificationEmailByAddress(context.Background(), "user@example.com"); err != nil {
+		t.Fatalf("ResendVerificationEmailByAddress() error = %v", err)
+	}
+	if len(store.outbox) != initialOutbox {
+		t.Fatalf("outbox count = %d, want %d", len(store.outbox), initialOutbox)
+	}
+}
+
+func TestAuthServiceResendVerificationEmailByAddressRejectsInvalidEmail(t *testing.T) {
+	service := newTestAuthService(t)
+
+	err := service.ResendVerificationEmailByAddress(context.Background(), "not-an-email")
+	if !errors.Is(err, ErrInvalidEmail) {
+		t.Fatalf("ResendVerificationEmailByAddress() error = %v, want %v", err, ErrInvalidEmail)
+	}
+}
+
+func TestAuthServiceResendVerificationEmailByAddressWrapsLookupError(t *testing.T) {
+	service := newTestAuthService(t)
+	store := service.store.(*fakeAuthStore)
+	store.getUserByEmailErr = errors.New("database unavailable")
+
+	err := service.ResendVerificationEmailByAddress(context.Background(), "user@example.com")
+	if err == nil {
+		t.Fatal("ResendVerificationEmailByAddress() error = nil, want error")
+	}
+	if !strings.Contains(err.Error(), "get user by email") {
+		t.Fatalf("ResendVerificationEmailByAddress() error = %v, want operation context", err)
+	}
+}
+
 func newTestAuthService(t *testing.T) *AuthService {
 	t.Helper()
 
@@ -308,6 +382,7 @@ type fakeAuthStore struct {
 	sessions                map[string]db.Session
 	verificationTokens      map[string]db.EmailVerificationToken
 	outbox                  []email.Message
+	getUserByEmailErr       error
 	resendErr               error
 }
 
@@ -357,6 +432,9 @@ func (s *fakeAuthStore) CreateUserWithEmailVerification(ctx context.Context, par
 }
 
 func (s *fakeAuthStore) GetUserByEmail(ctx context.Context, email string) (db.User, error) {
+	if s.getUserByEmailErr != nil {
+		return db.User{}, s.getUserByEmailErr
+	}
 	user, ok := s.usersByEmail[email]
 	if !ok {
 		return db.User{}, sql.ErrNoRows
