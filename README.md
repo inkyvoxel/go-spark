@@ -35,6 +35,10 @@ make run
 
 The app listens on `:8080` by default, stores its SQLite database at `./data/app.db`, and requires registration passwords to be at least 12 characters unless `AUTH_PASSWORD_MIN_LENGTH` is set.
 
+`make run` loads `.env` when the file exists. Environment variables already set in your shell take precedence over values in `.env`.
+
+Email delivery defaults to `EMAIL_PROVIDER=log` for safe local development. Set `EMAIL_PROVIDER=smtp` with `SMTP_*` values to send real mail.
+
 Open:
 
 ```text
@@ -58,7 +62,7 @@ make tools
 
 `sqlc` and `goose` are pinned as Go tool dependencies in `go.mod`, so the Makefile runs them through `go tool`. You do not need separate global installs.
 
-See [docs/development.md](docs/development.md) for tool and workflow details.
+See [docs/development.md](docs/development.md) for tool and workflow details. See [docs/email.md](docs/email.md) for the staged email and account-confirmation plan.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) before opening pull requests, and [CHANGELOG.md](CHANGELOG.md) for notable changes.
 

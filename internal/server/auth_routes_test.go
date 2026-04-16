@@ -1,6 +1,8 @@
 package server
 
 import (
+	"database/sql"
+	"errors"
 	"io"
 	"log/slog"
 	"net/http"
@@ -321,6 +323,66 @@ func TestRoutesRegisterShowsServiceValidationErrors(t *testing.T) {
 	}
 }
 
+func TestRoutesConfirmEmail(t *testing.T) {
+	auth := &fakeAuthLookup{
+		user: db.User{ID: 1, Email: "new@example.com"},
+	}
+	srv := newAuthRouteTestServer(t, auth)
+
+	req := httptest.NewRequest(http.MethodGet, "/confirm-email?token=raw-token", nil)
+	rec := httptest.NewRecorder()
+
+	srv.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	if auth.verifyToken != "raw-token" {
+		t.Fatalf("verify token = %q, want raw-token", auth.verifyToken)
+	}
+	if !strings.Contains(rec.Body.String(), "Email confirmed") {
+		t.Fatalf("body = %q, want confirmation success", rec.Body.String())
+	}
+}
+
+func TestRoutesConfirmEmailRejectsInvalidToken(t *testing.T) {
+	auth := &fakeAuthLookup{
+		verifyErr: services.ErrInvalidVerificationToken,
+	}
+	srv := newAuthRouteTestServer(t, auth)
+
+	req := httptest.NewRequest(http.MethodGet, "/confirm-email?token=bad-token", nil)
+	rec := httptest.NewRecorder()
+
+	srv.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+	}
+	if auth.verifyToken != "bad-token" {
+		t.Fatalf("verify token = %q, want bad-token", auth.verifyToken)
+	}
+	if !strings.Contains(rec.Body.String(), "invalid or has expired") {
+		t.Fatalf("body = %q, want invalid token message", rec.Body.String())
+	}
+}
+
+func TestRoutesConfirmEmailHandlesUnexpectedError(t *testing.T) {
+	auth := &fakeAuthLookup{
+		verifyErr: errors.New("database unavailable"),
+	}
+	srv := newAuthRouteTestServer(t, auth)
+
+	req := httptest.NewRequest(http.MethodGet, "/confirm-email?token=raw-token", nil)
+	rec := httptest.NewRecorder()
+
+	srv.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusInternalServerError)
+	}
+}
+
 func TestRoutesLogout(t *testing.T) {
 	auth := &fakeAuthLookup{}
 	srv := newAuthRouteTestServer(t, auth)
@@ -416,6 +478,142 @@ func TestRoutesAccountRequiresAuth(t *testing.T) {
 	}
 }
 
+func TestRoutesAccountShowsResendForUnverifiedUser(t *testing.T) {
+	auth := &fakeAuthLookup{
+		user: db.User{ID: 1, Email: "user@example.com"},
+	}
+	srv := newAuthRouteTestServer(t, auth)
+
+	req := httptest.NewRequest(http.MethodGet, "/account", nil)
+	req.AddCookie(&http.Cookie{Name: sessionCookieName, Value: "session-token"})
+	rec := httptest.NewRecorder()
+
+	srv.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, "resend-visible") {
+		t.Fatalf("body = %q, want resend control", body)
+	}
+}
+
+func TestRoutesAccountHidesResendForVerifiedUser(t *testing.T) {
+	auth := &fakeAuthLookup{
+		user: db.User{
+			ID:    1,
+			Email: "user@example.com",
+			EmailVerifiedAt: sql.NullTime{
+				Time:  time.Now().UTC(),
+				Valid: true,
+			},
+		},
+	}
+	srv := newAuthRouteTestServer(t, auth)
+
+	req := httptest.NewRequest(http.MethodGet, "/account", nil)
+	req.AddCookie(&http.Cookie{Name: sessionCookieName, Value: "session-token"})
+	rec := httptest.NewRecorder()
+
+	srv.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	body := rec.Body.String()
+	if strings.Contains(body, "resend-visible") {
+		t.Fatalf("body = %q, did not want resend control", body)
+	}
+}
+
+func TestRoutesResendVerification(t *testing.T) {
+	auth := &fakeAuthLookup{
+		user: db.User{ID: 1, Email: "user@example.com"},
+	}
+	srv := newAuthRouteTestServer(t, auth)
+
+	form := url.Values{csrfFieldName: []string{"csrf"}}
+	req := httptest.NewRequest(http.MethodPost, "/account/resend-verification", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(&http.Cookie{Name: sessionCookieName, Value: "session-token"})
+	req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: "csrf"})
+	rec := httptest.NewRecorder()
+
+	srv.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusSeeOther)
+	}
+	if location := rec.Header().Get("Location"); location != "/account?resend=sent" {
+		t.Fatalf("Location = %q, want %q", location, "/account?resend=sent")
+	}
+	if !auth.resendCalled {
+		t.Fatal("ResendVerificationEmail() was not called")
+	}
+	if auth.resendUser.ID != auth.user.ID {
+		t.Fatalf("resend user ID = %d, want %d", auth.resendUser.ID, auth.user.ID)
+	}
+}
+
+func TestRoutesResendVerificationHandlesError(t *testing.T) {
+	auth := &fakeAuthLookup{
+		user:      db.User{ID: 1, Email: "user@example.com"},
+		resendErr: errors.New("database unavailable"),
+	}
+	srv := newAuthRouteTestServer(t, auth)
+
+	form := url.Values{csrfFieldName: []string{"csrf"}}
+	req := httptest.NewRequest(http.MethodPost, "/account/resend-verification", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(&http.Cookie{Name: sessionCookieName, Value: "session-token"})
+	req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: "csrf"})
+	rec := httptest.NewRecorder()
+
+	srv.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusSeeOther)
+	}
+	if location := rec.Header().Get("Location"); location != "/account?resend=error" {
+		t.Fatalf("Location = %q, want %q", location, "/account?resend=error")
+	}
+}
+
+func TestRoutesResendVerificationRequiresCSRF(t *testing.T) {
+	auth := &fakeAuthLookup{
+		user: db.User{ID: 1, Email: "user@example.com"},
+	}
+	srv := newAuthRouteTestServer(t, auth)
+
+	req := httptest.NewRequest(http.MethodPost, "/account/resend-verification", strings.NewReader(url.Values{}.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(&http.Cookie{Name: sessionCookieName, Value: "session-token"})
+	rec := httptest.NewRecorder()
+
+	srv.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusForbidden)
+	}
+}
+
+func TestRoutesResendVerificationRequiresAuth(t *testing.T) {
+	srv := newAuthRouteTestServer(t, &fakeAuthLookup{})
+
+	form := url.Values{csrfFieldName: []string{"csrf"}}
+	req := httptest.NewRequest(http.MethodPost, "/account/resend-verification", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: "csrf"})
+	rec := httptest.NewRecorder()
+
+	srv.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusUnauthorized)
+	}
+}
+
 func TestRoutesAccountRejectsAnonymousUser(t *testing.T) {
 	srv := newAuthRouteTestServer(t, &fakeAuthLookup{})
 
@@ -440,10 +638,11 @@ func newAuthRouteTestServer(t *testing.T, auth authService) *Server {
 		auth:   auth,
 		logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
 		templates: testTemplates(t, map[string]string{
-			"home.html":     `home {{ if .Authenticated }}Account Sign out {{ .User.Email }}{{ else }}Sign in Create account{{ end }}`,
-			"register.html": `register {{ .Error }} {{ with index .FieldErrors "email" }}{{ . }}{{ end }} {{ with index .FieldErrors "password" }}{{ . }}{{ end }} {{ with index .FieldErrors "confirm_password" }}{{ . }}{{ end }} {{ .Email }} {{ .PasswordMinLength }} {{ .CSRFToken }}`,
-			"login.html":    `login {{ .Error }} {{ .CSRFToken }} {{ .Next }}`,
-			"account.html":  `account {{ .User.Email }} {{ .CSRFToken }}`,
+			"home.html":          `home {{ if .Authenticated }}Account Sign out {{ .User.Email }}{{ else }}Sign in Create account{{ end }}`,
+			"register.html":      `register {{ .Error }} {{ with index .FieldErrors "email" }}{{ . }}{{ end }} {{ with index .FieldErrors "password" }}{{ . }}{{ end }} {{ with index .FieldErrors "confirm_password" }}{{ . }}{{ end }} {{ .Email }} {{ .PasswordMinLength }} {{ .CSRFToken }}`,
+			"login.html":         `login {{ .Error }} {{ .CSRFToken }} {{ .Next }}`,
+			"account.html":       `account {{ .User.Email }} {{ .CSRFToken }} {{ if not .User.EmailVerifiedAt.Valid }}resend-visible {{ end }} resend-status={{ .ResendStatus }}`,
+			"confirm_email.html": `confirm {{ if .Error }}{{ .Error }}{{ else }}Email confirmed{{ end }}`,
 		}),
 		passwordMinLength: 8,
 	}

@@ -1,11 +1,75 @@
 package config
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/inkyvoxel/go-spark/internal/email"
 	"github.com/inkyvoxel/go-spark/internal/services"
 )
+
+func TestLoadDotEnvLoadsValuesWithoutOverridingEnvironment(t *testing.T) {
+	t.Setenv("APP_ENV", "shell")
+	unsetEnvForTest(t, "TEST_DOTENV_ONLY_VALUE")
+
+	path := filepath.Join(t.TempDir(), ".env")
+	if err := os.WriteFile(path, []byte("APP_ENV=dotenv\nTEST_DOTENV_ONLY_VALUE=loaded\n"), 0o600); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	if err := LoadDotEnv(path); err != nil {
+		t.Fatalf("LoadDotEnv() error = %v", err)
+	}
+
+	if got := os.Getenv("APP_ENV"); got != "shell" {
+		t.Fatalf("APP_ENV = %q, want existing shell value", got)
+	}
+	if got := os.Getenv("TEST_DOTENV_ONLY_VALUE"); got != "loaded" {
+		t.Fatalf("TEST_DOTENV_ONLY_VALUE = %q, want dotenv value", got)
+	}
+}
+
+func TestLoadDotEnvIgnoresMissingFile(t *testing.T) {
+	path := filepath.Join(t.TempDir(), ".env")
+
+	if err := LoadDotEnv(path); err != nil {
+		t.Fatalf("LoadDotEnv() error = %v, want nil", err)
+	}
+}
+
+func TestLoadDotEnvReturnsParseError(t *testing.T) {
+	path := filepath.Join(t.TempDir(), ".env")
+	if err := os.WriteFile(path, []byte(`APP_ENV="unterminated`), 0o600); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	err := LoadDotEnv(path)
+	if err == nil {
+		t.Fatal("LoadDotEnv() error = nil, want error")
+	}
+	if !strings.Contains(err.Error(), "load") {
+		t.Fatalf("LoadDotEnv() error = %v, want load context", err)
+	}
+}
+
+func unsetEnvForTest(t *testing.T, key string) {
+	t.Helper()
+
+	original, ok := os.LookupEnv(key)
+	if err := os.Unsetenv(key); err != nil {
+		t.Fatalf("Unsetenv() error = %v", err)
+	}
+
+	t.Cleanup(func() {
+		if ok {
+			_ = os.Setenv(key, original)
+			return
+		}
+		_ = os.Unsetenv(key)
+	})
+}
 
 func TestFromEnvUsesDefaults(t *testing.T) {
 	t.Setenv("APP_ADDR", "")
@@ -13,6 +77,10 @@ func TestFromEnvUsesDefaults(t *testing.T) {
 	t.Setenv("DATABASE_PATH", "")
 	t.Setenv("APP_COOKIE_SECURE", "")
 	t.Setenv("AUTH_PASSWORD_MIN_LENGTH", "")
+	t.Setenv("APP_BASE_URL", "")
+	t.Setenv("EMAIL_FROM", "")
+	t.Setenv("EMAIL_PROVIDER", "")
+	t.Setenv("EMAIL_LOG_BODY", "")
 
 	cfg, err := FromEnv(services.DefaultPasswordMinLength)
 	if err != nil {
@@ -34,6 +102,18 @@ func TestFromEnvUsesDefaults(t *testing.T) {
 	if cfg.PasswordMinLength != services.DefaultPasswordMinLength {
 		t.Fatalf("PasswordMinLength = %d, want %d", cfg.PasswordMinLength, services.DefaultPasswordMinLength)
 	}
+	if cfg.AppBaseURL != "http://localhost:8080" {
+		t.Fatalf("AppBaseURL = %q, want %q", cfg.AppBaseURL, "http://localhost:8080")
+	}
+	if cfg.EmailFrom != `"Go Spark" <hello@example.com>` {
+		t.Fatalf("EmailFrom = %q, want formatted sender", cfg.EmailFrom)
+	}
+	if cfg.EmailProvider != email.ProviderLog {
+		t.Fatalf("EmailProvider = %q, want %q", cfg.EmailProvider, email.ProviderLog)
+	}
+	if cfg.EmailLogBody {
+		t.Fatal("EmailLogBody = true, want false")
+	}
 }
 
 func TestFromEnvUsesEnvironment(t *testing.T) {
@@ -42,6 +122,10 @@ func TestFromEnvUsesEnvironment(t *testing.T) {
 	t.Setenv("DATABASE_PATH", "/tmp/app-test.db")
 	t.Setenv("APP_COOKIE_SECURE", "true")
 	t.Setenv("AUTH_PASSWORD_MIN_LENGTH", "16")
+	t.Setenv("APP_BASE_URL", "https://app.example.com/")
+	t.Setenv("EMAIL_FROM", "Example <mail@example.com>")
+	t.Setenv("EMAIL_PROVIDER", "LOG")
+	t.Setenv("EMAIL_LOG_BODY", "true")
 
 	cfg, err := FromEnv(services.DefaultPasswordMinLength)
 	if err != nil {
@@ -62,6 +146,18 @@ func TestFromEnvUsesEnvironment(t *testing.T) {
 	}
 	if cfg.PasswordMinLength != 16 {
 		t.Fatalf("PasswordMinLength = %d, want %d", cfg.PasswordMinLength, 16)
+	}
+	if cfg.AppBaseURL != "https://app.example.com" {
+		t.Fatalf("AppBaseURL = %q, want %q", cfg.AppBaseURL, "https://app.example.com")
+	}
+	if cfg.EmailFrom != `"Example" <mail@example.com>` {
+		t.Fatalf("EmailFrom = %q, want formatted sender", cfg.EmailFrom)
+	}
+	if cfg.EmailProvider != email.ProviderLog {
+		t.Fatalf("EmailProvider = %q, want %q", cfg.EmailProvider, email.ProviderLog)
+	}
+	if !cfg.EmailLogBody {
+		t.Fatal("EmailLogBody = false, want true")
 	}
 }
 
@@ -111,5 +207,199 @@ func TestFromEnvRejectsInvalidCookieSecureBool(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "APP_COOKIE_SECURE") {
 		t.Fatalf("FromEnv() error = %v, want APP_COOKIE_SECURE", err)
+	}
+}
+
+func TestFromEnvRejectsInvalidAppBaseURL(t *testing.T) {
+	t.Setenv("APP_BASE_URL", "localhost:8080")
+
+	_, err := FromEnv(services.DefaultPasswordMinLength)
+	if err == nil {
+		t.Fatal("FromEnv() error = nil, want error")
+	}
+	if !strings.Contains(err.Error(), "APP_BASE_URL") {
+		t.Fatalf("FromEnv() error = %v, want APP_BASE_URL", err)
+	}
+}
+
+func TestFromEnvRejectsInvalidEmailFrom(t *testing.T) {
+	t.Setenv("EMAIL_FROM", "not an address")
+
+	_, err := FromEnv(services.DefaultPasswordMinLength)
+	if err == nil {
+		t.Fatal("FromEnv() error = nil, want error")
+	}
+	if !strings.Contains(err.Error(), "EMAIL_FROM") {
+		t.Fatalf("FromEnv() error = %v, want EMAIL_FROM", err)
+	}
+}
+
+func TestFromEnvRejectsUnknownEmailProvider(t *testing.T) {
+	t.Setenv("EMAIL_PROVIDER", "ses")
+
+	_, err := FromEnv(services.DefaultPasswordMinLength)
+	if err == nil {
+		t.Fatal("FromEnv() error = nil, want error")
+	}
+	if !strings.Contains(err.Error(), "EMAIL_PROVIDER") {
+		t.Fatalf("FromEnv() error = %v, want EMAIL_PROVIDER", err)
+	}
+}
+
+func TestFromEnvParsesSMTPProvider(t *testing.T) {
+	t.Setenv("EMAIL_PROVIDER", "smtp")
+	t.Setenv("SMTP_HOST", "smtp.example.com")
+	t.Setenv("SMTP_PORT", "587")
+	t.Setenv("SMTP_USERNAME", "mailer")
+	t.Setenv("SMTP_PASSWORD", "secret")
+	t.Setenv("SMTP_FROM", "Mailer <mailer@example.com>")
+	t.Setenv("SMTP_TLS", "true")
+
+	cfg, err := FromEnv(services.DefaultPasswordMinLength)
+	if err != nil {
+		t.Fatalf("FromEnv() error = %v", err)
+	}
+
+	if cfg.EmailProvider != email.ProviderSMTP {
+		t.Fatalf("EmailProvider = %q, want %q", cfg.EmailProvider, email.ProviderSMTP)
+	}
+	if cfg.SMTPHost != "smtp.example.com" {
+		t.Fatalf("SMTPHost = %q, want smtp.example.com", cfg.SMTPHost)
+	}
+	if cfg.SMTPPort != 587 {
+		t.Fatalf("SMTPPort = %d, want 587", cfg.SMTPPort)
+	}
+	if cfg.SMTPUsername != "mailer" {
+		t.Fatalf("SMTPUsername = %q, want mailer", cfg.SMTPUsername)
+	}
+	if cfg.SMTPPassword != "secret" {
+		t.Fatalf("SMTPPassword = %q, want secret", cfg.SMTPPassword)
+	}
+	if cfg.SMTPFrom != `"Mailer" <mailer@example.com>` {
+		t.Fatalf("SMTPFrom = %q, want formatted sender", cfg.SMTPFrom)
+	}
+	if !cfg.SMTPTLS {
+		t.Fatal("SMTPTLS = false, want true")
+	}
+}
+
+func TestFromEnvSMTPProviderDefaultsSMTPFromAndTLS(t *testing.T) {
+	t.Setenv("EMAIL_PROVIDER", "smtp")
+	t.Setenv("EMAIL_FROM", "Go Spark <hello@example.com>")
+	t.Setenv("SMTP_HOST", "smtp.example.com")
+	t.Setenv("SMTP_PORT", "587")
+	t.Setenv("SMTP_FROM", "")
+	t.Setenv("SMTP_TLS", "")
+
+	cfg, err := FromEnv(services.DefaultPasswordMinLength)
+	if err != nil {
+		t.Fatalf("FromEnv() error = %v", err)
+	}
+
+	if cfg.SMTPFrom != `"Go Spark" <hello@example.com>` {
+		t.Fatalf("SMTPFrom = %q, want EMAIL_FROM fallback", cfg.SMTPFrom)
+	}
+	if !cfg.SMTPTLS {
+		t.Fatal("SMTPTLS = false, want true default")
+	}
+}
+
+func TestFromEnvSMTPProviderRejectsMissingHost(t *testing.T) {
+	t.Setenv("EMAIL_PROVIDER", "smtp")
+	t.Setenv("SMTP_HOST", "")
+	t.Setenv("SMTP_PORT", "587")
+
+	_, err := FromEnv(services.DefaultPasswordMinLength)
+	if err == nil {
+		t.Fatal("FromEnv() error = nil, want error")
+	}
+	if !strings.Contains(err.Error(), "SMTP_HOST") {
+		t.Fatalf("FromEnv() error = %v, want SMTP_HOST", err)
+	}
+}
+
+func TestFromEnvSMTPProviderRejectsMissingPort(t *testing.T) {
+	t.Setenv("EMAIL_PROVIDER", "smtp")
+	t.Setenv("SMTP_HOST", "smtp.example.com")
+	t.Setenv("SMTP_PORT", "")
+
+	_, err := FromEnv(services.DefaultPasswordMinLength)
+	if err == nil {
+		t.Fatal("FromEnv() error = nil, want error")
+	}
+	if !strings.Contains(err.Error(), "SMTP_PORT") {
+		t.Fatalf("FromEnv() error = %v, want SMTP_PORT", err)
+	}
+}
+
+func TestFromEnvSMTPProviderRejectsInvalidPort(t *testing.T) {
+	t.Setenv("EMAIL_PROVIDER", "smtp")
+	t.Setenv("SMTP_HOST", "smtp.example.com")
+	t.Setenv("SMTP_PORT", "abc")
+
+	_, err := FromEnv(services.DefaultPasswordMinLength)
+	if err == nil {
+		t.Fatal("FromEnv() error = nil, want error")
+	}
+	if !strings.Contains(err.Error(), "SMTP_PORT") {
+		t.Fatalf("FromEnv() error = %v, want SMTP_PORT", err)
+	}
+}
+
+func TestFromEnvSMTPProviderRejectsInvalidTLSBool(t *testing.T) {
+	t.Setenv("EMAIL_PROVIDER", "smtp")
+	t.Setenv("SMTP_HOST", "smtp.example.com")
+	t.Setenv("SMTP_PORT", "587")
+	t.Setenv("SMTP_TLS", "sometimes")
+
+	_, err := FromEnv(services.DefaultPasswordMinLength)
+	if err == nil {
+		t.Fatal("FromEnv() error = nil, want error")
+	}
+	if !strings.Contains(err.Error(), "SMTP_TLS") {
+		t.Fatalf("FromEnv() error = %v, want SMTP_TLS", err)
+	}
+}
+
+func TestFromEnvSMTPProviderRejectsPartialAuth(t *testing.T) {
+	t.Setenv("EMAIL_PROVIDER", "smtp")
+	t.Setenv("SMTP_HOST", "smtp.example.com")
+	t.Setenv("SMTP_PORT", "587")
+	t.Setenv("SMTP_USERNAME", "mailer")
+	t.Setenv("SMTP_PASSWORD", "")
+
+	_, err := FromEnv(services.DefaultPasswordMinLength)
+	if err == nil {
+		t.Fatal("FromEnv() error = nil, want error")
+	}
+	if !strings.Contains(err.Error(), "SMTP_USERNAME") {
+		t.Fatalf("FromEnv() error = %v, want SMTP_USERNAME", err)
+	}
+}
+
+func TestFromEnvLogProviderIgnoresSMTPSettings(t *testing.T) {
+	t.Setenv("EMAIL_PROVIDER", "log")
+	t.Setenv("SMTP_HOST", "")
+	t.Setenv("SMTP_PORT", "not-a-number")
+	t.Setenv("SMTP_TLS", "sometimes")
+
+	cfg, err := FromEnv(services.DefaultPasswordMinLength)
+	if err != nil {
+		t.Fatalf("FromEnv() error = %v", err)
+	}
+	if cfg.EmailProvider != email.ProviderLog {
+		t.Fatalf("EmailProvider = %q, want log", cfg.EmailProvider)
+	}
+}
+
+func TestFromEnvRejectsInvalidEmailLogBodyBool(t *testing.T) {
+	t.Setenv("EMAIL_LOG_BODY", "sometimes")
+
+	_, err := FromEnv(services.DefaultPasswordMinLength)
+	if err == nil {
+		t.Fatal("FromEnv() error = nil, want error")
+	}
+	if !strings.Contains(err.Error(), "EMAIL_LOG_BODY") {
+		t.Fatalf("FromEnv() error = %v, want EMAIL_LOG_BODY", err)
 	}
 }

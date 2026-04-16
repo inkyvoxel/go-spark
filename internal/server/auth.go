@@ -18,7 +18,9 @@ type authService interface {
 	Login(context.Context, string, string) (db.User, db.Session, error)
 	Logout(context.Context, string) error
 	Register(context.Context, string, string) (db.User, error)
+	ResendVerificationEmail(context.Context, db.User) error
 	UserBySessionToken(context.Context, string) (db.User, error)
+	VerifyEmail(context.Context, string) (db.User, error)
 }
 
 type authContextKey struct{}

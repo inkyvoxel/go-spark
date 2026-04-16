@@ -5,8 +5,33 @@
 package db
 
 import (
+	"database/sql"
 	"time"
 )
+
+type EmailOutbox struct {
+	ID          int64
+	Sender      string
+	Recipient   string
+	Subject     string
+	TextBody    string
+	HtmlBody    string
+	Status      string
+	Attempts    int64
+	LastError   string
+	AvailableAt time.Time
+	SentAt      sql.NullTime
+	CreatedAt   time.Time
+}
+
+type EmailVerificationToken struct {
+	ID         int64
+	UserID     int64
+	TokenHash  string
+	ExpiresAt  time.Time
+	ConsumedAt sql.NullTime
+	CreatedAt  time.Time
+}
 
 type Session struct {
 	ID        int64
@@ -17,8 +42,9 @@ type Session struct {
 }
 
 type User struct {
-	ID           int64
-	Email        string
-	PasswordHash string
-	CreatedAt    time.Time
+	ID              int64
+	Email           string
+	PasswordHash    string
+	CreatedAt       time.Time
+	EmailVerifiedAt sql.NullTime
 }

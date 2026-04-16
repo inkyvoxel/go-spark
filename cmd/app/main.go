@@ -3,22 +3,29 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
 	"github.com/inkyvoxel/go-spark/internal/config"
 	"github.com/inkyvoxel/go-spark/internal/database"
-	dbgen "github.com/inkyvoxel/go-spark/internal/db/generated"
+	"github.com/inkyvoxel/go-spark/internal/email"
 	"github.com/inkyvoxel/go-spark/internal/server"
 	"github.com/inkyvoxel/go-spark/internal/services"
 )
 
 func main() {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
+
+	if err := config.LoadDotEnv(".env"); err != nil {
+		logger.Error("load .env", "err", err)
+		os.Exit(1)
+	}
 
 	cfg, err := config.FromEnv(services.DefaultPasswordMinLength)
 	if err != nil {
@@ -33,8 +40,22 @@ func main() {
 	}
 	defer db.Close()
 
-	auth := services.NewAuthService(database.NewAuthStore(dbgen.New(db)), services.AuthOptions{
+	auth := services.NewAuthService(database.NewAuthStore(db), services.AuthOptions{
 		PasswordMinLen: cfg.PasswordMinLength,
+		ConfirmationEmail: email.AccountConfirmationOptions{
+			AppBaseURL: cfg.AppBaseURL,
+			From:       authSenderFrom(cfg),
+		},
+	})
+
+	emailSender, err := newEmailSender(cfg, logger)
+	if err != nil {
+		logger.Error("configure email sender", "err", err)
+		os.Exit(1)
+	}
+
+	emailWorker := email.NewWorker(database.NewEmailOutboxStore(db), emailSender, email.WorkerOptions{
+		Logger: logger,
 	})
 
 	app := server.New(server.Options{
@@ -54,14 +75,20 @@ func main() {
 		IdleTimeout:       120 * time.Second,
 	}
 
-	errs := make(chan error, 1)
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	errs := make(chan error, 2)
 	go func() {
-		logger.Info("server listening", "addr", cfg.Addr, "env", cfg.Env)
+		logger.Info("server listening", "addr", cfg.Addr, "env", cfg.Env, "email_provider", cfg.EmailProvider)
 		errs <- httpServer.ListenAndServe()
 	}()
 
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
+	go func() {
+		if err := emailWorker.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
+			errs <- err
+		}
+	}()
 
 	select {
 	case <-ctx.Done():
@@ -75,8 +102,36 @@ func main() {
 		logger.Info("server stopped")
 	case err := <-errs:
 		if !errors.Is(err, http.ErrServerClosed) {
-			logger.Error("server failed", "err", err)
+			logger.Error("application failed", "err", err)
 			os.Exit(1)
 		}
 	}
+}
+
+func newEmailSender(cfg config.Config, logger *slog.Logger) (email.Sender, error) {
+	switch cfg.EmailProvider {
+	case email.ProviderLog:
+		return email.NewLogSender(logger, email.LogSenderOptions{
+			LogBody: cfg.EmailLogBody,
+		}), nil
+	case email.ProviderSMTP:
+		return email.NewSMTPSender(email.SMTPSenderOptions{
+			Logger:   logger,
+			Host:     cfg.SMTPHost,
+			Port:     cfg.SMTPPort,
+			Username: cfg.SMTPUsername,
+			Password: cfg.SMTPPassword,
+			From:     cfg.SMTPFrom,
+			UseTLS:   cfg.SMTPTLS,
+		})
+	default:
+		return nil, fmt.Errorf("unsupported email provider %q", cfg.EmailProvider)
+	}
+}
+
+func authSenderFrom(cfg config.Config) string {
+	if cfg.EmailProvider == email.ProviderSMTP && strings.TrimSpace(cfg.SMTPFrom) != "" {
+		return cfg.SMTPFrom
+	}
+	return cfg.EmailFrom
 }

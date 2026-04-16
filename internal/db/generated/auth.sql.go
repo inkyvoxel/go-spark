@@ -7,8 +7,71 @@ package db
 
 import (
 	"context"
+	"database/sql"
 	"time"
 )
+
+const consumeEmailVerificationToken = `-- name: ConsumeEmailVerificationToken :one
+UPDATE email_verification_tokens
+SET consumed_at = ?
+WHERE token_hash = ?
+  AND consumed_at IS NULL
+  AND expires_at > ?
+RETURNING id, user_id, token_hash, expires_at, consumed_at, created_at
+`
+
+type ConsumeEmailVerificationTokenParams struct {
+	ConsumedAt sql.NullTime
+	TokenHash  string
+	ExpiresAt  time.Time
+}
+
+func (q *Queries) ConsumeEmailVerificationToken(ctx context.Context, arg ConsumeEmailVerificationTokenParams) (EmailVerificationToken, error) {
+	row := q.db.QueryRowContext(ctx, consumeEmailVerificationToken, arg.ConsumedAt, arg.TokenHash, arg.ExpiresAt)
+	var i EmailVerificationToken
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.TokenHash,
+		&i.ExpiresAt,
+		&i.ConsumedAt,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const createEmailVerificationToken = `-- name: CreateEmailVerificationToken :one
+INSERT INTO email_verification_tokens (
+    user_id,
+    token_hash,
+    expires_at
+) VALUES (
+    ?,
+    ?,
+    ?
+)
+RETURNING id, user_id, token_hash, expires_at, consumed_at, created_at
+`
+
+type CreateEmailVerificationTokenParams struct {
+	UserID    int64
+	TokenHash string
+	ExpiresAt time.Time
+}
+
+func (q *Queries) CreateEmailVerificationToken(ctx context.Context, arg CreateEmailVerificationTokenParams) (EmailVerificationToken, error) {
+	row := q.db.QueryRowContext(ctx, createEmailVerificationToken, arg.UserID, arg.TokenHash, arg.ExpiresAt)
+	var i EmailVerificationToken
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.TokenHash,
+		&i.ExpiresAt,
+		&i.ConsumedAt,
+		&i.CreatedAt,
+	)
+	return i, err
+}
 
 const createSession = `-- name: CreateSession :one
 INSERT INTO sessions (
@@ -50,7 +113,7 @@ INSERT INTO users (
     ?,
     ?
 )
-RETURNING id, email, password_hash, created_at
+RETURNING id, email, password_hash, created_at, email_verified_at
 `
 
 type CreateUserParams struct {
@@ -66,6 +129,7 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		&i.Email,
 		&i.PasswordHash,
 		&i.CreatedAt,
+		&i.EmailVerifiedAt,
 	)
 	return i, err
 }
@@ -81,7 +145,7 @@ func (q *Queries) DeleteSessionByToken(ctx context.Context, token string) error 
 }
 
 const getUserByEmail = `-- name: GetUserByEmail :one
-SELECT id, email, password_hash, created_at
+SELECT id, email, password_hash, created_at, email_verified_at
 FROM users
 WHERE email = ?
 LIMIT 1
@@ -95,12 +159,13 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error
 		&i.Email,
 		&i.PasswordHash,
 		&i.CreatedAt,
+		&i.EmailVerifiedAt,
 	)
 	return i, err
 }
 
 const getUserBySessionToken = `-- name: GetUserBySessionToken :one
-SELECT users.id, users.email, users.password_hash, users.created_at
+SELECT users.id, users.email, users.password_hash, users.created_at, users.email_verified_at
 FROM users
 JOIN sessions ON sessions.user_id = users.id
 WHERE sessions.token = ?
@@ -116,6 +181,32 @@ func (q *Queries) GetUserBySessionToken(ctx context.Context, token string) (User
 		&i.Email,
 		&i.PasswordHash,
 		&i.CreatedAt,
+		&i.EmailVerifiedAt,
+	)
+	return i, err
+}
+
+const markUserEmailVerified = `-- name: MarkUserEmailVerified :one
+UPDATE users
+SET email_verified_at = ?
+WHERE id = ?
+RETURNING id, email, password_hash, created_at, email_verified_at
+`
+
+type MarkUserEmailVerifiedParams struct {
+	EmailVerifiedAt sql.NullTime
+	ID              int64
+}
+
+func (q *Queries) MarkUserEmailVerified(ctx context.Context, arg MarkUserEmailVerifiedParams) (User, error) {
+	row := q.db.QueryRowContext(ctx, markUserEmailVerified, arg.EmailVerifiedAt, arg.ID)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.PasswordHash,
+		&i.CreatedAt,
+		&i.EmailVerifiedAt,
 	)
 	return i, err
 }
