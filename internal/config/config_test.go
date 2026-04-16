@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/inkyvoxel/go-spark/internal/email"
 	"github.com/inkyvoxel/go-spark/internal/services"
@@ -126,6 +127,8 @@ func TestFromEnvUsesEnvironment(t *testing.T) {
 	t.Setenv("EMAIL_FROM", "Example <mail@example.com>")
 	t.Setenv("EMAIL_PROVIDER", "LOG")
 	t.Setenv("EMAIL_LOG_BODY", "true")
+	t.Setenv("RATE_LIMIT_LOGIN_MAX_REQUESTS", "7")
+	t.Setenv("RATE_LIMIT_LOGIN_WINDOW", "2m")
 
 	cfg, err := FromEnv(services.DefaultPasswordMinLength)
 	if err != nil {
@@ -158,6 +161,12 @@ func TestFromEnvUsesEnvironment(t *testing.T) {
 	}
 	if !cfg.EmailLogBody {
 		t.Fatal("EmailLogBody = false, want true")
+	}
+	if cfg.RateLimitPolicies.Login.MaxRequests != 7 {
+		t.Fatalf("RateLimitPolicies.Login.MaxRequests = %d, want %d", cfg.RateLimitPolicies.Login.MaxRequests, 7)
+	}
+	if cfg.RateLimitPolicies.Login.Window != 2*time.Minute {
+		t.Fatalf("RateLimitPolicies.Login.Window = %v, want %v", cfg.RateLimitPolicies.Login.Window, 2*time.Minute)
 	}
 }
 
@@ -243,6 +252,18 @@ func TestFromEnvRejectsUnknownEmailProvider(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "EMAIL_PROVIDER") {
 		t.Fatalf("FromEnv() error = %v, want EMAIL_PROVIDER", err)
+	}
+}
+
+func TestFromEnvRejectsInvalidRateLimitWindow(t *testing.T) {
+	t.Setenv("RATE_LIMIT_FORGOT_PASSWORD_WINDOW", "tomorrow")
+
+	_, err := FromEnv(services.DefaultPasswordMinLength)
+	if err == nil {
+		t.Fatal("FromEnv() error = nil, want error")
+	}
+	if !strings.Contains(err.Error(), "RATE_LIMIT_FORGOT_PASSWORD_WINDOW") {
+		t.Fatalf("FromEnv() error = %v, want RATE_LIMIT_FORGOT_PASSWORD_WINDOW", err)
 	}
 }
 

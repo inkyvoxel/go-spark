@@ -68,6 +68,7 @@ func main() {
 		Auth:              auth,
 		CookieSecure:      cfg.CookieSecure,
 		PasswordMinLength: cfg.PasswordMinLength,
+		RateLimitPolicies: toServerRateLimitPolicies(cfg.RateLimitPolicies),
 	})
 
 	httpServer := &http.Server{
@@ -138,4 +139,29 @@ func authSenderFrom(cfg config.Config) string {
 		return cfg.SMTPFrom
 	}
 	return cfg.EmailFrom
+}
+
+func toServerRateLimitPolicies(cfg config.RateLimitPoliciesConfig) server.RateLimitPolicies {
+	return server.RateLimitPolicies{
+		Login: server.RateLimitPolicy{
+			MaxRequests: cfg.Login.MaxRequests,
+			Window:      cfg.Login.Window,
+		},
+		Register: server.RateLimitPolicy{
+			MaxRequests: cfg.Register.MaxRequests,
+			Window:      cfg.Register.Window,
+		},
+		ForgotPassword: server.RateLimitPolicy{
+			MaxRequests: cfg.ForgotPassword.MaxRequests,
+			Window:      cfg.ForgotPassword.Window,
+		},
+		PublicResendVerification: server.RateLimitPolicy{
+			MaxRequests: cfg.PublicResendVerification.MaxRequests,
+			Window:      cfg.PublicResendVerification.Window,
+		},
+		AccountResendVerification: server.RateLimitPolicy{
+			MaxRequests: cfg.AccountResendVerification.MaxRequests,
+			Window:      cfg.AccountResendVerification.Window,
+		},
+	}
 }

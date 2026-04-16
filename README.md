@@ -33,11 +33,20 @@ make migrate-up
 make run
 ```
 
-The app listens on `:8080` by default, stores its SQLite database at `./data/app.db`, and requires registration passwords to be at least 12 characters unless `AUTH_PASSWORD_MIN_LENGTH` is set.
+Open:
+
+```text
+http://localhost:8080
+http://localhost:8080/healthz
+```
+
+The app listens on `:8080` by default, stores its SQLite database at `./data/app.db`.
+
+## Environment variables
 
 `make run` loads `.env` when the file exists. Environment variables already set in your shell take precedence over values in `.env`.
 
-Email delivery defaults to `EMAIL_PROVIDER=log` for safe local development. Set `EMAIL_PROVIDER=smtp` with `SMTP_*` values to send real mail.
+## Emails
 
 Built-in email functionality includes:
 
@@ -46,11 +55,54 @@ Built-in email functionality includes:
 * Resend confirmation from the account page for signed-in, unverified users.
 * Durable email delivery intent via a database outbox worker.
 
-Open:
+Email delivery defaults to `EMAIL_PROVIDER=log` for safe local development. Set `EMAIL_PROVIDER=smtp` with `SMTP_*` values to send real mail.
 
-```text
-http://localhost:8080
-http://localhost:8080/healthz
+## Auth Rate Limiting
+
+Sensitive auth POST endpoints are protected by an in-memory fixed-window limiter:
+
+* `POST /login` keyed by `IP + normalized email`
+* `POST /register` keyed by `IP + normalized email`
+* `POST /forgot-password` keyed by `IP + normalized email`
+* `POST /resend-verification` keyed by `IP + normalized email`
+* `POST /account/resend-verification` keyed by `IP + userID`
+
+Default policies:
+
+* Login: `5/min`
+* Register: `3/10min`
+* Forgot password: `3/15min`
+* Public resend verification: `3/15min`
+* Account resend verification: `5/15min`
+
+Behavior:
+
+* Denied requests return HTTP `429 Too Many Requests`.
+* `Retry-After` is set in seconds.
+* Limiter uses `RemoteAddr` IP parsing in v1 (forwarded headers are not trusted).
+* If email is missing or malformed, keying falls back to IP-only for safety.
+* Data is in-memory per app instance (not shared across replicas).
+
+Optional env overrides are available for each policy:
+
+* `RATE_LIMIT_<POLICY>_MAX_REQUESTS` (positive integer)
+* `RATE_LIMIT_<POLICY>_WINDOW` (Go duration, for example `1m`, `10m`, `15m`)
+
+Policy names:
+
+* `LOGIN`
+* `REGISTER`
+* `FORGOT_PASSWORD`
+* `PUBLIC_RESEND_VERIFICATION`
+* `ACCOUNT_RESEND_VERIFICATION`
+
+Example:
+
+```sh
+RATE_LIMIT_LOGIN_MAX_REQUESTS=10
+RATE_LIMIT_LOGIN_WINDOW=1m
+RATE_LIMIT_FORGOT_PASSWORD_MAX_REQUESTS=5
+RATE_LIMIT_FORGOT_PASSWORD_WINDOW=30m
 ```
 
 ## Commands
@@ -117,7 +169,7 @@ Before deploying an app based on this template:
 * Keep `AUTH_PASSWORD_MIN_LENGTH` at 12 or higher unless you have a clear compatibility reason.
 * Add request timeouts and deployment-specific logging/metrics as the app grows.
 
-## Replacing SQLite Later
+## Replacing SQLite
 
 SQLite is a good default for a simple starter because it keeps local development and deployment small. If a future project needs multiple app instances, heavier write concurrency, or managed database operations, Postgres is the natural next step.
 

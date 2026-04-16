@@ -7,10 +7,24 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/inkyvoxel/go-spark/internal/email"
 	"github.com/joho/godotenv"
 )
+
+type RateLimitPolicyConfig struct {
+	MaxRequests int
+	Window      time.Duration
+}
+
+type RateLimitPoliciesConfig struct {
+	Login                     RateLimitPolicyConfig
+	Register                  RateLimitPolicyConfig
+	ForgotPassword            RateLimitPolicyConfig
+	PublicResendVerification  RateLimitPolicyConfig
+	AccountResendVerification RateLimitPolicyConfig
+}
 
 type Config struct {
 	Addr              string
@@ -28,6 +42,7 @@ type Config struct {
 	SMTPPassword      string
 	SMTPFrom          string
 	SMTPTLS           bool
+	RateLimitPolicies RateLimitPoliciesConfig
 }
 
 func LoadDotEnv(path string) error {
@@ -87,6 +102,12 @@ func FromEnv(defaultPasswordMinLength int) (Config, error) {
 		EmailProvider:     emailProvider,
 		EmailLogBody:      emailLogBody,
 	}
+
+	rateLimitPolicies, err := rateLimitPoliciesFromEnv()
+	if err != nil {
+		return Config{}, err
+	}
+	cfg.RateLimitPolicies = rateLimitPolicies
 
 	if emailProvider != email.ProviderSMTP {
 		return cfg, nil
@@ -194,6 +215,38 @@ func envInt(key string) (int, error) {
 	return value, nil
 }
 
+func envIntOptionalPositive(key string) (int, error) {
+	raw := os.Getenv(key)
+	if raw == "" {
+		return 0, nil
+	}
+
+	value, err := strconv.Atoi(raw)
+	if err != nil {
+		return 0, fmt.Errorf("%s must be an integer: %w", key, err)
+	}
+	if value <= 0 {
+		return 0, fmt.Errorf("%s must be greater than zero", key)
+	}
+	return value, nil
+}
+
+func envDurationOptionalPositive(key string) (time.Duration, error) {
+	raw := os.Getenv(key)
+	if raw == "" {
+		return 0, nil
+	}
+
+	value, err := time.ParseDuration(raw)
+	if err != nil {
+		return 0, fmt.Errorf("%s must be a duration: %w", key, err)
+	}
+	if value <= 0 {
+		return 0, fmt.Errorf("%s must be greater than zero", key)
+	}
+	return value, nil
+}
+
 func envURL(key, fallback string) (string, error) {
 	raw := envOrDefault(key, fallback)
 	parsed, err := url.Parse(raw)
@@ -230,4 +283,51 @@ func envEmailProvider(key, fallback string) (string, error) {
 	}
 
 	return provider, nil
+}
+
+func rateLimitPoliciesFromEnv() (RateLimitPoliciesConfig, error) {
+	login, err := rateLimitPolicyFromEnv("RATE_LIMIT_LOGIN")
+	if err != nil {
+		return RateLimitPoliciesConfig{}, err
+	}
+	register, err := rateLimitPolicyFromEnv("RATE_LIMIT_REGISTER")
+	if err != nil {
+		return RateLimitPoliciesConfig{}, err
+	}
+	forgotPassword, err := rateLimitPolicyFromEnv("RATE_LIMIT_FORGOT_PASSWORD")
+	if err != nil {
+		return RateLimitPoliciesConfig{}, err
+	}
+	publicResendVerification, err := rateLimitPolicyFromEnv("RATE_LIMIT_PUBLIC_RESEND_VERIFICATION")
+	if err != nil {
+		return RateLimitPoliciesConfig{}, err
+	}
+	accountResendVerification, err := rateLimitPolicyFromEnv("RATE_LIMIT_ACCOUNT_RESEND_VERIFICATION")
+	if err != nil {
+		return RateLimitPoliciesConfig{}, err
+	}
+
+	return RateLimitPoliciesConfig{
+		Login:                     login,
+		Register:                  register,
+		ForgotPassword:            forgotPassword,
+		PublicResendVerification:  publicResendVerification,
+		AccountResendVerification: accountResendVerification,
+	}, nil
+}
+
+func rateLimitPolicyFromEnv(prefix string) (RateLimitPolicyConfig, error) {
+	maxRequests, err := envIntOptionalPositive(prefix + "_MAX_REQUESTS")
+	if err != nil {
+		return RateLimitPolicyConfig{}, err
+	}
+	window, err := envDurationOptionalPositive(prefix + "_WINDOW")
+	if err != nil {
+		return RateLimitPolicyConfig{}, err
+	}
+
+	return RateLimitPolicyConfig{
+		MaxRequests: maxRequests,
+		Window:      window,
+	}, nil
 }

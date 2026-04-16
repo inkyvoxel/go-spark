@@ -17,6 +17,8 @@ type Server struct {
 	templates         map[string]*template.Template
 	cookieSecure      bool
 	passwordMinLength int
+	rateLimiter       rateLimitStore
+	rateLimitPolicies RateLimitPolicies
 }
 
 type Options struct {
@@ -25,6 +27,7 @@ type Options struct {
 	Logger            *slog.Logger
 	CookieSecure      bool
 	PasswordMinLength int
+	RateLimitPolicies RateLimitPolicies
 }
 
 func New(opts Options) *Server {
@@ -48,6 +51,8 @@ func New(opts Options) *Server {
 		templates:         mustParseTemplates(),
 		cookieSecure:      opts.CookieSecure,
 		passwordMinLength: passwordMinLength,
+		rateLimiter:       newInMemoryRateLimiter(),
+		rateLimitPolicies: rateLimitPoliciesWithDefaults(opts.RateLimitPolicies),
 	}
 }
 
@@ -86,6 +91,8 @@ func parseTemplates() (map[string]*template.Template, error) {
 }
 
 func (s *Server) Routes() http.Handler {
+	s.ensureRateLimiting()
+
 	mux := http.NewServeMux()
 	dynamic := http.NewServeMux()
 
@@ -94,19 +101,44 @@ func (s *Server) Routes() http.Handler {
 
 	// Register new protected pages with requireAuth and anonymous-only pages with requireAnonymous.
 	dynamic.Handle("GET /register", s.requireAnonymous(http.HandlerFunc(s.registerForm)))
-	dynamic.Handle("POST /register", s.requireAnonymous(http.HandlerFunc(s.register)))
+	dynamic.Handle(
+		"POST /register",
+		s.requireAnonymous(
+			s.withRateLimit("register", s.rateLimitPolicies.Register, rateLimitKeyByIPAndEmail("email"), http.HandlerFunc(s.register)),
+		),
+	)
 	dynamic.HandleFunc("GET /confirm-email", s.confirmEmail)
 	dynamic.Handle("GET /forgot-password", s.requireAnonymous(http.HandlerFunc(s.forgotPasswordForm)))
-	dynamic.Handle("POST /forgot-password", s.requireAnonymous(http.HandlerFunc(s.forgotPassword)))
+	dynamic.Handle(
+		"POST /forgot-password",
+		s.requireAnonymous(
+			s.withRateLimit("forgot-password", s.rateLimitPolicies.ForgotPassword, rateLimitKeyByIPAndEmail("email"), http.HandlerFunc(s.forgotPassword)),
+		),
+	)
 	dynamic.Handle("GET /login", s.requireAnonymous(http.HandlerFunc(s.loginForm)))
-	dynamic.Handle("POST /login", s.requireAnonymous(http.HandlerFunc(s.login)))
+	dynamic.Handle(
+		"POST /login",
+		s.requireAnonymous(
+			s.withRateLimit("login", s.rateLimitPolicies.Login, rateLimitKeyByIPAndEmail("email"), http.HandlerFunc(s.login)),
+		),
+	)
 	dynamic.Handle("GET /reset-password", s.requireAnonymous(http.HandlerFunc(s.resetPasswordForm)))
 	dynamic.Handle("POST /reset-password", s.requireAnonymous(http.HandlerFunc(s.resetPassword)))
 	dynamic.Handle("GET /resend-verification", s.requireAnonymous(http.HandlerFunc(s.resendVerificationForm)))
-	dynamic.Handle("POST /resend-verification", s.requireAnonymous(http.HandlerFunc(s.resendVerificationPublic)))
+	dynamic.Handle(
+		"POST /resend-verification",
+		s.requireAnonymous(
+			s.withRateLimit("resend-verification-public", s.rateLimitPolicies.PublicResendVerification, rateLimitKeyByIPAndEmail("email"), http.HandlerFunc(s.resendVerificationPublic)),
+		),
+	)
 	dynamic.Handle("POST /logout", s.requireAuth(http.HandlerFunc(s.logout)))
 	dynamic.Handle("GET /account", s.requireAuth(http.HandlerFunc(s.account)))
-	dynamic.Handle("POST /account/resend-verification", s.requireAuth(http.HandlerFunc(s.resendVerification)))
+	dynamic.Handle(
+		"POST /account/resend-verification",
+		s.requireAuth(
+			s.withRateLimit("resend-verification-account", s.rateLimitPolicies.AccountResendVerification, rateLimitKeyByIPAndUser(), http.HandlerFunc(s.resendVerification)),
+		),
+	)
 	dynamic.Handle("POST /account/change-password", s.requireAuth(http.HandlerFunc(s.changePassword)))
 	dynamic.HandleFunc("GET /", s.home)
 
