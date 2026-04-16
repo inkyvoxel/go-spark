@@ -6,12 +6,10 @@ What is still not implemented:
 - Separate worker process mode.
 - HTML email styling beyond the simple message body.
 - Secure forgotten password flow
-- Visiting an expire verification link, when signed in, displays a 'Email link expired. This confirmation link is invalid or has expired.' and a 'Sign in' link. If they are already signed in, display the "Go to your account" link instead.
 
 ## Account features
 
 - Change email address securely
-- Change password securely
 
 ## Security
 

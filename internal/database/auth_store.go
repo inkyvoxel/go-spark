@@ -127,6 +127,25 @@ func (s *AuthStore) DeleteSessionByToken(ctx context.Context, token string) erro
 	return nil
 }
 
+func (s *AuthStore) DeleteSessionsByUserID(ctx context.Context, userID int64) error {
+	if err := s.queries.DeleteSessionsByUserID(ctx, userID); err != nil {
+		return fmt.Errorf("delete sessions by user ID: %w", err)
+	}
+
+	return nil
+}
+
+func (s *AuthStore) UpdateUserPasswordHash(ctx context.Context, userID int64, passwordHash string) error {
+	if err := s.queries.UpdateUserPasswordHash(ctx, db.UpdateUserPasswordHashParams{
+		PasswordHash: passwordHash,
+		ID:           userID,
+	}); err != nil {
+		return fmt.Errorf("update user password hash: %w", err)
+	}
+
+	return nil
+}
+
 func (s *AuthStore) CreateEmailVerificationToken(ctx context.Context, userID int64, tokenHash string, expiresAt time.Time) (db.EmailVerificationToken, error) {
 	token, err := s.queries.CreateEmailVerificationToken(ctx, db.CreateEmailVerificationTokenParams{
 		UserID:    userID,

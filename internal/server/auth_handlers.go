@@ -22,6 +22,7 @@ type templateData struct {
 	FieldErrors       map[string]string
 	Email             string
 	EmailPattern      string
+	LoginStatus       string
 	Next              string
 	Authenticated     bool
 	User              db.User
@@ -88,6 +89,10 @@ func (s *Server) register(w http.ResponseWriter, r *http.Request) {
 func (s *Server) loginForm(w http.ResponseWriter, r *http.Request) {
 	data := s.newTemplateData(r, "Sign In")
 	data.Next = safeRedirectPath(r.URL.Query().Get("next"))
+	status := strings.TrimSpace(r.URL.Query().Get("status"))
+	if status == "password-changed" {
+		data.LoginStatus = status
+	}
 	s.render(w, "login.html", data)
 }
 
@@ -181,6 +186,64 @@ func (s *Server) resendVerification(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/account?resend=sent", http.StatusSeeOther)
 }
 
+func (s *Server) changePassword(w http.ResponseWriter, r *http.Request) {
+	user, ok := currentUser(r.Context())
+	if !ok {
+		http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+		return
+	}
+
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+		return
+	}
+
+	currentPassword := r.FormValue("current_password")
+	newPassword := r.FormValue("new_password")
+	confirmPassword := r.FormValue("confirm_password")
+
+	fieldErrors := make(map[string]string)
+	if currentPassword == "" {
+		fieldErrors["current_password"] = "Enter your current password."
+	}
+	for key, value := range s.validatePasswordPair(newPassword, confirmPassword, "new_password", "confirm_password") {
+		fieldErrors[key] = value
+	}
+	if len(fieldErrors) > 0 {
+		data := s.newTemplateData(r, "Account")
+		data.Error = "Check your details and try again."
+		data.FieldErrors = fieldErrors
+		s.renderStatus(w, http.StatusBadRequest, "account.html", data)
+		return
+	}
+
+	if err := s.auth.ChangePassword(r.Context(), user, currentPassword, newPassword); err != nil {
+		data := s.newTemplateData(r, "Account")
+		data.Error = "Check your details and try again."
+		switch {
+		case errors.Is(err, services.ErrCurrentPasswordIncorrect):
+			data.FieldErrors = map[string]string{"current_password": "Current password is not correct."}
+			s.renderStatus(w, http.StatusBadRequest, "account.html", data)
+			return
+		case errors.Is(err, services.ErrInvalidPassword):
+			data.FieldErrors = map[string]string{"new_password": fmt.Sprintf("Use at least %d characters.", data.PasswordMinLength)}
+			s.renderStatus(w, http.StatusBadRequest, "account.html", data)
+			return
+		case errors.Is(err, services.ErrPasswordUnchanged):
+			data.FieldErrors = map[string]string{"new_password": "Choose a different password."}
+			s.renderStatus(w, http.StatusBadRequest, "account.html", data)
+			return
+		default:
+			s.logger.Error("change password", "user_id", user.ID, "err", err)
+			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+			return
+		}
+	}
+
+	s.clearSessionCookie(w, r)
+	http.Redirect(w, r, "/login?status=password-changed", http.StatusSeeOther)
+}
+
 func (s *Server) resendVerificationPublic(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
@@ -236,25 +299,35 @@ func (s *Server) handleAuthFormError(w http.ResponseWriter, templateName string,
 }
 
 func (s *Server) validateRegistrationForm(email, password, confirmPassword string) map[string]string {
+	fieldErrors := make(map[string]string)
+	if strings.TrimSpace(email) == "" {
+		fieldErrors["email"] = "Enter your email address."
+	}
+	for key, value := range s.validatePasswordPair(password, confirmPassword, "password", "confirm_password") {
+		fieldErrors[key] = value
+	}
+
+	return fieldErrors
+}
+
+func (s *Server) validatePasswordPair(password, confirmPassword, passwordField, confirmPasswordField string) map[string]string {
 	passwordMinLength := s.passwordMinLength
 	if passwordMinLength == 0 {
 		passwordMinLength = services.DefaultPasswordMinLength
 	}
 
 	fieldErrors := make(map[string]string)
-	if strings.TrimSpace(email) == "" {
-		fieldErrors["email"] = "Enter your email address."
-	}
 	if password == "" {
-		fieldErrors["password"] = "Enter a password."
+		fieldErrors[passwordField] = "Enter a password."
 	} else if utf8.RuneCountInString(password) < passwordMinLength {
-		fieldErrors["password"] = fmt.Sprintf("Use at least %d characters.", passwordMinLength)
+		fieldErrors[passwordField] = fmt.Sprintf("Use at least %d characters.", passwordMinLength)
 	}
 	if confirmPassword == "" {
-		fieldErrors["confirm_password"] = "Confirm your password."
+		fieldErrors[confirmPasswordField] = "Confirm your password."
 	} else if password != confirmPassword {
-		fieldErrors["confirm_password"] = "Passwords do not match."
+		fieldErrors[confirmPasswordField] = "Passwords do not match."
 	}
+
 	return fieldErrors
 }
 

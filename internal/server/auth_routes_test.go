@@ -197,6 +197,22 @@ func TestRoutesLoginFormShowsResendVerificationLink(t *testing.T) {
 	}
 }
 
+func TestRoutesLoginFormShowsPasswordChangedStatus(t *testing.T) {
+	srv := newAuthRouteTestServer(t, &fakeAuthLookup{})
+
+	req := httptest.NewRequest(http.MethodGet, "/login?status=password-changed", nil)
+	rec := httptest.NewRecorder()
+
+	srv.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	if !strings.Contains(rec.Body.String(), "login-status=password-changed") {
+		t.Fatalf("body = %q, want password-changed login status", rec.Body.String())
+	}
+}
+
 func TestRoutesLoginRedirectsAuthenticatedUserToAccount(t *testing.T) {
 	auth := &fakeAuthLookup{
 		user: db.User{ID: 1, Email: "user@example.com"},
@@ -554,6 +570,9 @@ func TestRoutesAccountShowsResendForUnverifiedUser(t *testing.T) {
 	if !strings.Contains(body, "check-email-visible") {
 		t.Fatalf("body = %q, want unverified check-email message", body)
 	}
+	if !strings.Contains(body, "change-password-visible") {
+		t.Fatalf("body = %q, want change password form", body)
+	}
 }
 
 func TestRoutesAccountHidesResendForVerifiedUser(t *testing.T) {
@@ -663,6 +682,152 @@ func TestRoutesResendVerificationRequiresAuth(t *testing.T) {
 
 	form := url.Values{csrfFieldName: []string{"csrf"}}
 	req := httptest.NewRequest(http.MethodPost, "/account/resend-verification", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: "csrf"})
+	rec := httptest.NewRecorder()
+
+	srv.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusUnauthorized)
+	}
+}
+
+func TestRoutesChangePassword(t *testing.T) {
+	auth := &fakeAuthLookup{
+		user: db.User{ID: 1, Email: "user@example.com"},
+	}
+	srv := newAuthRouteTestServer(t, auth)
+
+	form := url.Values{
+		"current_password": []string{"old-password"},
+		"new_password":     []string{"new-password"},
+		"confirm_password": []string{"new-password"},
+		csrfFieldName:      []string{"csrf"},
+	}
+	req := httptest.NewRequest(http.MethodPost, "/account/change-password", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(&http.Cookie{Name: sessionCookieName, Value: "session-token"})
+	req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: "csrf"})
+	rec := httptest.NewRecorder()
+
+	srv.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusSeeOther)
+	}
+	if location := rec.Header().Get("Location"); location != "/login?status=password-changed" {
+		t.Fatalf("Location = %q, want %q", location, "/login?status=password-changed")
+	}
+	if !auth.changePasswordCalled {
+		t.Fatal("ChangePassword() was not called")
+	}
+	if auth.changePasswordUser.ID != auth.user.ID {
+		t.Fatalf("change password user ID = %d, want %d", auth.changePasswordUser.ID, auth.user.ID)
+	}
+	if auth.changePasswordOld != "old-password" || auth.changePasswordNew != "new-password" {
+		t.Fatalf("change password values = %q/%q", auth.changePasswordOld, auth.changePasswordNew)
+	}
+	session := cookieFromRecorder(t, rec, sessionCookieName)
+	if session.MaxAge != -1 {
+		t.Fatalf("session MaxAge = %d, want %d", session.MaxAge, -1)
+	}
+}
+
+func TestRoutesChangePasswordValidatesFields(t *testing.T) {
+	auth := &fakeAuthLookup{
+		user: db.User{ID: 1, Email: "user@example.com"},
+	}
+	srv := newAuthRouteTestServer(t, auth)
+
+	form := url.Values{
+		csrfFieldName: []string{"csrf"},
+	}
+	req := httptest.NewRequest(http.MethodPost, "/account/change-password", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(&http.Cookie{Name: sessionCookieName, Value: "session-token"})
+	req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: "csrf"})
+	rec := httptest.NewRecorder()
+
+	srv.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+	}
+	if auth.changePasswordCalled {
+		t.Fatal("ChangePassword() was called")
+	}
+	body := rec.Body.String()
+	for _, want := range []string{"Enter your current password.", "Enter a password.", "Confirm your password."} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("body = %q, want %q", body, want)
+		}
+	}
+}
+
+func TestRoutesChangePasswordRejectsIncorrectCurrentPassword(t *testing.T) {
+	auth := &fakeAuthLookup{
+		user:              db.User{ID: 1, Email: "user@example.com"},
+		changePasswordErr: services.ErrCurrentPasswordIncorrect,
+	}
+	srv := newAuthRouteTestServer(t, auth)
+
+	form := url.Values{
+		"current_password": []string{"wrong-password"},
+		"new_password":     []string{"new-password"},
+		"confirm_password": []string{"new-password"},
+		csrfFieldName:      []string{"csrf"},
+	}
+	req := httptest.NewRequest(http.MethodPost, "/account/change-password", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(&http.Cookie{Name: sessionCookieName, Value: "session-token"})
+	req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: "csrf"})
+	rec := httptest.NewRecorder()
+
+	srv.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, "Current password is not correct.") {
+		t.Fatalf("body = %q, want incorrect-current-password error", body)
+	}
+}
+
+func TestRoutesChangePasswordRequiresCSRF(t *testing.T) {
+	auth := &fakeAuthLookup{
+		user: db.User{ID: 1, Email: "user@example.com"},
+	}
+	srv := newAuthRouteTestServer(t, auth)
+
+	form := url.Values{
+		"current_password": []string{"old-password"},
+		"new_password":     []string{"new-password"},
+		"confirm_password": []string{"new-password"},
+	}
+	req := httptest.NewRequest(http.MethodPost, "/account/change-password", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(&http.Cookie{Name: sessionCookieName, Value: "session-token"})
+	rec := httptest.NewRecorder()
+
+	srv.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusForbidden)
+	}
+}
+
+func TestRoutesChangePasswordRequiresAuth(t *testing.T) {
+	srv := newAuthRouteTestServer(t, &fakeAuthLookup{})
+
+	form := url.Values{
+		"current_password": []string{"old-password"},
+		"new_password":     []string{"new-password"},
+		"confirm_password": []string{"new-password"},
+		csrfFieldName:      []string{"csrf"},
+	}
+	req := httptest.NewRequest(http.MethodPost, "/account/change-password", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: "csrf"})
 	rec := httptest.NewRecorder()
@@ -831,8 +996,8 @@ func newAuthRouteTestServer(t *testing.T, auth authService) *Server {
 		templates: testTemplates(t, map[string]string{
 			"home.html":                `home {{ if .Authenticated }}Account Sign out {{ .User.Email }}{{ else }}Sign in Create account{{ end }}`,
 			"register.html":            `register {{ .Error }} {{ with index .FieldErrors "email" }}{{ . }}{{ end }} {{ with index .FieldErrors "password" }}{{ . }}{{ end }} {{ with index .FieldErrors "confirm_password" }}{{ . }}{{ end }} {{ .Email }} {{ .PasswordMinLength }} {{ .CSRFToken }}`,
-			"login.html":               `login {{ .Error }} {{ .CSRFToken }} {{ .Next }} /resend-verification`,
-			"account.html":             `account {{ .User.Email }} {{ .CSRFToken }} {{ if not .User.EmailVerifiedAt.Valid }}resend-visible check-email-visible{{ end }} resend-status={{ .ResendStatus }}`,
+			"login.html":               `login {{ .Error }} {{ .CSRFToken }} {{ .Next }} login-status={{ .LoginStatus }} /resend-verification`,
+			"account.html":             `account {{ .Error }} {{ with index .FieldErrors "current_password" }}{{ . }}{{ end }} {{ with index .FieldErrors "new_password" }}{{ . }}{{ end }} {{ with index .FieldErrors "confirm_password" }}{{ . }}{{ end }} {{ .User.Email }} {{ .CSRFToken }} change-password-visible {{ if not .User.EmailVerifiedAt.Valid }}resend-visible check-email-visible{{ end }} resend-status={{ .ResendStatus }}`,
 			"confirm_email.html":       `confirm {{ if .Error }}{{ .Error }} {{ if .Authenticated }}Go to your account{{ else }}Sign in{{ end }}{{ else }}Email confirmed{{ end }}`,
 			"resend_verification.html": `resend-form {{ .Error }} {{ with index .FieldErrors "email" }}{{ . }}{{ end }} {{ .Email }} resend-status={{ .ResendStatus }} {{ .CSRFToken }}`,
 		}),

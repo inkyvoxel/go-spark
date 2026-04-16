@@ -121,6 +121,74 @@ func TestAuthStoreUserAndSessionFlow(t *testing.T) {
 	}
 }
 
+func TestAuthStoreUpdateUserPasswordHash(t *testing.T) {
+	store := newTestAuthStore(t)
+
+	user, err := store.CreateUser(context.Background(), "user@example.com", "old-hash")
+	if err != nil {
+		t.Fatalf("CreateUser() error = %v", err)
+	}
+
+	if err := store.UpdateUserPasswordHash(context.Background(), user.ID, "new-hash"); err != nil {
+		t.Fatalf("UpdateUserPasswordHash() error = %v", err)
+	}
+
+	updated, err := store.GetUserByEmail(context.Background(), "user@example.com")
+	if err != nil {
+		t.Fatalf("GetUserByEmail() error = %v", err)
+	}
+	if updated.PasswordHash != "new-hash" {
+		t.Fatalf("PasswordHash = %q, want %q", updated.PasswordHash, "new-hash")
+	}
+}
+
+func TestAuthStoreDeleteSessionsByUserID(t *testing.T) {
+	store := newTestAuthStore(t)
+
+	userOne, err := store.CreateUser(context.Background(), "user1@example.com", "hash")
+	if err != nil {
+		t.Fatalf("CreateUser() error = %v", err)
+	}
+	userTwo, err := store.CreateUser(context.Background(), "user2@example.com", "hash")
+	if err != nil {
+		t.Fatalf("CreateUser() error = %v", err)
+	}
+
+	userOneSessionA, err := store.CreateSession(context.Background(), userOne.ID, "token-1a", time.Now().UTC().Add(time.Hour))
+	if err != nil {
+		t.Fatalf("CreateSession() error = %v", err)
+	}
+	userOneSessionB, err := store.CreateSession(context.Background(), userOne.ID, "token-1b", time.Now().UTC().Add(time.Hour))
+	if err != nil {
+		t.Fatalf("CreateSession() error = %v", err)
+	}
+	userTwoSession, err := store.CreateSession(context.Background(), userTwo.ID, "token-2", time.Now().UTC().Add(time.Hour))
+	if err != nil {
+		t.Fatalf("CreateSession() error = %v", err)
+	}
+
+	if err := store.DeleteSessionsByUserID(context.Background(), userOne.ID); err != nil {
+		t.Fatalf("DeleteSessionsByUserID() error = %v", err)
+	}
+
+	_, err = store.GetUserBySessionToken(context.Background(), userOneSessionA.Token)
+	if !errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("GetUserBySessionToken() token-1a error = %v, want %v", err, sql.ErrNoRows)
+	}
+	_, err = store.GetUserBySessionToken(context.Background(), userOneSessionB.Token)
+	if !errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("GetUserBySessionToken() token-1b error = %v, want %v", err, sql.ErrNoRows)
+	}
+
+	remaining, err := store.GetUserBySessionToken(context.Background(), userTwoSession.Token)
+	if err != nil {
+		t.Fatalf("GetUserBySessionToken() token-2 error = %v", err)
+	}
+	if remaining.ID != userTwo.ID {
+		t.Fatalf("remaining session user ID = %d, want %d", remaining.ID, userTwo.ID)
+	}
+}
+
 func TestAuthStoreUnexpectedCreateUserErrorIsWrapped(t *testing.T) {
 	conn := newAuthStoreTestDB(t)
 	store := NewAuthStore(conn)

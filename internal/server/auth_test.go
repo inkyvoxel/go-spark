@@ -221,27 +221,32 @@ func TestCurrentUserReturnsFalseWhenMissing(t *testing.T) {
 }
 
 type fakeAuthLookup struct {
-	user              db.User
-	token             string
-	err               error
-	registered        bool
-	registerEmail     string
-	registerPass      string
-	registerErr       error
-	loginEmail        string
-	loginPass         string
-	loginSession      db.Session
-	loginErr          error
-	logoutToken       string
-	logoutErr         error
-	verifyToken       string
-	verifyErr         error
-	publicResendEmail string
-	publicResendErr   error
-	publicResendCalls int
-	resendUser        db.User
-	resendErr         error
-	resendCalled      bool
+	user                 db.User
+	token                string
+	err                  error
+	registered           bool
+	registerEmail        string
+	registerPass         string
+	registerErr          error
+	loginEmail           string
+	loginPass            string
+	loginSession         db.Session
+	loginErr             error
+	logoutToken          string
+	logoutErr            error
+	verifyToken          string
+	verifyErr            error
+	publicResendEmail    string
+	publicResendErr      error
+	publicResendCalls    int
+	resendUser           db.User
+	resendErr            error
+	resendCalled         bool
+	changePasswordUser   db.User
+	changePasswordOld    string
+	changePasswordNew    string
+	changePasswordErr    error
+	changePasswordCalled bool
 }
 
 func (f *fakeAuthLookup) UserBySessionToken(ctx context.Context, token string) (db.User, error) {
@@ -288,6 +293,14 @@ func (f *fakeAuthLookup) ResendVerificationEmail(ctx context.Context, user db.Us
 	f.resendCalled = true
 	f.resendUser = user
 	return f.resendErr
+}
+
+func (f *fakeAuthLookup) ChangePassword(ctx context.Context, user db.User, currentPassword, newPassword string) error {
+	f.changePasswordCalled = true
+	f.changePasswordUser = user
+	f.changePasswordOld = currentPassword
+	f.changePasswordNew = newPassword
+	return f.changePasswordErr
 }
 
 func newAuthMiddlewareTestServer(auth authService) *Server {

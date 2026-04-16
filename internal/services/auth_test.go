@@ -151,6 +151,107 @@ func TestAuthServiceUserBySessionTokenAndLogout(t *testing.T) {
 	}
 }
 
+func TestAuthServiceChangePassword(t *testing.T) {
+	service := newTestAuthService(t)
+
+	user, err := service.Register(context.Background(), "user@example.com", "password")
+	if err != nil {
+		t.Fatalf("Register() error = %v", err)
+	}
+
+	_, session, err := service.Login(context.Background(), "user@example.com", "password")
+	if err != nil {
+		t.Fatalf("Login() error = %v", err)
+	}
+
+	if err := service.ChangePassword(context.Background(), user, "password", "new-password"); err != nil {
+		t.Fatalf("ChangePassword() error = %v", err)
+	}
+
+	if _, _, err := service.Login(context.Background(), "user@example.com", "password"); !errors.Is(err, ErrInvalidCredentials) {
+		t.Fatalf("Login() old password error = %v, want %v", err, ErrInvalidCredentials)
+	}
+
+	if _, _, err := service.Login(context.Background(), "user@example.com", "new-password"); err != nil {
+		t.Fatalf("Login() new password error = %v", err)
+	}
+
+	if _, err := service.UserBySessionToken(context.Background(), session.Token); !errors.Is(err, ErrInvalidSession) {
+		t.Fatalf("UserBySessionToken() old session error = %v, want %v", err, ErrInvalidSession)
+	}
+}
+
+func TestAuthServiceChangePasswordRejectsIncorrectCurrentPassword(t *testing.T) {
+	service := newTestAuthService(t)
+
+	user, err := service.Register(context.Background(), "user@example.com", "password")
+	if err != nil {
+		t.Fatalf("Register() error = %v", err)
+	}
+
+	err = service.ChangePassword(context.Background(), user, "wrong-password", "new-password")
+	if !errors.Is(err, ErrCurrentPasswordIncorrect) {
+		t.Fatalf("ChangePassword() error = %v, want %v", err, ErrCurrentPasswordIncorrect)
+	}
+}
+
+func TestAuthServiceChangePasswordRejectsShortPassword(t *testing.T) {
+	service := newTestAuthService(t)
+
+	user, err := service.Register(context.Background(), "user@example.com", "password")
+	if err != nil {
+		t.Fatalf("Register() error = %v", err)
+	}
+
+	err = service.ChangePassword(context.Background(), user, "password", "short")
+	if !errors.Is(err, ErrInvalidPassword) {
+		t.Fatalf("ChangePassword() error = %v, want %v", err, ErrInvalidPassword)
+	}
+}
+
+func TestAuthServiceChangePasswordRejectsUnchangedPassword(t *testing.T) {
+	service := newTestAuthService(t)
+
+	user, err := service.Register(context.Background(), "user@example.com", "password")
+	if err != nil {
+		t.Fatalf("Register() error = %v", err)
+	}
+
+	err = service.ChangePassword(context.Background(), user, "password", "password")
+	if !errors.Is(err, ErrPasswordUnchanged) {
+		t.Fatalf("ChangePassword() error = %v, want %v", err, ErrPasswordUnchanged)
+	}
+}
+
+func TestAuthServiceChangePasswordWrapsStoreErrors(t *testing.T) {
+	service := newTestAuthService(t)
+	store := service.store.(*fakeAuthStore)
+
+	user, err := service.Register(context.Background(), "user@example.com", "password")
+	if err != nil {
+		t.Fatalf("Register() error = %v", err)
+	}
+
+	store.updateUserPasswordHashErr = errors.New("database unavailable")
+	err = service.ChangePassword(context.Background(), user, "password", "new-password")
+	if err == nil {
+		t.Fatal("ChangePassword() error = nil, want error")
+	}
+	if !strings.Contains(err.Error(), "update user password") {
+		t.Fatalf("ChangePassword() error = %v, want operation context", err)
+	}
+
+	store.updateUserPasswordHashErr = nil
+	store.deleteSessionsByUserIDErr = errors.New("database unavailable")
+	err = service.ChangePassword(context.Background(), user, "password", "new-password")
+	if err == nil {
+		t.Fatal("ChangePassword() error = nil, want error")
+	}
+	if !strings.Contains(err.Error(), "delete sessions by user ID") {
+		t.Fatalf("ChangePassword() error = %v, want operation context", err)
+	}
+}
+
 func TestAuthServiceCreateEmailVerificationToken(t *testing.T) {
 	store := newFakeAuthStore()
 	service := NewAuthService(store, AuthOptions{
@@ -374,16 +475,18 @@ func newTestAuthService(t *testing.T) *AuthService {
 }
 
 type fakeAuthStore struct {
-	nextUserID              int64
-	nextSessionID           int64
-	nextVerificationTokenID int64
-	usersByEmail            map[string]db.User
-	usersByID               map[int64]db.User
-	sessions                map[string]db.Session
-	verificationTokens      map[string]db.EmailVerificationToken
-	outbox                  []email.Message
-	getUserByEmailErr       error
-	resendErr               error
+	nextUserID                int64
+	nextSessionID             int64
+	nextVerificationTokenID   int64
+	usersByEmail              map[string]db.User
+	usersByID                 map[int64]db.User
+	sessions                  map[string]db.Session
+	verificationTokens        map[string]db.EmailVerificationToken
+	outbox                    []email.Message
+	getUserByEmailErr         error
+	resendErr                 error
+	updateUserPasswordHashErr error
+	deleteSessionsByUserIDErr error
 }
 
 func newFakeAuthStore() *fakeAuthStore {
@@ -473,6 +576,37 @@ func (s *fakeAuthStore) GetUserBySessionToken(ctx context.Context, token string)
 
 func (s *fakeAuthStore) DeleteSessionByToken(ctx context.Context, token string) error {
 	delete(s.sessions, token)
+	return nil
+}
+
+func (s *fakeAuthStore) DeleteSessionsByUserID(ctx context.Context, userID int64) error {
+	if s.deleteSessionsByUserIDErr != nil {
+		return s.deleteSessionsByUserIDErr
+	}
+
+	for token, session := range s.sessions {
+		if session.UserID == userID {
+			delete(s.sessions, token)
+		}
+	}
+
+	return nil
+}
+
+func (s *fakeAuthStore) UpdateUserPasswordHash(ctx context.Context, userID int64, passwordHash string) error {
+	if s.updateUserPasswordHashErr != nil {
+		return s.updateUserPasswordHashErr
+	}
+
+	user, ok := s.usersByID[userID]
+	if !ok {
+		return sql.ErrNoRows
+	}
+
+	user.PasswordHash = passwordHash
+	s.usersByID[userID] = user
+	s.usersByEmail[user.Email] = user
+
 	return nil
 }
 

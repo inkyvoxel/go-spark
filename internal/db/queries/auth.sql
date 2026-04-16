@@ -38,6 +38,15 @@ RETURNING id, user_id, token, expires_at, created_at;
 DELETE FROM sessions
 WHERE token = ?;
 
+-- name: DeleteSessionsByUserID :exec
+DELETE FROM sessions
+WHERE user_id = ?;
+
+-- name: UpdateUserPasswordHash :exec
+UPDATE users
+SET password_hash = ?
+WHERE id = ?;
+
 -- name: CreateEmailVerificationToken :one
 INSERT INTO email_verification_tokens (
     user_id,

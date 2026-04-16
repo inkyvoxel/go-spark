@@ -26,9 +26,11 @@ const (
 
 var (
 	ErrEmailAlreadyRegistered   = errors.New("email already registered")
+	ErrCurrentPasswordIncorrect = errors.New("current password incorrect")
 	ErrInvalidCredentials       = errors.New("invalid credentials")
 	ErrInvalidEmail             = errors.New("invalid email")
 	ErrInvalidPassword          = errors.New("invalid password")
+	ErrPasswordUnchanged        = errors.New("password unchanged")
 	ErrInvalidSession           = errors.New("invalid session")
 	ErrInvalidVerificationToken = errors.New("invalid verification token")
 )
@@ -50,6 +52,8 @@ type AuthStore interface {
 	CreateSession(ctx context.Context, userID int64, token string, expiresAt time.Time) (db.Session, error)
 	GetUserBySessionToken(ctx context.Context, token string) (db.User, error)
 	DeleteSessionByToken(ctx context.Context, token string) error
+	DeleteSessionsByUserID(ctx context.Context, userID int64) error
+	UpdateUserPasswordHash(ctx context.Context, userID int64, passwordHash string) error
 	CreateEmailVerificationToken(ctx context.Context, userID int64, tokenHash string, expiresAt time.Time) (db.EmailVerificationToken, error)
 	ResendEmailVerification(ctx context.Context, params ResendEmailVerificationParams) error
 	VerifyEmailByTokenHash(ctx context.Context, tokenHash string, verifiedAt time.Time) (db.User, error)
@@ -215,6 +219,35 @@ func (s *AuthService) Logout(ctx context.Context, token string) error {
 
 	if err := s.store.DeleteSessionByToken(ctx, token); err != nil {
 		return fmt.Errorf("delete session: %w", err)
+	}
+
+	return nil
+}
+
+func (s *AuthService) ChangePassword(ctx context.Context, user db.User, currentPassword, newPassword string) error {
+	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(currentPassword)); err != nil {
+		return ErrCurrentPasswordIncorrect
+	}
+
+	if utf8.RuneCountInString(newPassword) < s.passwordMinLen {
+		return ErrInvalidPassword
+	}
+
+	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(newPassword)); err == nil {
+		return ErrPasswordUnchanged
+	}
+
+	hash, err := bcrypt.GenerateFromPassword([]byte(newPassword), s.bcryptCost)
+	if err != nil {
+		return fmt.Errorf("hash password: %w", err)
+	}
+
+	if err := s.store.UpdateUserPasswordHash(ctx, user.ID, string(hash)); err != nil {
+		return fmt.Errorf("update user password: %w", err)
+	}
+
+	if err := s.store.DeleteSessionsByUserID(ctx, user.ID); err != nil {
+		return fmt.Errorf("delete sessions by user ID: %w", err)
 	}
 
 	return nil

@@ -15,6 +15,7 @@ import (
 const sessionCookieName = "session"
 
 type authService interface {
+	ChangePassword(context.Context, db.User, string, string) error
 	Login(context.Context, string, string) (db.User, db.Session, error)
 	Logout(context.Context, string) error
 	Register(context.Context, string, string) (db.User, error)
