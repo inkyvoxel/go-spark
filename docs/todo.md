@@ -9,7 +9,6 @@ What is still not implemented:
 - HTML email styling beyond the simple message body.
 - Secure forgotten password flow
 - Visiting an expire verification link, when signed in, displays a 'Email link expired. This confirmation link is invalid or has expired.' and a 'Sign in' link. If they are already signed in, display the "Go to your account" link instead.
-- Update README, docs, and homepage to be more explicit that this starter template has basic email functionality
 
 ## Account features
 

@@ -4,6 +4,8 @@ This document outlines a staged email architecture for Go Spark.
 
 The first email use case is account confirmation. The design should keep request handlers fast, avoid provider lock-in, and stay small enough for a starter template.
 
+Current baseline in this starter: account confirmation emails are implemented, including confirmation tokens, resend support for signed-in unverified users, and a database-backed outbox worker.
+
 ## Goals
 
 * Send account confirmation emails without blocking web requests on provider calls.

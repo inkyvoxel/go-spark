@@ -187,6 +187,7 @@ The goal is to keep authentication:
 Authentication uses:
 
 * Email and password login.
+* Account email verification via confirmation links.
 * Server-side sessions stored in SQLite.
 * HTTP-only cookies for session IDs.
 * Minimal external dependencies.
@@ -358,7 +359,6 @@ token := hex.EncodeToString(b)
 These can be added later if a project needs them:
 
 * Password reset via email.
-* Email verification.
 * Remember-me sessions.
 * OAuth login with providers such as Google or GitHub.
 * Rate limiting on login attempts.
