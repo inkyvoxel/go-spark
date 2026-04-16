@@ -243,6 +243,9 @@ func TestRoutesRegister(t *testing.T) {
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusSeeOther)
 	}
+	if location := rec.Header().Get("Location"); location != "/account" {
+		t.Fatalf("Location = %q, want %q", location, "/account")
+	}
 	if !auth.registered {
 		t.Fatal("Register() was not called")
 	}
@@ -513,6 +516,9 @@ func TestRoutesAccountShowsResendForUnverifiedUser(t *testing.T) {
 	if !strings.Contains(body, "resend-visible") {
 		t.Fatalf("body = %q, want resend control", body)
 	}
+	if !strings.Contains(body, "check-email-visible") {
+		t.Fatalf("body = %q, want unverified check-email message", body)
+	}
 }
 
 func TestRoutesAccountHidesResendForVerifiedUser(t *testing.T) {
@@ -540,6 +546,9 @@ func TestRoutesAccountHidesResendForVerifiedUser(t *testing.T) {
 	body := rec.Body.String()
 	if strings.Contains(body, "resend-visible") {
 		t.Fatalf("body = %q, did not want resend control", body)
+	}
+	if strings.Contains(body, "check-email-visible") {
+		t.Fatalf("body = %q, did not want unverified check-email message", body)
 	}
 }
 
@@ -788,7 +797,7 @@ func newAuthRouteTestServer(t *testing.T, auth authService) *Server {
 			"home.html":                `home {{ if .Authenticated }}Account Sign out {{ .User.Email }}{{ else }}Sign in Create account{{ end }}`,
 			"register.html":            `register {{ .Error }} {{ with index .FieldErrors "email" }}{{ . }}{{ end }} {{ with index .FieldErrors "password" }}{{ . }}{{ end }} {{ with index .FieldErrors "confirm_password" }}{{ . }}{{ end }} {{ .Email }} {{ .PasswordMinLength }} {{ .CSRFToken }}`,
 			"login.html":               `login {{ .Error }} {{ .CSRFToken }} {{ .Next }} /resend-verification`,
-			"account.html":             `account {{ .User.Email }} {{ .CSRFToken }} {{ if not .User.EmailVerifiedAt.Valid }}resend-visible {{ end }} resend-status={{ .ResendStatus }}`,
+			"account.html":             `account {{ .User.Email }} {{ .CSRFToken }} {{ if not .User.EmailVerifiedAt.Valid }}resend-visible check-email-visible{{ end }} resend-status={{ .ResendStatus }}`,
 			"confirm_email.html":       `confirm {{ if .Error }}{{ .Error }}{{ else }}Email confirmed{{ end }}`,
 			"resend_verification.html": `resend-form {{ .Error }} {{ with index .FieldErrors "email" }}{{ . }}{{ end }} {{ .Email }} resend-status={{ .ResendStatus }} {{ .CSRFToken }}`,
 		}),

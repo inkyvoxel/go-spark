@@ -4,6 +4,7 @@
   <p>You are signed in as {{ .User.Email }} {{ if .User.EmailVerifiedAt.Valid }}(verified){{ else }}(unverified){{ end
     }}.</p>
   {{ if not .User.EmailVerifiedAt.Valid }}
+  <p role="status">Check your email to confirm your account.</p>
   {{ if eq .ResendStatus "sent" }}<p role="status">Verification email sent. Check your inbox.</p>{{ end }}
   {{ if eq .ResendStatus "error" }}<p role="alert">We couldn't send a verification email right now. Please try again.</p>{{ end }}
   <form method="post" action="/account/resend-verification">
