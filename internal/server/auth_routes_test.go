@@ -381,8 +381,43 @@ func TestRoutesConfirmEmailRejectsInvalidToken(t *testing.T) {
 	if auth.verifyToken != "bad-token" {
 		t.Fatalf("verify token = %q, want bad-token", auth.verifyToken)
 	}
-	if !strings.Contains(rec.Body.String(), "invalid or has expired") {
-		t.Fatalf("body = %q, want invalid token message", rec.Body.String())
+	body := rec.Body.String()
+	if !strings.Contains(body, "invalid or has expired") {
+		t.Fatalf("body = %q, want invalid token message", body)
+	}
+	if !strings.Contains(body, "Sign in") {
+		t.Fatalf("body = %q, want sign-in link for anonymous user", body)
+	}
+	if strings.Contains(body, "Go to your account") {
+		t.Fatalf("body = %q, did not want account link for anonymous user", body)
+	}
+}
+
+func TestRoutesConfirmEmailRejectsInvalidTokenForAuthenticatedUser(t *testing.T) {
+	auth := &fakeAuthLookup{
+		user:      db.User{ID: 1, Email: "user@example.com"},
+		verifyErr: services.ErrInvalidVerificationToken,
+	}
+	srv := newAuthRouteTestServer(t, auth)
+
+	req := httptest.NewRequest(http.MethodGet, "/confirm-email?token=bad-token", nil)
+	req.AddCookie(&http.Cookie{Name: sessionCookieName, Value: "session-token"})
+	rec := httptest.NewRecorder()
+
+	srv.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, "invalid or has expired") {
+		t.Fatalf("body = %q, want invalid token message", body)
+	}
+	if !strings.Contains(body, "Go to your account") {
+		t.Fatalf("body = %q, want account link for signed-in user", body)
+	}
+	if strings.Contains(body, "Sign in") {
+		t.Fatalf("body = %q, did not want sign-in link for signed-in user", body)
 	}
 }
 
@@ -798,7 +833,7 @@ func newAuthRouteTestServer(t *testing.T, auth authService) *Server {
 			"register.html":            `register {{ .Error }} {{ with index .FieldErrors "email" }}{{ . }}{{ end }} {{ with index .FieldErrors "password" }}{{ . }}{{ end }} {{ with index .FieldErrors "confirm_password" }}{{ . }}{{ end }} {{ .Email }} {{ .PasswordMinLength }} {{ .CSRFToken }}`,
 			"login.html":               `login {{ .Error }} {{ .CSRFToken }} {{ .Next }} /resend-verification`,
 			"account.html":             `account {{ .User.Email }} {{ .CSRFToken }} {{ if not .User.EmailVerifiedAt.Valid }}resend-visible check-email-visible{{ end }} resend-status={{ .ResendStatus }}`,
-			"confirm_email.html":       `confirm {{ if .Error }}{{ .Error }}{{ else }}Email confirmed{{ end }}`,
+			"confirm_email.html":       `confirm {{ if .Error }}{{ .Error }} {{ if .Authenticated }}Go to your account{{ else }}Sign in{{ end }}{{ else }}Email confirmed{{ end }}`,
 			"resend_verification.html": `resend-form {{ .Error }} {{ with index .FieldErrors "email" }}{{ . }}{{ end }} {{ .Email }} resend-status={{ .ResendStatus }} {{ .CSRFToken }}`,
 		}),
 		passwordMinLength: 8,
