@@ -2,10 +2,22 @@
 <article>
   <h1>Resend verification email</h1>
   <p>Enter your email address and we will send a new confirmation link if needed.</p>
+  {{ template "resend_verification_form_section" . }}
+  <p><a href="/login">Back to sign in</a></p>
+</article>
+{{ end }}
+
+{{ define "resend_verification_form_section" }}
+<section id="resend-verification-form-section">
   {{ if eq .ResendStatus "sent" }}<p role="status">If that email can be verified, we sent a confirmation link.</p>{{ end }}
   {{ if eq .ResendStatus "error" }}<p role="alert">We couldn't send a verification email right now. Please try again.</p>{{ end }}
   {{ if .Error }}<p role="alert">{{ .Error }}</p>{{ end }}
-  <form method="post" action="/resend-verification">
+  <form
+    method="post"
+    action="/resend-verification"
+    hx-post="/resend-verification"
+    hx-target="#resend-verification-form-section"
+    hx-swap="outerHTML">
     <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
     <label>
       Email
@@ -21,6 +33,5 @@
     </label>
     <button type="submit">Send verification email</button>
   </form>
-  <p><a href="/login">Back to sign in</a></p>
-</article>
+</section>
 {{ end }}

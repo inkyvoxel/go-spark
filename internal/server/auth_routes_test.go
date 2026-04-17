@@ -1006,6 +1006,91 @@ func TestRoutesPublicResendVerificationHandlesError(t *testing.T) {
 	}
 }
 
+func TestRoutesPublicResendVerificationHTMXReturnsFragment(t *testing.T) {
+	auth := &fakeAuthLookup{}
+	srv := newAuthRouteTestServer(t, auth)
+
+	form := url.Values{
+		"email":       []string{"user@example.com"},
+		csrfFieldName: []string{"csrf"},
+	}
+	req := httptest.NewRequest(http.MethodPost, "/resend-verification", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("HX-Request", "true")
+	req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: "csrf"})
+	rec := httptest.NewRecorder()
+
+	srv.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	if location := rec.Header().Get("Location"); location != "" {
+		t.Fatalf("Location = %q, want empty for HTMX fragment", location)
+	}
+	if !strings.Contains(rec.Body.String(), "resend-status=sent") {
+		t.Fatalf("body = %q, want resend-status=sent", rec.Body.String())
+	}
+}
+
+func TestRoutesPublicResendVerificationHTMXReturnsErrorFragment(t *testing.T) {
+	auth := &fakeAuthLookup{
+		publicResendErr: errors.New("database unavailable"),
+	}
+	srv := newAuthRouteTestServer(t, auth)
+
+	form := url.Values{
+		"email":       []string{"user@example.com"},
+		csrfFieldName: []string{"csrf"},
+	}
+	req := httptest.NewRequest(http.MethodPost, "/resend-verification", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("HX-Request", "true")
+	req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: "csrf"})
+	rec := httptest.NewRecorder()
+
+	srv.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	if location := rec.Header().Get("Location"); location != "" {
+		t.Fatalf("Location = %q, want empty for HTMX fragment", location)
+	}
+	if !strings.Contains(rec.Body.String(), "resend-status=error") {
+		t.Fatalf("body = %q, want resend-status=error", rec.Body.String())
+	}
+}
+
+func TestRoutesPublicResendVerificationHTMXRejectsInvalidEmail(t *testing.T) {
+	auth := &fakeAuthLookup{
+		publicResendErr: services.ErrInvalidEmail,
+	}
+	srv := newAuthRouteTestServer(t, auth)
+
+	form := url.Values{
+		"email":       []string{"not-an-email"},
+		csrfFieldName: []string{"csrf"},
+	}
+	req := httptest.NewRequest(http.MethodPost, "/resend-verification", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("HX-Request", "true")
+	req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: "csrf"})
+	rec := httptest.NewRecorder()
+
+	srv.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+	}
+	if location := rec.Header().Get("Location"); location != "" {
+		t.Fatalf("Location = %q, want empty for HTMX fragment", location)
+	}
+	if !strings.Contains(rec.Body.String(), "Enter a valid email address.") {
+		t.Fatalf("body = %q, want invalid email message", rec.Body.String())
+	}
+}
+
 func TestRoutesPublicResendVerificationRequiresCSRF(t *testing.T) {
 	srv := newAuthRouteTestServer(t, &fakeAuthLookup{})
 
@@ -1130,6 +1215,91 @@ func TestRoutesForgotPasswordHandlesError(t *testing.T) {
 	}
 	if location := rec.Header().Get("Location"); location != "/forgot-password?status=error" {
 		t.Fatalf("Location = %q, want %q", location, "/forgot-password?status=error")
+	}
+}
+
+func TestRoutesForgotPasswordHTMXReturnsFragment(t *testing.T) {
+	auth := &fakeAuthLookup{}
+	srv := newAuthRouteTestServer(t, auth)
+
+	form := url.Values{
+		"email":       []string{"user@example.com"},
+		csrfFieldName: []string{"csrf"},
+	}
+	req := httptest.NewRequest(http.MethodPost, "/forgot-password", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("HX-Request", "true")
+	req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: "csrf"})
+	rec := httptest.NewRecorder()
+
+	srv.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	if location := rec.Header().Get("Location"); location != "" {
+		t.Fatalf("Location = %q, want empty for HTMX fragment", location)
+	}
+	if !strings.Contains(rec.Body.String(), "forgot-status=sent") {
+		t.Fatalf("body = %q, want forgot-status=sent", rec.Body.String())
+	}
+}
+
+func TestRoutesForgotPasswordHTMXReturnsErrorFragment(t *testing.T) {
+	auth := &fakeAuthLookup{
+		requestResetErr: errors.New("database unavailable"),
+	}
+	srv := newAuthRouteTestServer(t, auth)
+
+	form := url.Values{
+		"email":       []string{"user@example.com"},
+		csrfFieldName: []string{"csrf"},
+	}
+	req := httptest.NewRequest(http.MethodPost, "/forgot-password", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("HX-Request", "true")
+	req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: "csrf"})
+	rec := httptest.NewRecorder()
+
+	srv.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	if location := rec.Header().Get("Location"); location != "" {
+		t.Fatalf("Location = %q, want empty for HTMX fragment", location)
+	}
+	if !strings.Contains(rec.Body.String(), "forgot-status=error") {
+		t.Fatalf("body = %q, want forgot-status=error", rec.Body.String())
+	}
+}
+
+func TestRoutesForgotPasswordHTMXRejectsInvalidEmail(t *testing.T) {
+	auth := &fakeAuthLookup{
+		requestResetErr: services.ErrInvalidEmail,
+	}
+	srv := newAuthRouteTestServer(t, auth)
+
+	form := url.Values{
+		"email":       []string{"not-an-email"},
+		csrfFieldName: []string{"csrf"},
+	}
+	req := httptest.NewRequest(http.MethodPost, "/forgot-password", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("HX-Request", "true")
+	req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: "csrf"})
+	rec := httptest.NewRecorder()
+
+	srv.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+	}
+	if location := rec.Header().Get("Location"); location != "" {
+		t.Fatalf("Location = %q, want empty for HTMX fragment", location)
+	}
+	if !strings.Contains(rec.Body.String(), "Enter a valid email address.") {
+		t.Fatalf("body = %q, want invalid email message", rec.Body.String())
 	}
 }
 
@@ -1335,9 +1505,9 @@ func newAuthRouteTestServer(t *testing.T, auth authService) *Server {
 			"login.html":               `login {{ .Error }} {{ .CSRFToken }} {{ .Next }} login-status={{ .LoginStatus }} /forgot-password /resend-verification`,
 			"account.html":             `{{ define "content" }}account {{ .Error }} {{ with index .FieldErrors "current_password" }}{{ . }}{{ end }} {{ with index .FieldErrors "new_password" }}{{ . }}{{ end }} {{ with index .FieldErrors "confirm_password" }}{{ . }}{{ end }} {{ .User.Email }} {{ .CSRFToken }} change-password-visible {{ if not .User.EmailVerifiedAt.Valid }}resend-visible check-email-visible{{ end }} {{ template "account_resend_section" . }}{{ end }}{{ define "account_resend_section" }}resend-status={{ .ResendStatus }}{{ end }}`,
 			"confirm_email.html":       `confirm {{ if .Error }}{{ .Error }} {{ if .Authenticated }}Go to your account{{ else }}Sign in{{ end }}{{ else }}Email confirmed{{ end }}`,
-			"forgot_password.html":     `forgot-form {{ .Error }} {{ with index .FieldErrors "email" }}{{ . }}{{ end }} {{ .Email }} forgot-status={{ .ForgotPasswordStatus }} {{ .CSRFToken }}`,
+			"forgot_password.html":     `{{ define "content" }}{{ template "forgot_password_form_section" . }}{{ end }}{{ define "forgot_password_form_section" }}forgot-form {{ .Error }} {{ with index .FieldErrors "email" }}{{ . }}{{ end }} {{ .Email }} forgot-status={{ .ForgotPasswordStatus }} {{ .CSRFToken }}{{ end }}`,
 			"reset_password.html":      `reset-form {{ .Error }} {{ with index .FieldErrors "new_password" }}{{ . }}{{ end }} {{ with index .FieldErrors "confirm_password" }}{{ . }}{{ end }} token={{ .ResetToken }} {{ .CSRFToken }}`,
-			"resend_verification.html": `resend-form {{ .Error }} {{ with index .FieldErrors "email" }}{{ . }}{{ end }} {{ .Email }} resend-status={{ .ResendStatus }} {{ .CSRFToken }}`,
+			"resend_verification.html": `{{ define "content" }}{{ template "resend_verification_form_section" . }}{{ end }}{{ define "resend_verification_form_section" }}resend-form {{ .Error }} {{ with index .FieldErrors "email" }}{{ . }}{{ end }} {{ .Email }} resend-status={{ .ResendStatus }} {{ .CSRFToken }}{{ end }}`,
 		}),
 		passwordMinLength: 8,
 	}

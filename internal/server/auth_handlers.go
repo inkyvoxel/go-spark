@@ -121,15 +121,31 @@ func (s *Server) forgotPassword(w http.ResponseWriter, r *http.Request) {
 			data.Email = strings.TrimSpace(emailAddress)
 			data.Error = "Check your details and try again."
 			data.FieldErrors = map[string]string{"email": "Enter a valid email address."}
+			if isHXRequest(r) {
+				s.renderFragmentStatus(w, http.StatusBadRequest, "forgot_password.html", "forgot_password_form_section", data)
+				return
+			}
 			s.renderStatus(w, http.StatusBadRequest, "forgot_password.html", data)
 			return
 		}
 
 		s.logger.Error("request password reset", "err", err)
+		if isHXRequest(r) {
+			data := s.newTemplateData(r, "Forgot Password")
+			data.ForgotPasswordStatus = "error"
+			s.renderFragmentStatus(w, http.StatusOK, "forgot_password.html", "forgot_password_form_section", data)
+			return
+		}
 		http.Redirect(w, r, "/forgot-password?status=error", http.StatusSeeOther)
 		return
 	}
 
+	if isHXRequest(r) {
+		data := s.newTemplateData(r, "Forgot Password")
+		data.ForgotPasswordStatus = "sent"
+		s.renderFragmentStatus(w, http.StatusOK, "forgot_password.html", "forgot_password_form_section", data)
+		return
+	}
 	http.Redirect(w, r, "/forgot-password?status=sent", http.StatusSeeOther)
 }
 
@@ -369,15 +385,31 @@ func (s *Server) resendVerificationPublic(w http.ResponseWriter, r *http.Request
 			data.Email = strings.TrimSpace(emailAddress)
 			data.Error = "Check your details and try again."
 			data.FieldErrors = map[string]string{"email": "Enter a valid email address."}
+			if isHXRequest(r) {
+				s.renderFragmentStatus(w, http.StatusBadRequest, "resend_verification.html", "resend_verification_form_section", data)
+				return
+			}
 			s.renderStatus(w, http.StatusBadRequest, "resend_verification.html", data)
 			return
 		}
 
 		s.logger.Error("resend verification email (public)", "err", err)
+		if isHXRequest(r) {
+			data := s.newTemplateData(r, "Resend Verification Email")
+			data.ResendStatus = "error"
+			s.renderFragmentStatus(w, http.StatusOK, "resend_verification.html", "resend_verification_form_section", data)
+			return
+		}
 		http.Redirect(w, r, "/resend-verification?status=error", http.StatusSeeOther)
 		return
 	}
 
+	if isHXRequest(r) {
+		data := s.newTemplateData(r, "Resend Verification Email")
+		data.ResendStatus = "sent"
+		s.renderFragmentStatus(w, http.StatusOK, "resend_verification.html", "resend_verification_form_section", data)
+		return
+	}
 	http.Redirect(w, r, "/resend-verification?status=sent", http.StatusSeeOther)
 }
 
