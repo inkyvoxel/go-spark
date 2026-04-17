@@ -27,15 +27,16 @@ What is still not implemented:
   - Risk: a project can accidentally deploy with insecure cookies behind a TLS-terminating proxy, localhost links in security emails, log-only email delivery, no pepper, or HTTP base URLs.
   - Recommendation: when `APP_ENV=production`, fail startup unless `APP_COOKIE_SECURE=true`, `APP_BASE_URL` uses `https`, `AUTH_PASSWORD_PEPPER` is non-empty, `EMAIL_PROVIDER=smtp` or an explicit production provider is configured, and `EMAIL_LOG_BODY=false`. Consider also rejecting default `EMAIL_FROM`.
   - Decision: fail startup when `AUTH_PASSWORD_PEPPER` is missing in production.
+  - Progress: `AUTH_PASSWORD_PEPPER` now fails fast in production; remaining production safety checks are still pending.
 
-- [ ] Add security response headers middleware.
+- [x] Add security response headers middleware.
   - Evidence: responses currently set content type in render helpers, but no global headers are added. `templates/layout.html` loads vendored CSS and HTMX locally, so the app is well-positioned for a strict policy.
   - Risk: missing defense-in-depth against clickjacking, MIME sniffing, referrer leakage of reset tokens, and script injection impact.
   - Recommendation: add middleware for at least `Content-Security-Policy`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin` or `no-referrer`, `Frame-Options: DENY` or CSP `frame-ancestors 'none'`, and `Permissions-Policy`. In production over HTTPS, add `Strict-Transport-Security`.
   - Deployment note: set baseline app-owned headers in Go so the starter is secure by default in every hosting environment. A production reverse proxy such as Caddy or nginx may also set or override deployment-specific headers, especially `Strict-Transport-Security`, but avoid maintaining conflicting policies in two places.
   - Suggested CSP starting point: `default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; form-action 'self'; frame-ancestors 'none'; base-uri 'self'`.
 
-- [ ] Put explicit max request body limits on all form POST routes.
+- [x] Put explicit max request body limits on all form POST routes.
   - Evidence: handlers call `r.ParseForm()` directly in register, login, forgot password, reset password, resend verification, and change password flows.
   - Risk: attackers can send large form bodies to consume memory/CPU before validation and rate limits complete.
   - Recommendation: wrap form parsing with `http.MaxBytesReader`, for example 32-64 KiB for auth forms, and return `413 Request Entity Too Large` for oversized bodies.

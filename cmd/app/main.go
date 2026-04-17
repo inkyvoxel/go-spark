@@ -32,8 +32,9 @@ func main() {
 		logger.Error("load config", "err", err)
 		os.Exit(1)
 	}
-	if cfg.Env == "production" && cfg.PasswordPepper == "" {
-		logger.Warn("AUTH_PASSWORD_PEPPER is blank; password hashing pepper is disabled")
+	if err := validateSecurityConfig(cfg); err != nil {
+		logger.Error("invalid security configuration", "err", err)
+		os.Exit(1)
 	}
 
 	db, err := database.Open(cfg.DatabasePath)
@@ -143,6 +144,16 @@ func authSenderFrom(cfg config.Config) string {
 		return cfg.SMTPFrom
 	}
 	return cfg.EmailFrom
+}
+
+func validateSecurityConfig(cfg config.Config) error {
+	if cfg.Env != "production" {
+		return nil
+	}
+	if strings.TrimSpace(cfg.PasswordPepper) == "" {
+		return fmt.Errorf("AUTH_PASSWORD_PEPPER must be set when APP_ENV=production")
+	}
+	return nil
 }
 
 func toServerRateLimitPolicies(cfg config.RateLimitPoliciesConfig) server.RateLimitPolicies {

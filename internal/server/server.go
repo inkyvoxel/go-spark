@@ -10,6 +10,11 @@ import (
 	"github.com/inkyvoxel/go-spark/internal/services"
 )
 
+const (
+	maxRequestBodyBytes = 64 * 1024
+	cspHeaderValue      = "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; form-action 'self'; frame-ancestors 'none'; base-uri 'self'"
+)
+
 type Server struct {
 	db                *sql.DB
 	auth              authService
@@ -142,7 +147,7 @@ func (s *Server) Routes() http.Handler {
 	dynamic.Handle("POST /account/change-password", s.requireAuth(http.HandlerFunc(s.changePassword)))
 	dynamic.HandleFunc("GET /", s.home)
 
-	mux.Handle("/", s.csrf(s.loadSession(dynamic)))
+	mux.Handle("/", s.securityHeaders(s.limitRequestBody(s.csrf(s.loadSession(dynamic)))))
 
 	return s.logRequests(mux)
 }
@@ -166,6 +171,30 @@ func (s *Server) health(w http.ResponseWriter, r *http.Request) {
 func (s *Server) logRequests(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		s.logger.Info("request", "method", r.Method, "path", r.URL.Path)
+		next.ServeHTTP(w, r)
+	})
+}
+
+func (s *Server) securityHeaders(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Security-Policy", cspHeaderValue)
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Header().Set("Referrer-Policy", "no-referrer")
+		w.Header().Set("X-Frame-Options", "DENY")
+		w.Header().Set("Permissions-Policy", "geolocation=(), microphone=(), camera=()")
+		if s.secureCookie(r) {
+			w.Header().Set("Strict-Transport-Security", "max-age=31536000")
+		}
+
+		next.ServeHTTP(w, r)
+	})
+}
+
+func (s *Server) limitRequestBody(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if isUnsafeMethod(r.Method) && r.Body != nil {
+			r.Body = http.MaxBytesReader(w, r.Body, maxRequestBodyBytes)
+		}
 		next.ServeHTTP(w, r)
 	})
 }
