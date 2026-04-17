@@ -289,6 +289,13 @@ func (s *Server) changePassword(w http.ResponseWriter, r *http.Request) {
 	currentPassword := r.FormValue("current_password")
 	newPassword := r.FormValue("new_password")
 	confirmPassword := r.FormValue("confirm_password")
+	render := func(status int, data templateData) {
+		if isHXRequest(r) {
+			s.renderFragmentStatus(w, status, "account.html", "account_change_password_section", data)
+			return
+		}
+		s.renderStatus(w, status, "account.html", data)
+	}
 
 	fieldErrors := make(map[string]string)
 	if currentPassword == "" {
@@ -301,7 +308,7 @@ func (s *Server) changePassword(w http.ResponseWriter, r *http.Request) {
 		data := s.newTemplateData(r, "Account")
 		data.Error = "Check your details and try again."
 		data.FieldErrors = fieldErrors
-		s.renderStatus(w, http.StatusUnprocessableEntity, "account.html", data)
+		render(http.StatusUnprocessableEntity, data)
 		return
 	}
 
@@ -311,15 +318,15 @@ func (s *Server) changePassword(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case errors.Is(err, services.ErrCurrentPasswordIncorrect):
 			data.FieldErrors = map[string]string{"current_password": "Current password is not correct."}
-			s.renderStatus(w, http.StatusUnprocessableEntity, "account.html", data)
+			render(http.StatusUnprocessableEntity, data)
 			return
 		case errors.Is(err, services.ErrInvalidPassword):
 			data.FieldErrors = map[string]string{"new_password": fmt.Sprintf("Use at least %d characters.", data.PasswordMinLength)}
-			s.renderStatus(w, http.StatusUnprocessableEntity, "account.html", data)
+			render(http.StatusUnprocessableEntity, data)
 			return
 		case errors.Is(err, services.ErrPasswordUnchanged):
 			data.FieldErrors = map[string]string{"new_password": "Choose a different password."}
-			s.renderStatus(w, http.StatusUnprocessableEntity, "account.html", data)
+			render(http.StatusUnprocessableEntity, data)
 			return
 		default:
 			s.logger.Error("change password", "user_id", user.ID, "err", err)
@@ -329,7 +336,7 @@ func (s *Server) changePassword(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.clearSessionCookie(w, r)
-	http.Redirect(w, r, "/login?status=password-changed", http.StatusSeeOther)
+	s.redirectWithHTMX(w, r, "/login?status=password-changed")
 }
 
 func (s *Server) resetPassword(w http.ResponseWriter, r *http.Request) {
@@ -341,6 +348,13 @@ func (s *Server) resetPassword(w http.ResponseWriter, r *http.Request) {
 	token := strings.TrimSpace(r.FormValue("token"))
 	newPassword := r.FormValue("new_password")
 	confirmPassword := r.FormValue("confirm_password")
+	render := func(status int, data templateData) {
+		if isHXRequest(r) {
+			s.renderFragmentStatus(w, status, "reset_password.html", "reset_password_form_section", data)
+			return
+		}
+		s.renderStatus(w, status, "reset_password.html", data)
+	}
 
 	fieldErrors := s.validatePasswordPair(newPassword, confirmPassword, "new_password", "confirm_password")
 	if len(fieldErrors) > 0 {
@@ -348,7 +362,7 @@ func (s *Server) resetPassword(w http.ResponseWriter, r *http.Request) {
 		data.ResetToken = token
 		data.Error = "Check your details and try again."
 		data.FieldErrors = fieldErrors
-		s.renderStatus(w, http.StatusUnprocessableEntity, "reset_password.html", data)
+		render(http.StatusUnprocessableEntity, data)
 		return
 	}
 
@@ -360,11 +374,11 @@ func (s *Server) resetPassword(w http.ResponseWriter, r *http.Request) {
 		case errors.Is(err, services.ErrInvalidPasswordResetToken):
 			data.Error = "This password reset link is invalid or has expired."
 			data.ResetTokenInvalid = true
-			s.renderStatus(w, http.StatusBadRequest, "reset_password.html", data)
+			render(http.StatusBadRequest, data)
 			return
 		case errors.Is(err, services.ErrInvalidPassword):
 			data.FieldErrors = map[string]string{"new_password": fmt.Sprintf("Use at least %d characters.", data.PasswordMinLength)}
-			s.renderStatus(w, http.StatusUnprocessableEntity, "reset_password.html", data)
+			render(http.StatusUnprocessableEntity, data)
 			return
 		default:
 			s.logger.Error("reset password", "err", err)
@@ -373,7 +387,7 @@ func (s *Server) resetPassword(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	http.Redirect(w, r, "/login?status=password-changed", http.StatusSeeOther)
+	s.redirectWithHTMX(w, r, "/login?status=password-changed")
 }
 
 func (s *Server) resendVerificationPublic(w http.ResponseWriter, r *http.Request) {

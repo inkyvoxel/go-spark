@@ -1,12 +1,23 @@
 {{ define "content" }}
 <article>
   <h1>Account</h1>
-  {{ if .Error }}<p role="alert">{{ .Error }}</p>{{ end }}
   <p>You are signed in as {{ .User.Email }} {{ if .User.EmailVerifiedAt.Valid }}(verified){{ else }}(unverified){{ end
     }}.</p>
   {{ template "account_resend_section" . }}
+  {{ template "account_change_password_section" . }}
+</article>
+{{ end }}
+
+{{ define "account_change_password_section" }}
+<section id="account-change-password-section">
   <h2>Change password</h2>
-  <form method="post" action="/account/change-password">
+  {{ if .Error }}<p role="alert">{{ .Error }}</p>{{ end }}
+  <form
+    method="post"
+    action="/account/change-password"
+    hx-post="/account/change-password"
+    hx-target="#account-change-password-section"
+    hx-swap="outerHTML">
     <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
     <label>
       Current password
@@ -43,7 +54,7 @@
     </label>
     <button type="submit">Change password</button>
   </form>
-</article>
+</section>
 {{ end }}
 
 {{ define "account_resend_section" }}
