@@ -3,12 +3,17 @@ package email
 import (
 	"bytes"
 	"context"
+	"embed"
 	"fmt"
 	"html/template"
+	"io/fs"
 	"log/slog"
 	"net/mail"
 	"net/url"
+	"path"
 	"strings"
+	"sync"
+	texttemplate "text/template"
 )
 
 const ProviderLog = "log"
@@ -74,6 +79,20 @@ type PasswordResetOptions struct {
 	From       string
 }
 
+//go:embed templates/*
+var emailTemplateFS embed.FS
+
+var (
+	emailTemplateCacheMu sync.RWMutex
+	emailTemplateCache   = map[string]compiledEmailTemplates{}
+)
+
+type compiledEmailTemplates struct {
+	subject *texttemplate.Template
+	text    *texttemplate.Template
+	html    *template.Template
+}
+
 func NewAccountConfirmationMessage(opts AccountConfirmationOptions, to, token string) (Message, error) {
 	from, err := normalizeAddress("from", opts.From)
 	if err != nil {
@@ -90,7 +109,14 @@ func NewAccountConfirmationMessage(opts AccountConfirmationOptions, to, token st
 		return Message{}, err
 	}
 
-	htmlBody, err := renderConfirmationHTML(confirmURL)
+	subject, textBody, htmlBody, err := renderEmailTemplates(
+		"account_confirmation",
+		struct {
+			ConfirmationURL string
+		}{
+			ConfirmationURL: confirmURL,
+		},
+	)
 	if err != nil {
 		return Message{}, err
 	}
@@ -98,8 +124,8 @@ func NewAccountConfirmationMessage(opts AccountConfirmationOptions, to, token st
 	return Message{
 		From:     from,
 		To:       recipient,
-		Subject:  "Confirm your email address",
-		TextBody: "Confirm your email address by opening this link:\n\n" + confirmURL,
+		Subject:  subject,
+		TextBody: textBody,
 		HTMLBody: htmlBody,
 	}, nil
 }
@@ -120,7 +146,14 @@ func NewPasswordResetMessage(opts PasswordResetOptions, to, token string) (Messa
 		return Message{}, err
 	}
 
-	htmlBody, err := renderPasswordResetHTML(resetURL)
+	subject, textBody, htmlBody, err := renderEmailTemplates(
+		"password_reset",
+		struct {
+			ResetURL string
+		}{
+			ResetURL: resetURL,
+		},
+	)
 	if err != nil {
 		return Message{}, err
 	}
@@ -128,8 +161,8 @@ func NewPasswordResetMessage(opts PasswordResetOptions, to, token string) (Messa
 	return Message{
 		From:     from,
 		To:       recipient,
-		Subject:  "Reset your password",
-		TextBody: "Reset your password by opening this link:\n\n" + resetURL,
+		Subject:  subject,
+		TextBody: textBody,
 		HTMLBody: htmlBody,
 	}, nil
 }
@@ -168,24 +201,92 @@ func tokenURL(appBaseURL, path, token, tokenLabel string) (string, error) {
 	return target.String(), nil
 }
 
-func renderConfirmationHTML(confirmURL string) (string, error) {
-	const body = `<p>Confirm your email address by opening this link:</p><p><a href="{{ . }}">Confirm email</a></p>`
-
-	var rendered bytes.Buffer
-	if err := template.Must(template.New("confirmation").Parse(body)).Execute(&rendered, confirmURL); err != nil {
-		return "", fmt.Errorf("render confirmation email: %w", err)
+func renderEmailTemplates(templateName string, data any) (string, string, string, error) {
+	templates, err := loadEmailTemplates(templateName)
+	if err != nil {
+		return "", "", "", err
 	}
 
+	subjectOut, err := renderTextTemplate(templates.subject, data)
+	if err != nil {
+		return "", "", "", fmt.Errorf("render %s subject template: %w", templateName, err)
+	}
+	textOut, err := renderTextTemplate(templates.text, data)
+	if err != nil {
+		return "", "", "", fmt.Errorf("render %s text template: %w", templateName, err)
+	}
+	htmlOut, err := renderHTMLTemplate(templates.html, data)
+	if err != nil {
+		return "", "", "", fmt.Errorf("render %s html template: %w", templateName, err)
+	}
+
+	return strings.TrimSpace(subjectOut), strings.TrimSpace(textOut), strings.TrimSpace(htmlOut), nil
+}
+
+func renderTextTemplate(tpl *texttemplate.Template, data any) (string, error) {
+	var rendered bytes.Buffer
+	if err := tpl.Execute(&rendered, data); err != nil {
+		return "", err
+	}
 	return rendered.String(), nil
 }
 
-func renderPasswordResetHTML(resetURL string) (string, error) {
-	const body = `<p>Reset your password by opening this link:</p><p><a href="{{ . }}">Reset password</a></p>`
-
+func renderHTMLTemplate(tpl *template.Template, data any) (string, error) {
 	var rendered bytes.Buffer
-	if err := template.Must(template.New("password-reset").Parse(body)).Execute(&rendered, resetURL); err != nil {
-		return "", fmt.Errorf("render password reset email: %w", err)
+	if err := tpl.Execute(&rendered, data); err != nil {
+		return "", err
+	}
+	return rendered.String(), nil
+}
+
+func loadEmailTemplates(templateName string) (compiledEmailTemplates, error) {
+	emailTemplateCacheMu.RLock()
+	cached, ok := emailTemplateCache[templateName]
+	emailTemplateCacheMu.RUnlock()
+	if ok {
+		return cached, nil
 	}
 
-	return rendered.String(), nil
+	subject, err := parseTextTemplate(path.Join("templates", templateName+".subject.txt"), templateName+"-subject")
+	if err != nil {
+		return compiledEmailTemplates{}, fmt.Errorf("parse %s subject template: %w", templateName, err)
+	}
+	textBody, err := parseTextTemplate(path.Join("templates", templateName+".text.txt"), templateName+"-text")
+	if err != nil {
+		return compiledEmailTemplates{}, fmt.Errorf("parse %s text template: %w", templateName, err)
+	}
+	htmlBody, err := parseHTMLTemplate(path.Join("templates", templateName+".html.tmpl"), templateName+"-html")
+	if err != nil {
+		return compiledEmailTemplates{}, fmt.Errorf("parse %s html template: %w", templateName, err)
+	}
+
+	compiled := compiledEmailTemplates{
+		subject: subject,
+		text:    textBody,
+		html:    htmlBody,
+	}
+
+	emailTemplateCacheMu.Lock()
+	emailTemplateCache[templateName] = compiled
+	emailTemplateCacheMu.Unlock()
+
+	return compiled, nil
+}
+
+func parseTextTemplate(filePath, name string) (*texttemplate.Template, error) {
+	content, err := fs.ReadFile(emailTemplateFS, filePath)
+	if err != nil {
+		return nil, err
+	}
+
+	return texttemplate.New(name).Option("missingkey=error").Parse(string(content))
+}
+
+func parseHTMLTemplate(filePath, name string) (*template.Template, error) {
+	content, err := fs.ReadFile(emailTemplateFS, filePath)
+	if err != nil {
+		return nil, err
+	}
+
+	return template.New(name).Option("missingkey=error").Parse(string(content))
 }
