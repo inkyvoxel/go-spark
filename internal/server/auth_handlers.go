@@ -66,11 +66,7 @@ func (s *Server) register(w http.ResponseWriter, r *http.Request) {
 		data.Email = strings.TrimSpace(email)
 		data.Error = "Check your details and try again."
 		data.FieldErrors = fieldErrors
-		if isHXRequest(r) {
-			s.renderFragmentStatus(w, http.StatusUnprocessableEntity, "register.html", "register_form_section", data)
-			return
-		}
-		s.renderStatus(w, http.StatusUnprocessableEntity, "register.html", data)
+		s.renderStatusForRequest(w, r, http.StatusUnprocessableEntity, "register.html", "register_form_section", data)
 		return
 	}
 
@@ -125,11 +121,7 @@ func (s *Server) forgotPassword(w http.ResponseWriter, r *http.Request) {
 			data.Email = strings.TrimSpace(emailAddress)
 			data.Error = "Check your details and try again."
 			data.FieldErrors = map[string]string{"email": "Enter a valid email address."}
-			if isHXRequest(r) {
-				s.renderFragmentStatus(w, http.StatusUnprocessableEntity, "forgot_password.html", "forgot_password_form_section", data)
-				return
-			}
-			s.renderStatus(w, http.StatusUnprocessableEntity, "forgot_password.html", data)
+			s.renderStatusForRequest(w, r, http.StatusUnprocessableEntity, "forgot_password.html", "forgot_password_form_section", data)
 			return
 		}
 
@@ -289,13 +281,6 @@ func (s *Server) changePassword(w http.ResponseWriter, r *http.Request) {
 	currentPassword := r.FormValue("current_password")
 	newPassword := r.FormValue("new_password")
 	confirmPassword := r.FormValue("confirm_password")
-	render := func(status int, data templateData) {
-		if isHXRequest(r) {
-			s.renderFragmentStatus(w, status, "account.html", "account_change_password_section", data)
-			return
-		}
-		s.renderStatus(w, status, "account.html", data)
-	}
 
 	fieldErrors := make(map[string]string)
 	if currentPassword == "" {
@@ -308,7 +293,7 @@ func (s *Server) changePassword(w http.ResponseWriter, r *http.Request) {
 		data := s.newTemplateData(r, "Account")
 		data.Error = "Check your details and try again."
 		data.FieldErrors = fieldErrors
-		render(http.StatusUnprocessableEntity, data)
+		s.renderStatusForRequest(w, r, http.StatusUnprocessableEntity, "account.html", "account_change_password_section", data)
 		return
 	}
 
@@ -318,15 +303,15 @@ func (s *Server) changePassword(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case errors.Is(err, services.ErrCurrentPasswordIncorrect):
 			data.FieldErrors = map[string]string{"current_password": "Current password is not correct."}
-			render(http.StatusUnprocessableEntity, data)
+			s.renderStatusForRequest(w, r, http.StatusUnprocessableEntity, "account.html", "account_change_password_section", data)
 			return
 		case errors.Is(err, services.ErrInvalidPassword):
 			data.FieldErrors = map[string]string{"new_password": fmt.Sprintf("Use at least %d characters.", data.PasswordMinLength)}
-			render(http.StatusUnprocessableEntity, data)
+			s.renderStatusForRequest(w, r, http.StatusUnprocessableEntity, "account.html", "account_change_password_section", data)
 			return
 		case errors.Is(err, services.ErrPasswordUnchanged):
 			data.FieldErrors = map[string]string{"new_password": "Choose a different password."}
-			render(http.StatusUnprocessableEntity, data)
+			s.renderStatusForRequest(w, r, http.StatusUnprocessableEntity, "account.html", "account_change_password_section", data)
 			return
 		default:
 			s.logger.Error("change password", "user_id", user.ID, "err", err)
@@ -348,13 +333,6 @@ func (s *Server) resetPassword(w http.ResponseWriter, r *http.Request) {
 	token := strings.TrimSpace(r.FormValue("token"))
 	newPassword := r.FormValue("new_password")
 	confirmPassword := r.FormValue("confirm_password")
-	render := func(status int, data templateData) {
-		if isHXRequest(r) {
-			s.renderFragmentStatus(w, status, "reset_password.html", "reset_password_form_section", data)
-			return
-		}
-		s.renderStatus(w, status, "reset_password.html", data)
-	}
 
 	fieldErrors := s.validatePasswordPair(newPassword, confirmPassword, "new_password", "confirm_password")
 	if len(fieldErrors) > 0 {
@@ -362,7 +340,7 @@ func (s *Server) resetPassword(w http.ResponseWriter, r *http.Request) {
 		data.ResetToken = token
 		data.Error = "Check your details and try again."
 		data.FieldErrors = fieldErrors
-		render(http.StatusUnprocessableEntity, data)
+		s.renderStatusForRequest(w, r, http.StatusUnprocessableEntity, "reset_password.html", "reset_password_form_section", data)
 		return
 	}
 
@@ -374,11 +352,11 @@ func (s *Server) resetPassword(w http.ResponseWriter, r *http.Request) {
 		case errors.Is(err, services.ErrInvalidPasswordResetToken):
 			data.Error = "This password reset link is invalid or has expired."
 			data.ResetTokenInvalid = true
-			render(http.StatusBadRequest, data)
+			s.renderStatusForRequest(w, r, http.StatusBadRequest, "reset_password.html", "reset_password_form_section", data)
 			return
 		case errors.Is(err, services.ErrInvalidPassword):
 			data.FieldErrors = map[string]string{"new_password": fmt.Sprintf("Use at least %d characters.", data.PasswordMinLength)}
-			render(http.StatusUnprocessableEntity, data)
+			s.renderStatusForRequest(w, r, http.StatusUnprocessableEntity, "reset_password.html", "reset_password_form_section", data)
 			return
 		default:
 			s.logger.Error("reset password", "err", err)
@@ -403,11 +381,7 @@ func (s *Server) resendVerificationPublic(w http.ResponseWriter, r *http.Request
 			data.Email = strings.TrimSpace(emailAddress)
 			data.Error = "Check your details and try again."
 			data.FieldErrors = map[string]string{"email": "Enter a valid email address."}
-			if isHXRequest(r) {
-				s.renderFragmentStatus(w, http.StatusUnprocessableEntity, "resend_verification.html", "resend_verification_form_section", data)
-				return
-			}
-			s.renderStatus(w, http.StatusUnprocessableEntity, "resend_verification.html", data)
+			s.renderStatusForRequest(w, r, http.StatusUnprocessableEntity, "resend_verification.html", "resend_verification_form_section", data)
 			return
 		}
 
@@ -432,35 +406,27 @@ func (s *Server) resendVerificationPublic(w http.ResponseWriter, r *http.Request
 }
 
 func (s *Server) handleAuthFormError(w http.ResponseWriter, r *http.Request, templateName, fragmentName string, data templateData, err error) {
-	render := func(status int, data templateData) {
-		if isHXRequest(r) {
-			s.renderFragmentStatus(w, status, templateName, fragmentName, data)
-			return
-		}
-		s.renderStatus(w, status, templateName, data)
-	}
-
 	if errors.Is(err, services.ErrInvalidEmail) {
 		data.Error = "Check your details and try again."
 		data.FieldErrors = map[string]string{"email": "Enter a valid email address."}
-		render(http.StatusUnprocessableEntity, data)
+		s.renderStatusForRequest(w, r, http.StatusUnprocessableEntity, templateName, fragmentName, data)
 		return
 	}
 	if errors.Is(err, services.ErrInvalidPassword) {
 		data.Error = "Check your details and try again."
 		data.FieldErrors = map[string]string{"password": fmt.Sprintf("Use at least %d characters.", data.PasswordMinLength)}
-		render(http.StatusUnprocessableEntity, data)
+		s.renderStatusForRequest(w, r, http.StatusUnprocessableEntity, templateName, fragmentName, data)
 		return
 	}
 	if errors.Is(err, services.ErrEmailAlreadyRegistered) {
 		data.Error = "Check your details and try again."
 		data.FieldErrors = map[string]string{"email": "An account with this email already exists."}
-		render(http.StatusUnprocessableEntity, data)
+		s.renderStatusForRequest(w, r, http.StatusUnprocessableEntity, templateName, fragmentName, data)
 		return
 	}
 	if errors.Is(err, services.ErrInvalidCredentials) {
 		data.Error = "Email or password is not correct."
-		render(http.StatusUnprocessableEntity, data)
+		s.renderStatusForRequest(w, r, http.StatusUnprocessableEntity, templateName, fragmentName, data)
 		return
 	}
 
@@ -569,4 +535,13 @@ func (s *Server) renderTemplateFragment(w io.Writer, templateName, fragmentName 
 
 func isHXRequest(r *http.Request) bool {
 	return strings.EqualFold(strings.TrimSpace(r.Header.Get("HX-Request")), "true")
+}
+
+func (s *Server) renderStatusForRequest(w http.ResponseWriter, r *http.Request, status int, templateName, fragmentName string, data templateData) {
+	if isHXRequest(r) {
+		s.renderFragmentStatus(w, status, templateName, fragmentName, data)
+		return
+	}
+
+	s.renderStatus(w, status, templateName, data)
 }
