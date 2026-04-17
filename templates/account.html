@@ -4,19 +4,7 @@
   {{ if .Error }}<p role="alert">{{ .Error }}</p>{{ end }}
   <p>You are signed in as {{ .User.Email }} {{ if .User.EmailVerifiedAt.Valid }}(verified){{ else }}(unverified){{ end
     }}.</p>
-  {{ if not .User.EmailVerifiedAt.Valid }}
-  {{ if eq .ResendStatus "error" }}
-  <p role="alert">We couldn't send a verification email right now. Please try again.</p>
-  {{ else if eq .ResendStatus "sent" }}
-  <p role="status">Check your email to confirm your account. We sent a new verification email.</p>
-  {{ else }}
-  <p role="status">Check your email to confirm your account.</p>
-  {{ end }}
-  <form method="post" action="/account/resend-verification">
-    <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
-    <button type="submit">Resend verification email</button>
-  </form>
-  {{ end }}
+  {{ template "account_resend_section" . }}
   <h2>Change password</h2>
   <form method="post" action="/account/change-password">
     <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
@@ -56,4 +44,27 @@
     <button type="submit">Change password</button>
   </form>
 </article>
+{{ end }}
+
+{{ define "account_resend_section" }}
+{{ if not .User.EmailVerifiedAt.Valid }}
+<section id="account-resend-section">
+  {{ if eq .ResendStatus "error" }}
+  <p role="alert">We couldn't send a verification email right now. Please try again.</p>
+  {{ else if eq .ResendStatus "sent" }}
+  <p role="status">Check your email to confirm your account. We sent a new verification email.</p>
+  {{ else }}
+  <p role="status">Check your email to confirm your account.</p>
+  {{ end }}
+  <form
+    method="post"
+    action="/account/resend-verification"
+    hx-post="/account/resend-verification"
+    hx-target="#account-resend-section"
+    hx-swap="outerHTML">
+    <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
+    <button type="submit">Resend verification email</button>
+  </form>
+</section>
+{{ end }}
 {{ end }}

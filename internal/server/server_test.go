@@ -116,13 +116,18 @@ func testTemplates(t *testing.T, pages map[string]string) map[string]*template.T
 
 	templates := make(map[string]*template.Template, len(pages))
 	for name, content := range pages {
+		parsedContent := `{{ define "content" }}` + content + `{{ end }}`
+		if strings.Contains(content, `{{ define "content"`) {
+			parsedContent = content
+		}
+
 		templates[name] = template.Must(template.New("layout.html").Parse(`
 			{{ define "layout.html" }}
 				<!doctype html>
 				<title>{{ .Title }}</title>
 				{{ template "content" . }}
 			{{ end }}
-			{{ define "content" }}` + content + `{{ end }}
+			` + parsedContent + `
 		`))
 	}
 

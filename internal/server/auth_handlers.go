@@ -234,12 +234,23 @@ func (s *Server) resendVerification(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	data := s.newTemplateData(r, "Account")
 	if err := s.auth.ResendVerificationEmail(r.Context(), user); err != nil {
 		s.logger.Error("resend verification email", "user_id", user.ID, "err", err)
+		if isHXRequest(r) {
+			data.ResendStatus = "error"
+			s.renderFragmentStatus(w, http.StatusOK, "account.html", "account_resend_section", data)
+			return
+		}
 		http.Redirect(w, r, "/account?resend=error", http.StatusSeeOther)
 		return
 	}
 
+	if isHXRequest(r) {
+		data.ResendStatus = "sent"
+		s.renderFragmentStatus(w, http.StatusOK, "account.html", "account_resend_section", data)
+		return
+	}
 	http.Redirect(w, r, "/account?resend=sent", http.StatusSeeOther)
 }
 
@@ -464,4 +475,30 @@ func (s *Server) renderTemplate(w io.Writer, templateName string, data templateD
 	}
 
 	return tmpl.ExecuteTemplate(w, "layout.html", data)
+}
+
+func (s *Server) renderFragmentStatus(w http.ResponseWriter, status int, templateName, fragmentName string, data templateData) {
+	var body bytes.Buffer
+	if err := s.renderTemplateFragment(&body, templateName, fragmentName, data); err != nil {
+		s.logger.Error("render template fragment", "template", templateName, "fragment", fragmentName, "err", err)
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(status)
+	_, _ = w.Write(body.Bytes())
+}
+
+func (s *Server) renderTemplateFragment(w io.Writer, templateName, fragmentName string, data templateData) error {
+	tmpl, ok := s.templates[templateName]
+	if !ok {
+		return fmt.Errorf("template %q not found", templateName)
+	}
+
+	return tmpl.ExecuteTemplate(w, fragmentName, data)
+}
+
+func isHXRequest(r *http.Request) bool {
+	return strings.EqualFold(strings.TrimSpace(r.Header.Get("HX-Request")), "true")
 }
