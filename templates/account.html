@@ -17,7 +17,10 @@
     action="/account/change-password"
     hx-post="/account/change-password"
     hx-target="#account-change-password-section"
-    hx-swap="outerHTML">
+    hx-swap="outerHTML"
+    hx-disabled-elt="button[type='submit']"
+    hx-on::before-request="this.querySelector('button[type=submit]').setAttribute('aria-busy','true')"
+    hx-on::after-request="this.querySelector('button[type=submit]').removeAttribute('aria-busy')">
     <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
     <label>
       Current password
@@ -72,7 +75,10 @@
     action="/account/resend-verification"
     hx-post="/account/resend-verification"
     hx-target="#account-resend-section"
-    hx-swap="outerHTML">
+    hx-swap="outerHTML"
+    hx-disabled-elt="button[type='submit']"
+    hx-on::before-request="this.querySelector('button[type=submit]').setAttribute('aria-busy','true')"
+    hx-on::after-request="this.querySelector('button[type=submit]').removeAttribute('aria-busy')">
     <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
     <button type="submit">Resend verification email</button>
   </form>

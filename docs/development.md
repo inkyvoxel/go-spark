@@ -72,6 +72,15 @@ This keeps local development independent from CDN availability and makes runtime
 
 HTMX response swapping is configured in `templates/layout.html` via `meta[name="htmx-config"]`. We currently allow swaps for HTTP `422` responses so server-side validation fragments render inline, while malformed requests can still use HTTP `400` and other `4xx/5xx` responses keep the default non-swap behavior.
 
+For auth forms, the canonical HTMX pattern is:
+
+* Keep normal `method` and `action` attributes for non-HTMX fallback.
+* Add `hx-post`, `hx-target`, and `hx-swap="outerHTML"` so HTMX requests replace only the form/status section fragment.
+* Use `hx-disabled-elt="button[type='submit']"` to prevent duplicate submits during in-flight requests.
+* Use PicoCSS loading on submit buttons by toggling `aria-busy` from HTMX form lifecycle hooks (`hx-on::before-request` and `hx-on::after-request`).
+* In handlers, return full-page render/PRG redirects for regular requests, and fragment responses for `HX-Request`.
+* For success navigation on HTMX requests, return `HX-Redirect` while preserving the same destination as the non-HTMX redirect flow.
+
 ## Database Workflow
 
 The default database path is:

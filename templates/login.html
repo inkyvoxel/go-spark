@@ -17,7 +17,10 @@
     action="/login"
     hx-post="/login"
     hx-target="#login-form-section"
-    hx-swap="outerHTML">
+    hx-swap="outerHTML"
+    hx-disabled-elt="button[type='submit']"
+    hx-on::before-request="this.querySelector('button[type=submit]').setAttribute('aria-busy','true')"
+    hx-on::after-request="this.querySelector('button[type=submit]').removeAttribute('aria-busy')">
     <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
     {{ if .Next }}<input type="hidden" name="next" value="{{ .Next }}">{{ end }}
     <label>
