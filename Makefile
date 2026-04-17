@@ -1,4 +1,4 @@
-.PHONY: run test fmt tidy sqlc migrate-up migrate-down migrate-status tools
+.PHONY: run test fmt tidy sqlc vulncheck migrate-up migrate-down migrate-status tools
 
 DB_PATH ?= ./data/app.db
 GOOSE_DRIVER ?= sqlite3
@@ -20,6 +20,9 @@ tidy:
 sqlc:
 	go tool sqlc generate
 
+vulncheck:
+	go tool govulncheck ./...
+
 migrate-up:
 	mkdir -p $(dir $(DB_PATH))
 	go tool goose -dir $(GOOSE_MIGRATION_DIR) $(GOOSE_DRIVER) "$(GOOSE_DBSTRING)" up
@@ -35,3 +38,4 @@ migrate-status:
 tools:
 	go tool sqlc version
 	go tool goose --version
+	go tool govulncheck -h >/dev/null 2>&1
