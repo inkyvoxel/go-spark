@@ -67,10 +67,10 @@ func (s *Server) register(w http.ResponseWriter, r *http.Request) {
 		data.Error = "Check your details and try again."
 		data.FieldErrors = fieldErrors
 		if isHXRequest(r) {
-			s.renderFragmentStatus(w, http.StatusBadRequest, "register.html", "register_form_section", data)
+			s.renderFragmentStatus(w, http.StatusUnprocessableEntity, "register.html", "register_form_section", data)
 			return
 		}
-		s.renderStatus(w, http.StatusBadRequest, "register.html", data)
+		s.renderStatus(w, http.StatusUnprocessableEntity, "register.html", data)
 		return
 	}
 
@@ -126,10 +126,10 @@ func (s *Server) forgotPassword(w http.ResponseWriter, r *http.Request) {
 			data.Error = "Check your details and try again."
 			data.FieldErrors = map[string]string{"email": "Enter a valid email address."}
 			if isHXRequest(r) {
-				s.renderFragmentStatus(w, http.StatusBadRequest, "forgot_password.html", "forgot_password_form_section", data)
+				s.renderFragmentStatus(w, http.StatusUnprocessableEntity, "forgot_password.html", "forgot_password_form_section", data)
 				return
 			}
-			s.renderStatus(w, http.StatusBadRequest, "forgot_password.html", data)
+			s.renderStatus(w, http.StatusUnprocessableEntity, "forgot_password.html", data)
 			return
 		}
 
@@ -301,7 +301,7 @@ func (s *Server) changePassword(w http.ResponseWriter, r *http.Request) {
 		data := s.newTemplateData(r, "Account")
 		data.Error = "Check your details and try again."
 		data.FieldErrors = fieldErrors
-		s.renderStatus(w, http.StatusBadRequest, "account.html", data)
+		s.renderStatus(w, http.StatusUnprocessableEntity, "account.html", data)
 		return
 	}
 
@@ -311,15 +311,15 @@ func (s *Server) changePassword(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case errors.Is(err, services.ErrCurrentPasswordIncorrect):
 			data.FieldErrors = map[string]string{"current_password": "Current password is not correct."}
-			s.renderStatus(w, http.StatusBadRequest, "account.html", data)
+			s.renderStatus(w, http.StatusUnprocessableEntity, "account.html", data)
 			return
 		case errors.Is(err, services.ErrInvalidPassword):
 			data.FieldErrors = map[string]string{"new_password": fmt.Sprintf("Use at least %d characters.", data.PasswordMinLength)}
-			s.renderStatus(w, http.StatusBadRequest, "account.html", data)
+			s.renderStatus(w, http.StatusUnprocessableEntity, "account.html", data)
 			return
 		case errors.Is(err, services.ErrPasswordUnchanged):
 			data.FieldErrors = map[string]string{"new_password": "Choose a different password."}
-			s.renderStatus(w, http.StatusBadRequest, "account.html", data)
+			s.renderStatus(w, http.StatusUnprocessableEntity, "account.html", data)
 			return
 		default:
 			s.logger.Error("change password", "user_id", user.ID, "err", err)
@@ -348,7 +348,7 @@ func (s *Server) resetPassword(w http.ResponseWriter, r *http.Request) {
 		data.ResetToken = token
 		data.Error = "Check your details and try again."
 		data.FieldErrors = fieldErrors
-		s.renderStatus(w, http.StatusBadRequest, "reset_password.html", data)
+		s.renderStatus(w, http.StatusUnprocessableEntity, "reset_password.html", data)
 		return
 	}
 
@@ -364,7 +364,7 @@ func (s *Server) resetPassword(w http.ResponseWriter, r *http.Request) {
 			return
 		case errors.Is(err, services.ErrInvalidPassword):
 			data.FieldErrors = map[string]string{"new_password": fmt.Sprintf("Use at least %d characters.", data.PasswordMinLength)}
-			s.renderStatus(w, http.StatusBadRequest, "reset_password.html", data)
+			s.renderStatus(w, http.StatusUnprocessableEntity, "reset_password.html", data)
 			return
 		default:
 			s.logger.Error("reset password", "err", err)
@@ -390,10 +390,10 @@ func (s *Server) resendVerificationPublic(w http.ResponseWriter, r *http.Request
 			data.Error = "Check your details and try again."
 			data.FieldErrors = map[string]string{"email": "Enter a valid email address."}
 			if isHXRequest(r) {
-				s.renderFragmentStatus(w, http.StatusBadRequest, "resend_verification.html", "resend_verification_form_section", data)
+				s.renderFragmentStatus(w, http.StatusUnprocessableEntity, "resend_verification.html", "resend_verification_form_section", data)
 				return
 			}
-			s.renderStatus(w, http.StatusBadRequest, "resend_verification.html", data)
+			s.renderStatus(w, http.StatusUnprocessableEntity, "resend_verification.html", data)
 			return
 		}
 
@@ -429,24 +429,24 @@ func (s *Server) handleAuthFormError(w http.ResponseWriter, r *http.Request, tem
 	if errors.Is(err, services.ErrInvalidEmail) {
 		data.Error = "Check your details and try again."
 		data.FieldErrors = map[string]string{"email": "Enter a valid email address."}
-		render(http.StatusBadRequest, data)
+		render(http.StatusUnprocessableEntity, data)
 		return
 	}
 	if errors.Is(err, services.ErrInvalidPassword) {
 		data.Error = "Check your details and try again."
 		data.FieldErrors = map[string]string{"password": fmt.Sprintf("Use at least %d characters.", data.PasswordMinLength)}
-		render(http.StatusBadRequest, data)
+		render(http.StatusUnprocessableEntity, data)
 		return
 	}
 	if errors.Is(err, services.ErrEmailAlreadyRegistered) {
 		data.Error = "Check your details and try again."
 		data.FieldErrors = map[string]string{"email": "An account with this email already exists."}
-		render(http.StatusBadRequest, data)
+		render(http.StatusUnprocessableEntity, data)
 		return
 	}
 	if errors.Is(err, services.ErrInvalidCredentials) {
 		data.Error = "Email or password is not correct."
-		render(http.StatusBadRequest, data)
+		render(http.StatusUnprocessableEntity, data)
 		return
 	}
 

@@ -1,7 +1,7 @@
 {{ define "content" }}
 <article>
   {{ if .Error }}
-  <h1>Email link expired</h1>
+  <h1>Invalid confirmation link</h1>
   <p role="alert">{{ .Error }}</p>
   {{ if .Authenticated }}
   <p><a href="/account">Go to your account</a></p>

@@ -70,7 +70,7 @@ static/vendor
 
 This keeps local development independent from CDN availability and makes runtime assets visible in the repository. When intentionally upgrading a vendored asset, replace the file in `static/vendor`, verify the app in a browser, and commit the asset change with the code that depends on it.
 
-HTMX response swapping is configured in `templates/layout.html` via `meta[name="htmx-config"]`. We currently allow swaps for HTTP `400` responses so server-side validation fragments render inline, while other `4xx/5xx` responses keep the default non-swap behavior.
+HTMX response swapping is configured in `templates/layout.html` via `meta[name="htmx-config"]`. We currently allow swaps for HTTP `422` responses so server-side validation fragments render inline, while malformed requests can still use HTTP `400` and other `4xx/5xx` responses keep the default non-swap behavior.
 
 ## Database Workflow
 

@@ -115,8 +115,8 @@ func TestRoutesLoginHTMXRejectsInvalidCredentials(t *testing.T) {
 
 	srv.Routes().ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+	if rec.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusUnprocessableEntity)
 	}
 	if location := rec.Header().Get("Location"); location != "" {
 		t.Fatalf("Location = %q, want empty for HTMX fragment", location)
@@ -420,8 +420,8 @@ func TestRoutesRegisterRejectsMismatchedPasswordConfirmation(t *testing.T) {
 
 	srv.Routes().ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+	if rec.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusUnprocessableEntity)
 	}
 	if auth.registered {
 		t.Fatal("Register() was called")
@@ -449,8 +449,8 @@ func TestRoutesRegisterHTMXRejectsMismatchedPasswordConfirmation(t *testing.T) {
 
 	srv.Routes().ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+	if rec.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusUnprocessableEntity)
 	}
 	if location := rec.Header().Get("Location"); location != "" {
 		t.Fatalf("Location = %q, want empty for HTMX fragment", location)
@@ -483,8 +483,8 @@ func TestRoutesRegisterHTMXShowsServiceValidationErrors(t *testing.T) {
 
 	srv.Routes().ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+	if rec.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusUnprocessableEntity)
 	}
 	if location := rec.Header().Get("Location"); location != "" {
 		t.Fatalf("Location = %q, want empty for HTMX fragment", location)
@@ -509,8 +509,8 @@ func TestRoutesRegisterValidatesRequiredFields(t *testing.T) {
 
 	srv.Routes().ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+	if rec.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusUnprocessableEntity)
 	}
 	if auth.registered {
 		t.Fatal("Register() was called")
@@ -542,8 +542,8 @@ func TestRoutesRegisterShowsServiceValidationErrors(t *testing.T) {
 
 	srv.Routes().ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+	if rec.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusUnprocessableEntity)
 	}
 	if !strings.Contains(rec.Body.String(), "An account with this email already exists.") {
 		t.Fatalf("body = %q, want duplicate email error", rec.Body.String())
@@ -1001,8 +1001,8 @@ func TestRoutesChangePasswordValidatesFields(t *testing.T) {
 
 	srv.Routes().ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+	if rec.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusUnprocessableEntity)
 	}
 	if auth.changePasswordCalled {
 		t.Fatal("ChangePassword() was called")
@@ -1036,8 +1036,8 @@ func TestRoutesChangePasswordRejectsIncorrectCurrentPassword(t *testing.T) {
 
 	srv.Routes().ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+	if rec.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusUnprocessableEntity)
 	}
 	body := rec.Body.String()
 	if !strings.Contains(body, "Current password is not correct.") {
@@ -1152,8 +1152,8 @@ func TestRoutesPublicResendVerificationRejectsInvalidEmail(t *testing.T) {
 
 	srv.Routes().ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+	if rec.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusUnprocessableEntity)
 	}
 	if !strings.Contains(rec.Body.String(), "Enter a valid email address.") {
 		t.Fatalf("body = %q, want invalid email message", rec.Body.String())
@@ -1259,8 +1259,8 @@ func TestRoutesPublicResendVerificationHTMXRejectsInvalidEmail(t *testing.T) {
 
 	srv.Routes().ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+	if rec.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusUnprocessableEntity)
 	}
 	if location := rec.Header().Get("Location"); location != "" {
 		t.Fatalf("Location = %q, want empty for HTMX fragment", location)
@@ -1364,8 +1364,8 @@ func TestRoutesForgotPasswordRejectsInvalidEmail(t *testing.T) {
 
 	srv.Routes().ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+	if rec.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusUnprocessableEntity)
 	}
 	if !strings.Contains(rec.Body.String(), "Enter a valid email address.") {
 		t.Fatalf("body = %q, want invalid email message", rec.Body.String())
@@ -1471,8 +1471,8 @@ func TestRoutesForgotPasswordHTMXRejectsInvalidEmail(t *testing.T) {
 
 	srv.Routes().ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+	if rec.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusUnprocessableEntity)
 	}
 	if location := rec.Header().Get("Location"); location != "" {
 		t.Fatalf("Location = %q, want empty for HTMX fragment", location)
@@ -1598,8 +1598,8 @@ func TestRoutesResetPasswordValidatesFields(t *testing.T) {
 
 	srv.Routes().ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+	if rec.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusUnprocessableEntity)
 	}
 	body := rec.Body.String()
 	for _, want := range []string{"Enter a password.", "Confirm your password."} {
