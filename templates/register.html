@@ -1,8 +1,20 @@
 {{ define "content" }}
 <article>
   <h1>Create account</h1>
+  {{ template "register_form_section" . }}
+  <p><a href="/login">Sign in instead</a></p>
+</article>
+{{ end }}
+
+{{ define "register_form_section" }}
+<section id="register-form-section">
   {{ if .Error }}<p role="alert">{{ .Error }}</p>{{ end }}
-  <form method="post" action="/register">
+  <form
+    method="post"
+    action="/register"
+    hx-post="/register"
+    hx-target="#register-form-section"
+    hx-swap="outerHTML">
     <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
     <label>
       Email
@@ -40,6 +52,5 @@
     </label>
     <button type="submit">Create account</button>
   </form>
-  <p><a href="/login">Sign in instead</a></p>
-</article>
+</section>
 {{ end }}

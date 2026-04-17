@@ -1,9 +1,23 @@
 {{ define "content" }}
 <article>
   <h1>Sign in</h1>
+  {{ template "login_form_section" . }}
+  <p><a href="/register">Create an account</a></p>
+  <p><a href="/forgot-password">Forgot your password?</a></p>
+  <p><a href="/resend-verification">Resend verification email</a></p>
+</article>
+{{ end }}
+
+{{ define "login_form_section" }}
+<section id="login-form-section">
   {{ if eq .LoginStatus "password-changed" }}<p role="status">Your password has changed. Sign in with your new password.</p>{{ end }}
   {{ if .Error }}<p role="alert">{{ .Error }}</p>{{ end }}
-  <form method="post" action="/login">
+  <form
+    method="post"
+    action="/login"
+    hx-post="/login"
+    hx-target="#login-form-section"
+    hx-swap="outerHTML">
     <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
     {{ if .Next }}<input type="hidden" name="next" value="{{ .Next }}">{{ end }}
     <label>
@@ -14,16 +28,21 @@
         value="{{ .Email }}"
         autocomplete="email"
         pattern="{{ .EmailPattern }}"
+        {{ if index .FieldErrors "email" }}aria-invalid="true"{{ end }}
         required>
+      {{ with index .FieldErrors "email" }}<small role="alert">{{ . }}</small>{{ end }}
     </label>
     <label>
       Password
-      <input type="password" name="password" autocomplete="current-password" required>
+      <input
+        type="password"
+        name="password"
+        autocomplete="current-password"
+        {{ if index .FieldErrors "password" }}aria-invalid="true"{{ end }}
+        required>
+      {{ with index .FieldErrors "password" }}<small role="alert">{{ . }}</small>{{ end }}
     </label>
     <button type="submit">Sign in</button>
   </form>
-  <p><a href="/register">Create an account</a></p>
-  <p><a href="/forgot-password">Forgot your password?</a></p>
-  <p><a href="/resend-verification">Resend verification email</a></p>
-</article>
+</section>
 {{ end }}

@@ -58,6 +58,77 @@ func TestRoutesLogin(t *testing.T) {
 	}
 }
 
+func TestRoutesLoginHTMXReturnsRedirectHeaderAndSession(t *testing.T) {
+	auth := &fakeAuthLookup{
+		user: db.User{ID: 1, Email: "user@example.com"},
+		loginSession: db.Session{
+			Token:     "session-token",
+			ExpiresAt: time.Now().Add(time.Hour),
+		},
+	}
+	srv := newAuthRouteTestServer(t, auth)
+
+	form := url.Values{
+		"email":       []string{"user@example.com"},
+		"password":    []string{"password"},
+		csrfFieldName: []string{"csrf"},
+	}
+	req := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("HX-Request", "true")
+	req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: "csrf"})
+	rec := httptest.NewRecorder()
+
+	srv.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	if location := rec.Header().Get("Location"); location != "" {
+		t.Fatalf("Location = %q, want empty for HTMX redirect", location)
+	}
+	if redirect := rec.Header().Get("HX-Redirect"); redirect != "/account" {
+		t.Fatalf("HX-Redirect = %q, want %q", redirect, "/account")
+	}
+	session := cookieFromRecorder(t, rec, sessionCookieName)
+	if session.Value != "session-token" {
+		t.Fatalf("session cookie = %q, want %q", session.Value, "session-token")
+	}
+}
+
+func TestRoutesLoginHTMXRejectsInvalidCredentials(t *testing.T) {
+	auth := &fakeAuthLookup{
+		loginErr: services.ErrInvalidCredentials,
+	}
+	srv := newAuthRouteTestServer(t, auth)
+
+	form := url.Values{
+		"email":       []string{"user@example.com"},
+		"password":    []string{"wrong-password"},
+		csrfFieldName: []string{"csrf"},
+	}
+	req := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("HX-Request", "true")
+	req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: "csrf"})
+	rec := httptest.NewRecorder()
+
+	srv.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+	}
+	if location := rec.Header().Get("Location"); location != "" {
+		t.Fatalf("Location = %q, want empty for HTMX fragment", location)
+	}
+	if redirect := rec.Header().Get("HX-Redirect"); redirect != "" {
+		t.Fatalf("HX-Redirect = %q, want empty for invalid credentials", redirect)
+	}
+	if !strings.Contains(rec.Body.String(), "Email or password is not correct.") {
+		t.Fatalf("body = %q, want invalid credentials error", rec.Body.String())
+	}
+}
+
 func TestRoutesLoginSetsSecureSessionCookieWhenConfigured(t *testing.T) {
 	auth := &fakeAuthLookup{
 		user: db.User{ID: 1, Email: "user@example.com"},
@@ -290,6 +361,48 @@ func TestRoutesRegister(t *testing.T) {
 	}
 }
 
+func TestRoutesRegisterHTMXReturnsRedirectHeaderAndSession(t *testing.T) {
+	auth := &fakeAuthLookup{
+		user: db.User{ID: 1, Email: "new@example.com"},
+		loginSession: db.Session{
+			Token:     "new-session-token",
+			ExpiresAt: time.Now().Add(time.Hour),
+		},
+	}
+	srv := newAuthRouteTestServer(t, auth)
+
+	form := url.Values{
+		"email":            []string{"new@example.com"},
+		"password":         []string{"password"},
+		"confirm_password": []string{"password"},
+		csrfFieldName:      []string{"csrf"},
+	}
+	req := httptest.NewRequest(http.MethodPost, "/register", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("HX-Request", "true")
+	req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: "csrf"})
+	rec := httptest.NewRecorder()
+
+	srv.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	if location := rec.Header().Get("Location"); location != "" {
+		t.Fatalf("Location = %q, want empty for HTMX redirect", location)
+	}
+	if redirect := rec.Header().Get("HX-Redirect"); redirect != "/account" {
+		t.Fatalf("HX-Redirect = %q, want %q", redirect, "/account")
+	}
+	if !auth.registered {
+		t.Fatal("Register() was not called")
+	}
+	session := cookieFromRecorder(t, rec, sessionCookieName)
+	if session.Value != "new-session-token" {
+		t.Fatalf("session cookie = %q, want %q", session.Value, "new-session-token")
+	}
+}
+
 func TestRoutesRegisterRejectsMismatchedPasswordConfirmation(t *testing.T) {
 	auth := &fakeAuthLookup{}
 	srv := newAuthRouteTestServer(t, auth)
@@ -315,6 +428,72 @@ func TestRoutesRegisterRejectsMismatchedPasswordConfirmation(t *testing.T) {
 	}
 	if !strings.Contains(rec.Body.String(), "Passwords do not match.") {
 		t.Fatalf("body = %q, want confirmation error", rec.Body.String())
+	}
+}
+
+func TestRoutesRegisterHTMXRejectsMismatchedPasswordConfirmation(t *testing.T) {
+	auth := &fakeAuthLookup{}
+	srv := newAuthRouteTestServer(t, auth)
+
+	form := url.Values{
+		"email":            []string{"new@example.com"},
+		"password":         []string{"password"},
+		"confirm_password": []string{"different"},
+		csrfFieldName:      []string{"csrf"},
+	}
+	req := httptest.NewRequest(http.MethodPost, "/register", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("HX-Request", "true")
+	req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: "csrf"})
+	rec := httptest.NewRecorder()
+
+	srv.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+	}
+	if location := rec.Header().Get("Location"); location != "" {
+		t.Fatalf("Location = %q, want empty for HTMX fragment", location)
+	}
+	if redirect := rec.Header().Get("HX-Redirect"); redirect != "" {
+		t.Fatalf("HX-Redirect = %q, want empty for validation error", redirect)
+	}
+	if !strings.Contains(rec.Body.String(), "Passwords do not match.") {
+		t.Fatalf("body = %q, want confirmation error", rec.Body.String())
+	}
+}
+
+func TestRoutesRegisterHTMXShowsServiceValidationErrors(t *testing.T) {
+	auth := &fakeAuthLookup{
+		registerErr: services.ErrEmailAlreadyRegistered,
+	}
+	srv := newAuthRouteTestServer(t, auth)
+
+	form := url.Values{
+		"email":            []string{"new@example.com"},
+		"password":         []string{"password"},
+		"confirm_password": []string{"password"},
+		csrfFieldName:      []string{"csrf"},
+	}
+	req := httptest.NewRequest(http.MethodPost, "/register", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("HX-Request", "true")
+	req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: "csrf"})
+	rec := httptest.NewRecorder()
+
+	srv.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+	}
+	if location := rec.Header().Get("Location"); location != "" {
+		t.Fatalf("Location = %q, want empty for HTMX fragment", location)
+	}
+	if redirect := rec.Header().Get("HX-Redirect"); redirect != "" {
+		t.Fatalf("HX-Redirect = %q, want empty for validation error", redirect)
+	}
+	if !strings.Contains(rec.Body.String(), "An account with this email already exists.") {
+		t.Fatalf("body = %q, want duplicate email error", rec.Body.String())
 	}
 }
 
@@ -1501,8 +1680,8 @@ func newAuthRouteTestServer(t *testing.T, auth authService) *Server {
 		logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
 		templates: testTemplates(t, map[string]string{
 			"home.html":                `home {{ if .Authenticated }}Account Sign out {{ .User.Email }}{{ else }}Sign in Create account{{ end }}`,
-			"register.html":            `register {{ .Error }} {{ with index .FieldErrors "email" }}{{ . }}{{ end }} {{ with index .FieldErrors "password" }}{{ . }}{{ end }} {{ with index .FieldErrors "confirm_password" }}{{ . }}{{ end }} {{ .Email }} {{ .PasswordMinLength }} {{ .CSRFToken }}`,
-			"login.html":               `login {{ .Error }} {{ .CSRFToken }} {{ .Next }} login-status={{ .LoginStatus }} /forgot-password /resend-verification`,
+			"register.html":            `{{ define "content" }}{{ template "register_form_section" . }}{{ end }}{{ define "register_form_section" }}register {{ .Error }} {{ with index .FieldErrors "email" }}{{ . }}{{ end }} {{ with index .FieldErrors "password" }}{{ . }}{{ end }} {{ with index .FieldErrors "confirm_password" }}{{ . }}{{ end }} {{ .Email }} {{ .PasswordMinLength }} {{ .CSRFToken }}{{ end }}`,
+			"login.html":               `{{ define "content" }}{{ template "login_form_section" . }} /forgot-password /resend-verification{{ end }}{{ define "login_form_section" }}login {{ .Error }} {{ with index .FieldErrors "email" }}{{ . }}{{ end }} {{ with index .FieldErrors "password" }}{{ . }}{{ end }} {{ .CSRFToken }} {{ .Next }} login-status={{ .LoginStatus }}{{ end }}`,
 			"account.html":             `{{ define "content" }}account {{ .Error }} {{ with index .FieldErrors "current_password" }}{{ . }}{{ end }} {{ with index .FieldErrors "new_password" }}{{ . }}{{ end }} {{ with index .FieldErrors "confirm_password" }}{{ . }}{{ end }} {{ .User.Email }} {{ .CSRFToken }} change-password-visible {{ if not .User.EmailVerifiedAt.Valid }}resend-visible check-email-visible{{ end }} {{ template "account_resend_section" . }}{{ end }}{{ define "account_resend_section" }}resend-status={{ .ResendStatus }}{{ end }}`,
 			"confirm_email.html":       `confirm {{ if .Error }}{{ .Error }} {{ if .Authenticated }}Go to your account{{ else }}Sign in{{ end }}{{ else }}Email confirmed{{ end }}`,
 			"forgot_password.html":     `{{ define "content" }}{{ template "forgot_password_form_section" . }}{{ end }}{{ define "forgot_password_form_section" }}forgot-form {{ .Error }} {{ with index .FieldErrors "email" }}{{ . }}{{ end }} {{ .Email }} forgot-status={{ .ForgotPasswordStatus }} {{ .CSRFToken }}{{ end }}`,

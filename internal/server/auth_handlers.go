@@ -66,6 +66,10 @@ func (s *Server) register(w http.ResponseWriter, r *http.Request) {
 		data.Email = strings.TrimSpace(email)
 		data.Error = "Check your details and try again."
 		data.FieldErrors = fieldErrors
+		if isHXRequest(r) {
+			s.renderFragmentStatus(w, http.StatusBadRequest, "register.html", "register_form_section", data)
+			return
+		}
 		s.renderStatus(w, http.StatusBadRequest, "register.html", data)
 		return
 	}
@@ -73,7 +77,7 @@ func (s *Server) register(w http.ResponseWriter, r *http.Request) {
 	if _, err := s.auth.Register(r.Context(), email, password); err != nil {
 		data := s.newTemplateData(r, "Create Account")
 		data.Email = strings.TrimSpace(email)
-		s.handleAuthFormError(w, "register.html", data, err)
+		s.handleAuthFormError(w, r, "register.html", "register_form_section", data, err)
 		return
 	}
 
@@ -81,12 +85,12 @@ func (s *Server) register(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		data := s.newTemplateData(r, "Create Account")
 		data.Email = strings.TrimSpace(email)
-		s.handleAuthFormError(w, "register.html", data, err)
+		s.handleAuthFormError(w, r, "register.html", "register_form_section", data, err)
 		return
 	}
 
 	s.setSessionCookie(w, r, session)
-	http.Redirect(w, r, "/account", http.StatusSeeOther)
+	s.redirectWithHTMX(w, r, "/account")
 }
 
 func (s *Server) loginForm(w http.ResponseWriter, r *http.Request) {
@@ -207,7 +211,7 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 		data := s.newTemplateData(r, "Sign In")
 		data.Email = strings.TrimSpace(r.FormValue("email"))
 		data.Next = safeRedirectPath(r.FormValue("next"))
-		s.handleAuthFormError(w, "login.html", data, err)
+		s.handleAuthFormError(w, r, "login.html", "login_form_section", data, err)
 		return
 	}
 
@@ -217,7 +221,7 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.setSessionCookie(w, r, session)
-	http.Redirect(w, r, next, http.StatusSeeOther)
+	s.redirectWithHTMX(w, r, next)
 }
 
 func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
@@ -413,33 +417,51 @@ func (s *Server) resendVerificationPublic(w http.ResponseWriter, r *http.Request
 	http.Redirect(w, r, "/resend-verification?status=sent", http.StatusSeeOther)
 }
 
-func (s *Server) handleAuthFormError(w http.ResponseWriter, templateName string, data templateData, err error) {
+func (s *Server) handleAuthFormError(w http.ResponseWriter, r *http.Request, templateName, fragmentName string, data templateData, err error) {
+	render := func(status int, data templateData) {
+		if isHXRequest(r) {
+			s.renderFragmentStatus(w, status, templateName, fragmentName, data)
+			return
+		}
+		s.renderStatus(w, status, templateName, data)
+	}
+
 	if errors.Is(err, services.ErrInvalidEmail) {
 		data.Error = "Check your details and try again."
 		data.FieldErrors = map[string]string{"email": "Enter a valid email address."}
-		s.renderStatus(w, http.StatusBadRequest, templateName, data)
+		render(http.StatusBadRequest, data)
 		return
 	}
 	if errors.Is(err, services.ErrInvalidPassword) {
 		data.Error = "Check your details and try again."
 		data.FieldErrors = map[string]string{"password": fmt.Sprintf("Use at least %d characters.", data.PasswordMinLength)}
-		s.renderStatus(w, http.StatusBadRequest, templateName, data)
+		render(http.StatusBadRequest, data)
 		return
 	}
 	if errors.Is(err, services.ErrEmailAlreadyRegistered) {
 		data.Error = "Check your details and try again."
 		data.FieldErrors = map[string]string{"email": "An account with this email already exists."}
-		s.renderStatus(w, http.StatusBadRequest, templateName, data)
+		render(http.StatusBadRequest, data)
 		return
 	}
 	if errors.Is(err, services.ErrInvalidCredentials) {
 		data.Error = "Email or password is not correct."
-		s.renderStatus(w, http.StatusBadRequest, templateName, data)
+		render(http.StatusBadRequest, data)
 		return
 	}
 
 	s.logger.Error("auth form", "err", err)
 	http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+}
+
+func (s *Server) redirectWithHTMX(w http.ResponseWriter, r *http.Request, destination string) {
+	if isHXRequest(r) {
+		w.Header().Set("HX-Redirect", destination)
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	http.Redirect(w, r, destination, http.StatusSeeOther)
 }
 
 func (s *Server) validateRegistrationForm(email, password, confirmPassword string) map[string]string {
