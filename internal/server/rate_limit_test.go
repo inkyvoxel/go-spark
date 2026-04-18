@@ -9,6 +9,7 @@ import (
 	"time"
 
 	db "github.com/inkyvoxel/go-spark/internal/db/generated"
+	"github.com/inkyvoxel/go-spark/internal/paths"
 )
 
 func TestInMemoryRateLimiterAllowWithinLimitThenDeny(t *testing.T) {
@@ -124,27 +125,27 @@ func TestRouteRateLimitProtectedPostRoutesReturn429AfterThreshold(t *testing.T) 
 	}{
 		{
 			name: "login",
-			path: "/login",
+			path: paths.Login,
 			form: url.Values{"email": []string{"user@example.com"}, "password": []string{"password"}},
 		},
 		{
 			name: "register",
-			path: "/register",
+			path: paths.Register,
 			form: url.Values{"email": []string{"new@example.com"}, "password": []string{"password123"}, "confirm_password": []string{"password123"}},
 		},
 		{
 			name: "forgot-password",
-			path: "/account/forgot-password",
+			path: paths.ForgotPassword,
 			form: url.Values{"email": []string{"user@example.com"}},
 		},
 		{
 			name: "resend-verification-public",
-			path: "/account/resend-verification",
+			path: paths.ResendVerification,
 			form: url.Values{"email": []string{"user@example.com"}},
 		},
 		{
 			name:         "resend-verification-account",
-			path:         "/account/verify-email/resend",
+			path:         paths.VerifyEmailResend,
 			form:         url.Values{},
 			sessionToken: "session-token",
 		},
@@ -176,17 +177,17 @@ func TestRouteRateLimitKeyingByIPAndEmail(t *testing.T) {
 	}
 	routes := srv.Routes()
 
-	first := postFormWithCSRF(routes, "/account/forgot-password", url.Values{"email": []string{"a@example.com"}}, "")
+	first := postFormWithCSRF(routes, paths.ForgotPassword, url.Values{"email": []string{"a@example.com"}}, "")
 	if first.Code == http.StatusTooManyRequests {
 		t.Fatalf("first status = %d, want non-429", first.Code)
 	}
 
-	second := postFormWithCSRF(routes, "/account/forgot-password", url.Values{"email": []string{"a@example.com"}}, "")
+	second := postFormWithCSRF(routes, paths.ForgotPassword, url.Values{"email": []string{"a@example.com"}}, "")
 	if second.Code != http.StatusTooManyRequests {
 		t.Fatalf("second status = %d, want %d", second.Code, http.StatusTooManyRequests)
 	}
 
-	third := postFormWithCSRF(routes, "/account/forgot-password", url.Values{"email": []string{"b@example.com"}}, "")
+	third := postFormWithCSRF(routes, paths.ForgotPassword, url.Values{"email": []string{"b@example.com"}}, "")
 	if third.Code == http.StatusTooManyRequests {
 		t.Fatalf("third status = %d, want non-429 for different email", third.Code)
 	}
@@ -200,19 +201,19 @@ func TestRouteRateLimitKeyingByIPAndUser(t *testing.T) {
 	}
 	routes := srv.Routes()
 
-	first := postFormWithCSRF(routes, "/account/verify-email/resend", url.Values{}, "session-token")
+	first := postFormWithCSRF(routes, paths.VerifyEmailResend, url.Values{}, "session-token")
 	if first.Code == http.StatusTooManyRequests {
 		t.Fatalf("first status = %d, want non-429", first.Code)
 	}
 
 	auth.user = db.User{ID: 2, Email: "user2@example.com"}
-	second := postFormWithCSRF(routes, "/account/verify-email/resend", url.Values{}, "session-token")
+	second := postFormWithCSRF(routes, paths.VerifyEmailResend, url.Values{}, "session-token")
 	if second.Code == http.StatusTooManyRequests {
 		t.Fatalf("second status = %d, want non-429 for different user", second.Code)
 	}
 
 	auth.user = db.User{ID: 1, Email: "user1@example.com"}
-	third := postFormWithCSRF(routes, "/account/verify-email/resend", url.Values{}, "session-token")
+	third := postFormWithCSRF(routes, paths.VerifyEmailResend, url.Values{}, "session-token")
 	if third.Code != http.StatusTooManyRequests {
 		t.Fatalf("third status = %d, want %d for original user", third.Code, http.StatusTooManyRequests)
 	}

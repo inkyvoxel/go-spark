@@ -2,13 +2,13 @@
 
 This document outlines a staged email architecture for Go Spark.
 
-The first email use case is account confirmation. The design should keep request handlers fast, avoid provider lock-in, and stay small enough for a starter template.
+The first email use cases are account confirmation and password reset. The design should keep request handlers fast, avoid provider lock-in, and stay small enough for a starter template.
 
-Current baseline in this starter: account confirmation emails are implemented, including confirmation tokens, resend support for signed-in unverified users, and a database-backed outbox worker.
+Current baseline in this starter: account confirmation and password reset emails are implemented, including hashed tokens, resend support, and a database-backed outbox worker.
 
 ## Goals
 
-* Send account confirmation emails without blocking web requests on provider calls.
+* Send account confirmation and password reset emails without blocking web requests on provider calls.
 * Keep email delivery intent durable across process restarts.
 * Keep business logic independent from email providers.
 * Use simple Go interfaces and explicit SQL instead of a background job framework.
@@ -26,11 +26,12 @@ Current baseline in this starter: account confirmation emails are implemented, i
 
 Use three separate concerns:
 
-* Account/auth services own account verification rules.
+* Account/auth services own account verification and password reset rules.
 * An email package owns message types and provider sending.
-* The database layer owns persistence for verification tokens and email outbox rows.
+* The database layer owns persistence for verification/reset tokens and email outbox rows.
+* `internal/paths` owns canonical public URL paths used in email links.
 
-The request path should create the user, create a verification token, and enqueue an email row in the database. A small worker should send queued emails outside the request path.
+The request path should create the relevant token and enqueue an email row in the database. A small worker should send queued emails outside the request path.
 
 This is close to a queue, but the queue is just a database table. That is a good starting point for this template because it is durable, understandable, and does not require extra infrastructure.
 
@@ -41,6 +42,7 @@ Suggested package boundaries:
 ```text
 /cmd/app              wires config, database, services, sender, and worker
 /internal/email       message types, sender interface, sender adapters, worker
+/internal/paths       canonical public URL path constants for links
 /internal/services    auth/account verification business logic
 /internal/database    SQLite-backed stores and driver-specific behavior
 /internal/db          SQL queries and sqlc-generated code
@@ -89,6 +91,22 @@ CREATE TABLE email_verification_tokens (
 
 Store only the token hash. The raw token should be generated once, included in the email URL, and never persisted.
 
+Add password reset tokens:
+
+```sql
+CREATE TABLE password_reset_tokens (
+    id INTEGER PRIMARY KEY,
+    user_id INTEGER NOT NULL,
+    token_hash TEXT NOT NULL UNIQUE,
+    expires_at TIMESTAMP NOT NULL,
+    consumed_at TIMESTAMP,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id)
+);
+```
+
+Store only the token hash. The raw reset token should be generated once, included in the email URL, and never persisted.
+
 Add an email outbox:
 
 ```sql
@@ -113,6 +131,8 @@ Useful indexes:
 ```sql
 CREATE INDEX email_verification_tokens_user_id_idx ON email_verification_tokens(user_id);
 CREATE INDEX email_verification_tokens_token_hash_idx ON email_verification_tokens(token_hash);
+CREATE INDEX password_reset_tokens_user_id_idx ON password_reset_tokens(user_id);
+CREATE INDEX password_reset_tokens_token_hash_idx ON password_reset_tokens(token_hash);
 CREATE INDEX email_outbox_pending_idx ON email_outbox(status, available_at);
 ```
 
@@ -135,7 +155,27 @@ Confirmation should:
 4. Set `users.email_verified_at`.
 5. Render a clear success or invalid-token page.
 
-The app can allow sign-in before verification at first. If a project needs stricter behavior, add route or service checks later.
+Unverified users may sign in, but verified-only account features are protected by `requireVerifiedAuth`. Unverified users are redirected to `/account/verify-email`, where they can resend confirmation email or log out.
+
+## Password Reset Flow
+
+Requesting a reset should:
+
+1. Accept an email address without revealing whether it exists.
+2. Generate a random reset token for a matching account.
+3. Store a hash of the token with an expiry.
+4. Build a reset URL using the configured application base URL and canonical reset path.
+5. Enqueue an email in `email_outbox`.
+6. Return the same user-facing response whether or not the email exists.
+
+Reset confirmation should:
+
+1. Accept the raw token from the reset URL.
+2. Hash the token and look up an unexpired, unconsumed token row.
+3. Validate and store the new password.
+4. Mark the reset token consumed.
+5. Revoke existing sessions for the user.
+6. Redirect the user to sign in.
 
 ## Delivery Model
 
@@ -194,6 +234,7 @@ Add `internal/email` with:
 * `Sender`
 * `LogSender`
 * message construction helpers for account confirmation
+* message construction helpers for password reset
 
 Add config for:
 
@@ -209,6 +250,7 @@ Add:
 
 * `users.email_verified_at`
 * `email_verification_tokens`
+* `password_reset_tokens`
 * SQLC queries for creating, consuming, and looking up tokens
 * service methods for creating and verifying tokens
 
@@ -270,11 +312,12 @@ Confirmation token errors should be user-safe. Expired, missing, malformed, or a
 
 ## Security Notes
 
-* Store verification token hashes, not raw tokens.
-* Use short-lived verification tokens, such as 24 hours.
+* Store verification and reset token hashes, not raw tokens.
+* Use short-lived tokens, such as 24 hours for verification and a shorter window for password reset.
 * Do not log raw tokens.
 * Do not expose whether an email address exists in resend flows.
-* Use HTTPS in production so confirmation URLs are protected in transit.
+* Do not expose whether an email address exists in password reset flows.
+* Use HTTPS in production so confirmation and reset URLs are protected in transit.
 * Keep provider credentials out of Git and load them from environment variables or deployment secrets.
 
 ## When To Revisit

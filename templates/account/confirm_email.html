@@ -4,14 +4,14 @@
   <h1>Invalid confirmation link</h1>
   <p role="alert">{{ .Error }}</p>
   {{ if .Authenticated }}
-  <p><a href="/account">Go to your account</a></p>
+  <p><a href="{{ .Routes.Account }}">Go to your account</a></p>
   {{ else }}
-  <p><a href="/login">Sign in</a></p>
+  <p><a href="{{ .Routes.Login }}">Sign in</a></p>
   {{ end }}
   {{ else }}
   <h1>Email confirmed</h1>
   <p>Your email address has been confirmed.</p>
-  <p><a href="/account">Go to your account</a></p>
+  <p><a href="{{ .Routes.Account }}">Go to your account</a></p>
   {{ end }}
 </article>
 {{ end }}

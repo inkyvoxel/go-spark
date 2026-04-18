@@ -2,9 +2,9 @@
 <article>
   <h1>Sign in</h1>
   {{ template "login_form_section" . }}
-  <p><a href="/register">Create an account</a></p>
-  <p><a href="/account/forgot-password">Forgot your password?</a></p>
-  <p><a href="/account/resend-verification">Resend verification email</a></p>
+  <p><a href="{{ .Routes.Register }}">Create an account</a></p>
+  <p><a href="{{ .Routes.ForgotPassword }}">Forgot your password?</a></p>
+  <p><a href="{{ .Routes.ResendVerification }}">Resend verification email</a></p>
 </article>
 {{ end }}
 
@@ -13,7 +13,7 @@
   {{ if eq .LoginStatus "password-changed" }}<p role="status">Your password has changed. Sign in with your new password.
   </p>{{ end }}
   {{ if .Error }}<p role="alert">{{ .Error }}</p>{{ end }}
-  <form method="post" action="/login" hx-post="/login" hx-target="#login-form-section" hx-swap="outerHTML"
+  <form method="post" action="{{ .Routes.Login }}" hx-post="{{ .Routes.Login }}" hx-target="#login-form-section" hx-swap="outerHTML"
     hx-disabled-elt="button[type='submit']"
     hx-on::before-request="this.querySelector('button[type=submit]').setAttribute('aria-busy','true')"
     hx-on::after-request="this.querySelector('button[type=submit]').removeAttribute('aria-busy')">

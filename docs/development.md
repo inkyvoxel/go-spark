@@ -59,9 +59,30 @@ make tools
 
 `make run` starts the app with `go run ./cmd/app`. On startup, the app loads `.env` when the file exists. Existing shell environment variables take precedence over `.env` values.
 
-This starter includes basic transactional email out of the box for account confirmation and resend-verification flows.
+This starter includes basic transactional email out of the box for account confirmation, resend-verification, and password reset flows.
 
 For email, keep `EMAIL_PROVIDER=log` during local development. To send real mail, set `EMAIL_PROVIDER=smtp` and provide `SMTP_HOST`, `SMTP_PORT`, and `SMTP_FROM` (plus `SMTP_USERNAME` and `SMTP_PASSWORD` when your server requires authentication).
+
+## Routes and Templates
+
+Public URL paths live in `internal/paths`. When adding or changing routes, update the canonical path constants first, then use those constants from handlers, middleware, emails, and tests.
+
+Server route registration should compose mux patterns from HTTP methods and path constants:
+
+```go
+dynamic.Handle(route(http.MethodGet, paths.Account), s.requireVerifiedAuth(http.HandlerFunc(s.account)))
+```
+
+Avoid creating extra constants that only mirror `paths.*` values. The small `route(method, path)` helper is the intended place where `net/http` method/path patterns are assembled.
+
+HTML templates receive route helpers through `.Routes`, which is populated from `paths.TemplateRoutes`. Template links, form actions, and HTMX attributes should use those helpers instead of inline literals:
+
+```html
+<a href="{{ .Routes.Login }}">Sign in</a>
+<form method="post" action="{{ .Routes.ResetPassword }}" hx-post="{{ .Routes.ResetPassword }}">
+```
+
+Template keys and fragment names live in `internal/server/template_constants.go`. Use those constants in render calls and tests to avoid drift between handlers and template files.
 
 ## Frontend Assets
 

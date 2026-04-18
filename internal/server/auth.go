@@ -9,21 +9,11 @@ import (
 	"time"
 
 	db "github.com/inkyvoxel/go-spark/internal/db/generated"
+	"github.com/inkyvoxel/go-spark/internal/paths"
 	"github.com/inkyvoxel/go-spark/internal/services"
 )
 
 const sessionCookieName = "session"
-
-const (
-	accountPath                   = "/account"
-	verifyEmailPath               = accountPath + "/verify-email"
-	accountConfirmEmailPath       = accountPath + "/confirm-email"
-	accountForgotPasswordPath     = accountPath + "/forgot-password"
-	accountResetPasswordPath      = accountPath + "/reset-password"
-	accountResendVerificationPath = accountPath + "/resend-verification"
-	accountVerifyEmailResendPath  = accountPath + "/verify-email/resend"
-	accountChangePasswordPath     = accountPath + "/change-password"
-)
 
 type authService interface {
 	ChangePassword(context.Context, db.User, string, string) error
@@ -126,10 +116,10 @@ func (s *Server) requireAnonymous(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if user, ok := currentUser(r.Context()); ok {
 			if user.EmailVerifiedAt.Valid {
-				http.Redirect(w, r, accountPath, http.StatusSeeOther)
+				http.Redirect(w, r, paths.Account, http.StatusSeeOther)
 				return
 			}
-			http.Redirect(w, r, verifyEmailPath, http.StatusSeeOther)
+			http.Redirect(w, r, paths.VerifyEmail, http.StatusSeeOther)
 			return
 		}
 
@@ -150,7 +140,7 @@ func (s *Server) requireVerifiedAuth(next http.Handler) http.Handler {
 		}
 		if !user.EmailVerifiedAt.Valid {
 			if r.Method == http.MethodGet {
-				http.Redirect(w, r, verifyEmailPath, http.StatusSeeOther)
+				http.Redirect(w, r, paths.VerifyEmail, http.StatusSeeOther)
 				return
 			}
 			http.Error(w, http.StatusText(http.StatusForbidden), http.StatusForbidden)
@@ -162,7 +152,7 @@ func (s *Server) requireVerifiedAuth(next http.Handler) http.Handler {
 }
 
 func redirectToLogin(w http.ResponseWriter, r *http.Request) {
-	loginURL := "/login"
+	loginURL := paths.Login
 	next := safeRedirectPath(r.URL.RequestURI())
 	if next != "" {
 		loginURL += "?next=" + url.QueryEscape(next)

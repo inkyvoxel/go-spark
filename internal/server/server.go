@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"path/filepath"
 
+	"github.com/inkyvoxel/go-spark/internal/paths"
 	"github.com/inkyvoxel/go-spark/internal/services"
 )
 
@@ -72,18 +73,18 @@ func mustParseTemplates() map[string]*template.Template {
 
 func parseTemplates() (map[string]*template.Template, error) {
 	pages := map[string]string{
-		"account.html":             filepath.Join("account", "account.html"),
-		"confirm_email.html":       filepath.Join("account", "confirm_email.html"),
-		"forgot_password.html":     filepath.Join("account", "forgot_password.html"),
-		"home.html":                "home.html",
-		"login.html":               filepath.Join("account", "login.html"),
-		"reset_password.html":      filepath.Join("account", "reset_password.html"),
-		"register.html":            filepath.Join("account", "register.html"),
-		"resend_verification.html": filepath.Join("account", "resend_verification.html"),
-		"verify_email.html":        filepath.Join("account", "verify_email.html"),
+		templateAccount:            filepath.Join("account", "account.html"),
+		templateConfirmEmail:       filepath.Join("account", "confirm_email.html"),
+		templateForgotPassword:     filepath.Join("account", "forgot_password.html"),
+		templateHome:               "home.html",
+		templateLogin:              filepath.Join("account", "login.html"),
+		templateResetPassword:      filepath.Join("account", "reset_password.html"),
+		templateRegister:           filepath.Join("account", "register.html"),
+		templateResendVerification: filepath.Join("account", "resend_verification.html"),
+		templateVerifyEmail:        filepath.Join("account", "verify_email.html"),
 	}
 	templates := make(map[string]*template.Template, len(pages))
-	layout := filepath.Join("templates", "layout.html")
+	layout := filepath.Join("templates", templateLayout)
 
 	for name, filePath := range pages {
 		parsed, err := template.ParseFiles(layout, filepath.Join("templates", filePath))
@@ -102,60 +103,64 @@ func (s *Server) Routes() http.Handler {
 	mux := http.NewServeMux()
 	dynamic := http.NewServeMux()
 
-	mux.Handle("GET /static/", http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))
-	mux.HandleFunc("GET /healthz", s.health)
+	mux.Handle(route(http.MethodGet, paths.StaticPrefix), http.StripPrefix(paths.StaticPrefix, http.FileServer(http.Dir("static"))))
+	mux.HandleFunc(route(http.MethodGet, paths.Healthz), s.health)
 
 	// Register new protected pages with requireAuth and anonymous-only pages with requireAnonymous.
-	dynamic.Handle("GET /register", s.requireAnonymous(http.HandlerFunc(s.registerForm)))
+	dynamic.Handle(route(http.MethodGet, paths.Register), s.requireAnonymous(http.HandlerFunc(s.registerForm)))
 	dynamic.Handle(
-		"POST /register",
+		route(http.MethodPost, paths.Register),
 		s.requireAnonymous(
 			s.withRateLimit("register", s.rateLimitPolicies.Register, rateLimitKeyByIPAndEmail("email"), http.HandlerFunc(s.register)),
 		),
 	)
-	dynamic.HandleFunc("GET "+accountConfirmEmailPath, s.confirmEmail)
-	dynamic.Handle("GET "+accountForgotPasswordPath, s.requireAnonymous(http.HandlerFunc(s.forgotPasswordForm)))
+	dynamic.HandleFunc(route(http.MethodGet, paths.ConfirmEmail), s.confirmEmail)
+	dynamic.Handle(route(http.MethodGet, paths.ForgotPassword), s.requireAnonymous(http.HandlerFunc(s.forgotPasswordForm)))
 	dynamic.Handle(
-		"POST "+accountForgotPasswordPath,
+		route(http.MethodPost, paths.ForgotPassword),
 		s.requireAnonymous(
 			s.withRateLimit("forgot-password", s.rateLimitPolicies.ForgotPassword, rateLimitKeyByIPAndEmail("email"), http.HandlerFunc(s.forgotPassword)),
 		),
 	)
-	dynamic.Handle("GET /login", s.requireAnonymous(http.HandlerFunc(s.loginForm)))
+	dynamic.Handle(route(http.MethodGet, paths.Login), s.requireAnonymous(http.HandlerFunc(s.loginForm)))
 	dynamic.Handle(
-		"POST /login",
+		route(http.MethodPost, paths.Login),
 		s.requireAnonymous(
 			s.withRateLimit("login", s.rateLimitPolicies.Login, rateLimitKeyByIPAndEmail("email"), http.HandlerFunc(s.login)),
 		),
 	)
-	dynamic.Handle("GET "+accountResetPasswordPath, s.requireAnonymous(http.HandlerFunc(s.resetPasswordForm)))
-	dynamic.Handle("POST "+accountResetPasswordPath, s.requireAnonymous(http.HandlerFunc(s.resetPassword)))
-	dynamic.Handle("GET "+accountResendVerificationPath, s.requireAnonymous(http.HandlerFunc(s.resendVerificationForm)))
+	dynamic.Handle(route(http.MethodGet, paths.ResetPassword), s.requireAnonymous(http.HandlerFunc(s.resetPasswordForm)))
+	dynamic.Handle(route(http.MethodPost, paths.ResetPassword), s.requireAnonymous(http.HandlerFunc(s.resetPassword)))
+	dynamic.Handle(route(http.MethodGet, paths.ResendVerification), s.requireAnonymous(http.HandlerFunc(s.resendVerificationForm)))
 	dynamic.Handle(
-		"POST "+accountResendVerificationPath,
+		route(http.MethodPost, paths.ResendVerification),
 		s.requireAnonymous(
 			s.withRateLimit("resend-verification-public", s.rateLimitPolicies.PublicResendVerification, rateLimitKeyByIPAndEmail("email"), http.HandlerFunc(s.resendVerificationPublic)),
 		),
 	)
-	dynamic.Handle("POST /logout", s.requireAuth(http.HandlerFunc(s.logout)))
-	dynamic.Handle("GET "+verifyEmailPath, s.requireAuth(http.HandlerFunc(s.verifyEmail)))
-	dynamic.Handle("GET "+accountPath, s.requireVerifiedAuth(http.HandlerFunc(s.account)))
+	dynamic.Handle(route(http.MethodPost, paths.Logout), s.requireAuth(http.HandlerFunc(s.logout)))
+	dynamic.Handle(route(http.MethodGet, paths.VerifyEmail), s.requireAuth(http.HandlerFunc(s.verifyEmail)))
+	dynamic.Handle(route(http.MethodGet, paths.Account), s.requireVerifiedAuth(http.HandlerFunc(s.account)))
 	dynamic.Handle(
-		"POST "+accountVerifyEmailResendPath,
+		route(http.MethodPost, paths.VerifyEmailResend),
 		s.requireAuth(
 			s.withRateLimit("resend-verification-account", s.rateLimitPolicies.AccountResendVerification, rateLimitKeyByIPAndUser(), http.HandlerFunc(s.resendVerification)),
 		),
 	)
-	dynamic.Handle("POST "+accountChangePasswordPath, s.requireVerifiedAuth(http.HandlerFunc(s.changePassword)))
-	dynamic.HandleFunc("GET /", s.home)
+	dynamic.Handle(route(http.MethodPost, paths.ChangePassword), s.requireVerifiedAuth(http.HandlerFunc(s.changePassword)))
+	dynamic.HandleFunc(route(http.MethodGet, paths.Home), s.home)
 
-	mux.Handle("/", s.securityHeaders(s.limitRequestBody(s.csrf(s.loadSession(dynamic)))))
+	mux.Handle(paths.Home, s.securityHeaders(s.limitRequestBody(s.csrf(s.loadSession(dynamic)))))
 
 	return s.logRequests(mux)
 }
 
+func route(method, path string) string {
+	return method + " " + path
+}
+
 func (s *Server) home(w http.ResponseWriter, r *http.Request) {
-	s.render(w, "home.html", s.newTemplateData(r, "Go Spark"))
+	s.render(w, templateHome, s.newTemplateData(r, "Go Spark"))
 }
 
 func (s *Server) health(w http.ResponseWriter, r *http.Request) {

@@ -13,6 +13,7 @@ import (
 	"time"
 
 	db "github.com/inkyvoxel/go-spark/internal/db/generated"
+	"github.com/inkyvoxel/go-spark/internal/paths"
 	"github.com/inkyvoxel/go-spark/internal/services"
 
 	_ "modernc.org/sqlite"
@@ -33,7 +34,7 @@ func TestRoutesLogin(t *testing.T) {
 		"password":    []string{"password"},
 		csrfFieldName: []string{"csrf"},
 	}
-	req := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, paths.Login, strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: "csrf"})
 	rec := httptest.NewRecorder()
@@ -43,8 +44,8 @@ func TestRoutesLogin(t *testing.T) {
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusSeeOther)
 	}
-	if location := rec.Header().Get("Location"); location != "/account" {
-		t.Fatalf("Location = %q, want %q", location, "/account")
+	if location := rec.Header().Get("Location"); location != paths.Account {
+		t.Fatalf("Location = %q, want %q", location, paths.Account)
 	}
 	if auth.loginEmail != "user@example.com" || auth.loginPass != "password" {
 		t.Fatalf("login credentials = %q/%q", auth.loginEmail, auth.loginPass)
@@ -73,7 +74,7 @@ func TestRoutesLoginHTMXReturnsRedirectHeaderAndSession(t *testing.T) {
 		"password":    []string{"password"},
 		csrfFieldName: []string{"csrf"},
 	}
-	req := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, paths.Login, strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("HX-Request", "true")
 	req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: "csrf"})
@@ -87,8 +88,8 @@ func TestRoutesLoginHTMXReturnsRedirectHeaderAndSession(t *testing.T) {
 	if location := rec.Header().Get("Location"); location != "" {
 		t.Fatalf("Location = %q, want empty for HTMX redirect", location)
 	}
-	if redirect := rec.Header().Get("HX-Redirect"); redirect != "/account" {
-		t.Fatalf("HX-Redirect = %q, want %q", redirect, "/account")
+	if redirect := rec.Header().Get("HX-Redirect"); redirect != paths.Account {
+		t.Fatalf("HX-Redirect = %q, want %q", redirect, paths.Account)
 	}
 	session := cookieFromRecorder(t, rec, sessionCookieName)
 	if session.Value != "session-token" {
@@ -107,7 +108,7 @@ func TestRoutesLoginHTMXRejectsInvalidCredentials(t *testing.T) {
 		"password":    []string{"wrong-password"},
 		csrfFieldName: []string{"csrf"},
 	}
-	req := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, paths.Login, strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("HX-Request", "true")
 	req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: "csrf"})
@@ -145,7 +146,7 @@ func TestRoutesLoginSetsSecureSessionCookieWhenConfigured(t *testing.T) {
 		"password":    []string{"password"},
 		csrfFieldName: []string{"csrf"},
 	}
-	req := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, paths.Login, strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: "csrf"})
 	rec := httptest.NewRecorder()
@@ -174,7 +175,7 @@ func TestRoutesLoginRedirectsToSafeNextPath(t *testing.T) {
 		"next":        []string{"/dashboard?tab=home"},
 		csrfFieldName: []string{"csrf"},
 	}
-	req := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, paths.Login, strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: "csrf"})
 	rec := httptest.NewRecorder()
@@ -205,7 +206,7 @@ func TestRoutesLoginRejectsUnsafeNextPath(t *testing.T) {
 		"next":        []string{"https://evil.example"},
 		csrfFieldName: []string{"csrf"},
 	}
-	req := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, paths.Login, strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: "csrf"})
 	rec := httptest.NewRecorder()
@@ -215,15 +216,15 @@ func TestRoutesLoginRejectsUnsafeNextPath(t *testing.T) {
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusSeeOther)
 	}
-	if location := rec.Header().Get("Location"); location != "/account" {
-		t.Fatalf("Location = %q, want %q", location, "/account")
+	if location := rec.Header().Get("Location"); location != paths.Account {
+		t.Fatalf("Location = %q, want %q", location, paths.Account)
 	}
 }
 
 func TestRoutesLoginFormIncludesSafeNextPath(t *testing.T) {
 	srv := newAuthRouteTestServer(t, &fakeAuthLookup{})
 
-	req := httptest.NewRequest(http.MethodGet, "/login?next=%2Faccount", nil)
+	req := httptest.NewRequest(http.MethodGet, paths.Login+"?next=%2Faccount", nil)
 	rec := httptest.NewRecorder()
 
 	srv.Routes().ServeHTTP(rec, req)
@@ -231,7 +232,7 @@ func TestRoutesLoginFormIncludesSafeNextPath(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
 	}
-	if !strings.Contains(rec.Body.String(), "/account") {
+	if !strings.Contains(rec.Body.String(), paths.Account) {
 		t.Fatalf("body = %q, want safe next path", rec.Body.String())
 	}
 }
@@ -239,7 +240,7 @@ func TestRoutesLoginFormIncludesSafeNextPath(t *testing.T) {
 func TestRoutesLoginFormOmitsUnsafeNextPath(t *testing.T) {
 	srv := newAuthRouteTestServer(t, &fakeAuthLookup{})
 
-	req := httptest.NewRequest(http.MethodGet, "/login?next=https%3A%2F%2Fevil.example", nil)
+	req := httptest.NewRequest(http.MethodGet, paths.Login+"?next=https%3A%2F%2Fevil.example", nil)
 	rec := httptest.NewRecorder()
 
 	srv.Routes().ServeHTTP(rec, req)
@@ -255,7 +256,7 @@ func TestRoutesLoginFormOmitsUnsafeNextPath(t *testing.T) {
 func TestRoutesLoginFormShowsResendVerificationLink(t *testing.T) {
 	srv := newAuthRouteTestServer(t, &fakeAuthLookup{})
 
-	req := httptest.NewRequest(http.MethodGet, "/login", nil)
+	req := httptest.NewRequest(http.MethodGet, paths.Login, nil)
 	rec := httptest.NewRecorder()
 
 	srv.Routes().ServeHTTP(rec, req)
@@ -263,7 +264,7 @@ func TestRoutesLoginFormShowsResendVerificationLink(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
 	}
-	if !strings.Contains(rec.Body.String(), "/account/resend-verification") {
+	if !strings.Contains(rec.Body.String(), paths.ResendVerification) {
 		t.Fatalf("body = %q, want resend verification link", rec.Body.String())
 	}
 }
@@ -271,7 +272,7 @@ func TestRoutesLoginFormShowsResendVerificationLink(t *testing.T) {
 func TestRoutesLoginFormShowsForgotPasswordLink(t *testing.T) {
 	srv := newAuthRouteTestServer(t, &fakeAuthLookup{})
 
-	req := httptest.NewRequest(http.MethodGet, "/login", nil)
+	req := httptest.NewRequest(http.MethodGet, paths.Login, nil)
 	rec := httptest.NewRecorder()
 
 	srv.Routes().ServeHTTP(rec, req)
@@ -279,7 +280,7 @@ func TestRoutesLoginFormShowsForgotPasswordLink(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
 	}
-	if !strings.Contains(rec.Body.String(), "/account/forgot-password") {
+	if !strings.Contains(rec.Body.String(), paths.ForgotPassword) {
 		t.Fatalf("body = %q, want forgot password link", rec.Body.String())
 	}
 }
@@ -287,7 +288,7 @@ func TestRoutesLoginFormShowsForgotPasswordLink(t *testing.T) {
 func TestRoutesLoginFormShowsPasswordChangedStatus(t *testing.T) {
 	srv := newAuthRouteTestServer(t, &fakeAuthLookup{})
 
-	req := httptest.NewRequest(http.MethodGet, "/login?status=password-changed", nil)
+	req := httptest.NewRequest(http.MethodGet, loginPathWithStatusChanged, nil)
 	rec := httptest.NewRecorder()
 
 	srv.Routes().ServeHTTP(rec, req)
@@ -306,7 +307,7 @@ func TestRoutesLoginRedirectsAuthenticatedUserToAccount(t *testing.T) {
 	}
 	srv := newAuthRouteTestServer(t, auth)
 
-	req := httptest.NewRequest(http.MethodGet, "/login", nil)
+	req := httptest.NewRequest(http.MethodGet, paths.Login, nil)
 	req.AddCookie(&http.Cookie{Name: sessionCookieName, Value: "session-token"})
 	rec := httptest.NewRecorder()
 
@@ -315,8 +316,8 @@ func TestRoutesLoginRedirectsAuthenticatedUserToAccount(t *testing.T) {
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusSeeOther)
 	}
-	if location := rec.Header().Get("Location"); location != "/account" {
-		t.Fatalf("Location = %q, want %q", location, "/account")
+	if location := rec.Header().Get("Location"); location != paths.Account {
+		t.Fatalf("Location = %q, want %q", location, paths.Account)
 	}
 }
 
@@ -326,7 +327,7 @@ func TestRoutesLoginRedirectsAuthenticatedUnverifiedUserToVerifyEmail(t *testing
 	}
 	srv := newAuthRouteTestServer(t, auth)
 
-	req := httptest.NewRequest(http.MethodGet, "/login", nil)
+	req := httptest.NewRequest(http.MethodGet, paths.Login, nil)
 	req.AddCookie(&http.Cookie{Name: sessionCookieName, Value: "session-token"})
 	rec := httptest.NewRecorder()
 
@@ -335,8 +336,8 @@ func TestRoutesLoginRedirectsAuthenticatedUnverifiedUserToVerifyEmail(t *testing
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusSeeOther)
 	}
-	if location := rec.Header().Get("Location"); location != verifyEmailPath {
-		t.Fatalf("Location = %q, want %q", location, verifyEmailPath)
+	if location := rec.Header().Get("Location"); location != paths.VerifyEmail {
+		t.Fatalf("Location = %q, want %q", location, paths.VerifyEmail)
 	}
 }
 
@@ -356,7 +357,7 @@ func TestRoutesLoginRedirectsUnverifiedUserToVerifyEmail(t *testing.T) {
 		"next":        []string{"/dashboard?tab=home"},
 		csrfFieldName: []string{"csrf"},
 	}
-	req := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, paths.Login, strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: "csrf"})
 	rec := httptest.NewRecorder()
@@ -366,8 +367,8 @@ func TestRoutesLoginRedirectsUnverifiedUserToVerifyEmail(t *testing.T) {
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusSeeOther)
 	}
-	if location := rec.Header().Get("Location"); location != verifyEmailPath {
-		t.Fatalf("Location = %q, want %q", location, verifyEmailPath)
+	if location := rec.Header().Get("Location"); location != paths.VerifyEmail {
+		t.Fatalf("Location = %q, want %q", location, paths.VerifyEmail)
 	}
 }
 
@@ -387,7 +388,7 @@ func TestRoutesRegister(t *testing.T) {
 		"confirm_password": []string{"password"},
 		csrfFieldName:      []string{"csrf"},
 	}
-	req := httptest.NewRequest(http.MethodPost, "/register", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, paths.Register, strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: "csrf"})
 	rec := httptest.NewRecorder()
@@ -397,8 +398,8 @@ func TestRoutesRegister(t *testing.T) {
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusSeeOther)
 	}
-	if location := rec.Header().Get("Location"); location != verifyEmailPath {
-		t.Fatalf("Location = %q, want %q", location, verifyEmailPath)
+	if location := rec.Header().Get("Location"); location != paths.VerifyEmail {
+		t.Fatalf("Location = %q, want %q", location, paths.VerifyEmail)
 	}
 	if !auth.registered {
 		t.Fatal("Register() was not called")
@@ -428,7 +429,7 @@ func TestRoutesRegisterHTMXReturnsRedirectHeaderAndSession(t *testing.T) {
 		"confirm_password": []string{"password"},
 		csrfFieldName:      []string{"csrf"},
 	}
-	req := httptest.NewRequest(http.MethodPost, "/register", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, paths.Register, strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("HX-Request", "true")
 	req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: "csrf"})
@@ -442,8 +443,8 @@ func TestRoutesRegisterHTMXReturnsRedirectHeaderAndSession(t *testing.T) {
 	if location := rec.Header().Get("Location"); location != "" {
 		t.Fatalf("Location = %q, want empty for HTMX redirect", location)
 	}
-	if redirect := rec.Header().Get("HX-Redirect"); redirect != verifyEmailPath {
-		t.Fatalf("HX-Redirect = %q, want %q", redirect, verifyEmailPath)
+	if redirect := rec.Header().Get("HX-Redirect"); redirect != paths.VerifyEmail {
+		t.Fatalf("HX-Redirect = %q, want %q", redirect, paths.VerifyEmail)
 	}
 	if !auth.registered {
 		t.Fatal("Register() was not called")
@@ -464,7 +465,7 @@ func TestRoutesRegisterRejectsMismatchedPasswordConfirmation(t *testing.T) {
 		"confirm_password": []string{"different"},
 		csrfFieldName:      []string{"csrf"},
 	}
-	req := httptest.NewRequest(http.MethodPost, "/register", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, paths.Register, strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: "csrf"})
 	rec := httptest.NewRecorder()
@@ -492,7 +493,7 @@ func TestRoutesRegisterHTMXRejectsMismatchedPasswordConfirmation(t *testing.T) {
 		"confirm_password": []string{"different"},
 		csrfFieldName:      []string{"csrf"},
 	}
-	req := httptest.NewRequest(http.MethodPost, "/register", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, paths.Register, strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("HX-Request", "true")
 	req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: "csrf"})
@@ -526,7 +527,7 @@ func TestRoutesRegisterHTMXShowsServiceValidationErrors(t *testing.T) {
 		"confirm_password": []string{"password"},
 		csrfFieldName:      []string{"csrf"},
 	}
-	req := httptest.NewRequest(http.MethodPost, "/register", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, paths.Register, strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("HX-Request", "true")
 	req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: "csrf"})
@@ -553,7 +554,7 @@ func TestRoutesRegisterValidatesRequiredFields(t *testing.T) {
 	srv := newAuthRouteTestServer(t, auth)
 
 	form := url.Values{csrfFieldName: []string{"csrf"}}
-	req := httptest.NewRequest(http.MethodPost, "/register", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, paths.Register, strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: "csrf"})
 	rec := httptest.NewRecorder()
@@ -586,7 +587,7 @@ func TestRoutesRegisterShowsServiceValidationErrors(t *testing.T) {
 		"confirm_password": []string{"password"},
 		csrfFieldName:      []string{"csrf"},
 	}
-	req := httptest.NewRequest(http.MethodPost, "/register", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, paths.Register, strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: "csrf"})
 	rec := httptest.NewRecorder()
@@ -610,7 +611,7 @@ func TestRoutesConfirmEmail(t *testing.T) {
 	}
 	srv := newAuthRouteTestServer(t, auth)
 
-	req := httptest.NewRequest(http.MethodGet, "/account/confirm-email?token=raw-token", nil)
+	req := httptest.NewRequest(http.MethodGet, paths.ConfirmEmail+"?token=raw-token", nil)
 	rec := httptest.NewRecorder()
 
 	srv.Routes().ServeHTTP(rec, req)
@@ -632,7 +633,7 @@ func TestRoutesConfirmEmailRejectsInvalidToken(t *testing.T) {
 	}
 	srv := newAuthRouteTestServer(t, auth)
 
-	req := httptest.NewRequest(http.MethodGet, "/account/confirm-email?token=bad-token", nil)
+	req := httptest.NewRequest(http.MethodGet, paths.ConfirmEmail+"?token=bad-token", nil)
 	rec := httptest.NewRecorder()
 
 	srv.Routes().ServeHTTP(rec, req)
@@ -662,7 +663,7 @@ func TestRoutesConfirmEmailRejectsInvalidTokenForAuthenticatedUser(t *testing.T)
 	}
 	srv := newAuthRouteTestServer(t, auth)
 
-	req := httptest.NewRequest(http.MethodGet, "/account/confirm-email?token=bad-token", nil)
+	req := httptest.NewRequest(http.MethodGet, paths.ConfirmEmail+"?token=bad-token", nil)
 	req.AddCookie(&http.Cookie{Name: sessionCookieName, Value: "session-token"})
 	rec := httptest.NewRecorder()
 
@@ -689,7 +690,7 @@ func TestRoutesConfirmEmailHandlesUnexpectedError(t *testing.T) {
 	}
 	srv := newAuthRouteTestServer(t, auth)
 
-	req := httptest.NewRequest(http.MethodGet, "/account/confirm-email?token=raw-token", nil)
+	req := httptest.NewRequest(http.MethodGet, paths.ConfirmEmail+"?token=raw-token", nil)
 	rec := httptest.NewRecorder()
 
 	srv.Routes().ServeHTTP(rec, req)
@@ -704,7 +705,7 @@ func TestRoutesLogout(t *testing.T) {
 	srv := newAuthRouteTestServer(t, auth)
 
 	form := url.Values{csrfFieldName: []string{"csrf"}}
-	req := httptest.NewRequest(http.MethodPost, "/logout", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, paths.Logout, strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: "csrf"})
 	req.AddCookie(&http.Cookie{Name: sessionCookieName, Value: "session-token"})
@@ -777,7 +778,7 @@ func TestRoutesAccountRequiresAuth(t *testing.T) {
 	}
 	srv := newAuthRouteTestServer(t, auth)
 
-	req := httptest.NewRequest(http.MethodGet, "/account", nil)
+	req := httptest.NewRequest(http.MethodGet, paths.Account, nil)
 	req.AddCookie(&http.Cookie{Name: sessionCookieName, Value: "session-token"})
 	rec := httptest.NewRecorder()
 
@@ -800,7 +801,7 @@ func TestRoutesAccountShowsResendForUnverifiedUser(t *testing.T) {
 	}
 	srv := newAuthRouteTestServer(t, auth)
 
-	req := httptest.NewRequest(http.MethodGet, "/account", nil)
+	req := httptest.NewRequest(http.MethodGet, paths.Account, nil)
 	req.AddCookie(&http.Cookie{Name: sessionCookieName, Value: "session-token"})
 	rec := httptest.NewRecorder()
 
@@ -809,15 +810,15 @@ func TestRoutesAccountShowsResendForUnverifiedUser(t *testing.T) {
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusSeeOther)
 	}
-	if location := rec.Header().Get("Location"); location != verifyEmailPath {
-		t.Fatalf("Location = %q, want %q", location, verifyEmailPath)
+	if location := rec.Header().Get("Location"); location != paths.VerifyEmail {
+		t.Fatalf("Location = %q, want %q", location, paths.VerifyEmail)
 	}
 }
 
 func TestRoutesVerifyEmailRequiresAuth(t *testing.T) {
 	srv := newAuthRouteTestServer(t, &fakeAuthLookup{})
 
-	req := httptest.NewRequest(http.MethodGet, verifyEmailPath, nil)
+	req := httptest.NewRequest(http.MethodGet, paths.VerifyEmail, nil)
 	rec := httptest.NewRecorder()
 
 	srv.Routes().ServeHTTP(rec, req)
@@ -825,8 +826,8 @@ func TestRoutesVerifyEmailRequiresAuth(t *testing.T) {
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusSeeOther)
 	}
-	if location := rec.Header().Get("Location"); location != "/login?next=%2Faccount%2Fverify-email" {
-		t.Fatalf("Location = %q, want %q", location, "/login?next=%2Faccount%2Fverify-email")
+	if location := rec.Header().Get("Location"); location != paths.Login+"?next=%2Faccount%2Fverify-email" {
+		t.Fatalf("Location = %q, want %q", location, paths.Login+"?next=%2Faccount%2Fverify-email")
 	}
 }
 
@@ -836,7 +837,7 @@ func TestRoutesVerifyEmailShowsInterstitialForUnverifiedUser(t *testing.T) {
 	}
 	srv := newAuthRouteTestServer(t, auth)
 
-	req := httptest.NewRequest(http.MethodGet, verifyEmailPath, nil)
+	req := httptest.NewRequest(http.MethodGet, paths.VerifyEmail, nil)
 	req.AddCookie(&http.Cookie{Name: sessionCookieName, Value: "session-token"})
 	rec := httptest.NewRecorder()
 
@@ -856,7 +857,7 @@ func TestRoutesVerifyEmailRedirectsVerifiedUserToAccount(t *testing.T) {
 	}
 	srv := newAuthRouteTestServer(t, auth)
 
-	req := httptest.NewRequest(http.MethodGet, verifyEmailPath, nil)
+	req := httptest.NewRequest(http.MethodGet, paths.VerifyEmail, nil)
 	req.AddCookie(&http.Cookie{Name: sessionCookieName, Value: "session-token"})
 	rec := httptest.NewRecorder()
 
@@ -865,8 +866,8 @@ func TestRoutesVerifyEmailRedirectsVerifiedUserToAccount(t *testing.T) {
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusSeeOther)
 	}
-	if location := rec.Header().Get("Location"); location != "/account" {
-		t.Fatalf("Location = %q, want %q", location, "/account")
+	if location := rec.Header().Get("Location"); location != paths.Account {
+		t.Fatalf("Location = %q, want %q", location, paths.Account)
 	}
 }
 
@@ -883,7 +884,7 @@ func TestRoutesAccountHidesResendForVerifiedUser(t *testing.T) {
 	}
 	srv := newAuthRouteTestServer(t, auth)
 
-	req := httptest.NewRequest(http.MethodGet, "/account", nil)
+	req := httptest.NewRequest(http.MethodGet, paths.Account, nil)
 	req.AddCookie(&http.Cookie{Name: sessionCookieName, Value: "session-token"})
 	rec := httptest.NewRecorder()
 
@@ -905,7 +906,7 @@ func TestRoutesResendVerification(t *testing.T) {
 	srv := newAuthRouteTestServer(t, auth)
 
 	form := url.Values{csrfFieldName: []string{"csrf"}}
-	req := httptest.NewRequest(http.MethodPost, "/account/verify-email/resend", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, paths.VerifyEmailResend, strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.AddCookie(&http.Cookie{Name: sessionCookieName, Value: "session-token"})
 	req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: "csrf"})
@@ -916,8 +917,8 @@ func TestRoutesResendVerification(t *testing.T) {
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusSeeOther)
 	}
-	if location := rec.Header().Get("Location"); location != verifyEmailPath+"?resend=sent" {
-		t.Fatalf("Location = %q, want %q", location, verifyEmailPath+"?resend=sent")
+	if location := rec.Header().Get("Location"); location != withQueryParam(paths.VerifyEmail, queryKeyResend, statusSent) {
+		t.Fatalf("Location = %q, want %q", location, withQueryParam(paths.VerifyEmail, queryKeyResend, statusSent))
 	}
 	if !auth.resendCalled {
 		t.Fatal("ResendVerificationEmail() was not called")
@@ -935,7 +936,7 @@ func TestRoutesResendVerificationHandlesError(t *testing.T) {
 	srv := newAuthRouteTestServer(t, auth)
 
 	form := url.Values{csrfFieldName: []string{"csrf"}}
-	req := httptest.NewRequest(http.MethodPost, "/account/verify-email/resend", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, paths.VerifyEmailResend, strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.AddCookie(&http.Cookie{Name: sessionCookieName, Value: "session-token"})
 	req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: "csrf"})
@@ -946,8 +947,8 @@ func TestRoutesResendVerificationHandlesError(t *testing.T) {
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusSeeOther)
 	}
-	if location := rec.Header().Get("Location"); location != verifyEmailPath+"?resend=error" {
-		t.Fatalf("Location = %q, want %q", location, verifyEmailPath+"?resend=error")
+	if location := rec.Header().Get("Location"); location != withQueryParam(paths.VerifyEmail, queryKeyResend, statusError) {
+		t.Fatalf("Location = %q, want %q", location, withQueryParam(paths.VerifyEmail, queryKeyResend, statusError))
 	}
 }
 
@@ -958,7 +959,7 @@ func TestRoutesResendVerificationHTMXReturnsFragment(t *testing.T) {
 	srv := newAuthRouteTestServer(t, auth)
 
 	form := url.Values{csrfFieldName: []string{"csrf"}}
-	req := httptest.NewRequest(http.MethodPost, "/account/verify-email/resend", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, paths.VerifyEmailResend, strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("HX-Request", "true")
 	req.AddCookie(&http.Cookie{Name: sessionCookieName, Value: "session-token"})
@@ -986,7 +987,7 @@ func TestRoutesResendVerificationHTMXReturnsErrorFragment(t *testing.T) {
 	srv := newAuthRouteTestServer(t, auth)
 
 	form := url.Values{csrfFieldName: []string{"csrf"}}
-	req := httptest.NewRequest(http.MethodPost, "/account/verify-email/resend", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, paths.VerifyEmailResend, strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("HX-Request", "true")
 	req.AddCookie(&http.Cookie{Name: sessionCookieName, Value: "session-token"})
@@ -1012,7 +1013,7 @@ func TestRoutesResendVerificationRequiresCSRF(t *testing.T) {
 	}
 	srv := newAuthRouteTestServer(t, auth)
 
-	req := httptest.NewRequest(http.MethodPost, "/account/verify-email/resend", strings.NewReader(url.Values{}.Encode()))
+	req := httptest.NewRequest(http.MethodPost, paths.VerifyEmailResend, strings.NewReader(url.Values{}.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.AddCookie(&http.Cookie{Name: sessionCookieName, Value: "session-token"})
 	rec := httptest.NewRecorder()
@@ -1028,7 +1029,7 @@ func TestRoutesResendVerificationRequiresAuth(t *testing.T) {
 	srv := newAuthRouteTestServer(t, &fakeAuthLookup{})
 
 	form := url.Values{csrfFieldName: []string{"csrf"}}
-	req := httptest.NewRequest(http.MethodPost, "/account/verify-email/resend", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, paths.VerifyEmailResend, strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: "csrf"})
 	rec := httptest.NewRecorder()
@@ -1052,7 +1053,7 @@ func TestRoutesChangePassword(t *testing.T) {
 		"confirm_password": []string{"new-password"},
 		csrfFieldName:      []string{"csrf"},
 	}
-	req := httptest.NewRequest(http.MethodPost, "/account/change-password", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, paths.ChangePassword, strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.AddCookie(&http.Cookie{Name: sessionCookieName, Value: "session-token"})
 	req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: "csrf"})
@@ -1063,8 +1064,8 @@ func TestRoutesChangePassword(t *testing.T) {
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusSeeOther)
 	}
-	if location := rec.Header().Get("Location"); location != "/login?status=password-changed" {
-		t.Fatalf("Location = %q, want %q", location, "/login?status=password-changed")
+	if location := rec.Header().Get("Location"); location != loginPathWithStatusChanged {
+		t.Fatalf("Location = %q, want %q", location, loginPathWithStatusChanged)
 	}
 	if !auth.changePasswordCalled {
 		t.Fatal("ChangePassword() was not called")
@@ -1090,7 +1091,7 @@ func TestRoutesChangePasswordValidatesFields(t *testing.T) {
 	form := url.Values{
 		csrfFieldName: []string{"csrf"},
 	}
-	req := httptest.NewRequest(http.MethodPost, "/account/change-password", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, paths.ChangePassword, strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.AddCookie(&http.Cookie{Name: sessionCookieName, Value: "session-token"})
 	req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: "csrf"})
@@ -1121,7 +1122,7 @@ func TestRoutesChangePasswordHTMXValidatesFields(t *testing.T) {
 	form := url.Values{
 		csrfFieldName: []string{"csrf"},
 	}
-	req := httptest.NewRequest(http.MethodPost, "/account/change-password", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, paths.ChangePassword, strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("HX-Request", "true")
 	req.AddCookie(&http.Cookie{Name: sessionCookieName, Value: "session-token"})
@@ -1159,7 +1160,7 @@ func TestRoutesChangePasswordHTMXRedirectsOnSuccess(t *testing.T) {
 		"confirm_password": []string{"new-password"},
 		csrfFieldName:      []string{"csrf"},
 	}
-	req := httptest.NewRequest(http.MethodPost, "/account/change-password", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, paths.ChangePassword, strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("HX-Request", "true")
 	req.AddCookie(&http.Cookie{Name: sessionCookieName, Value: "session-token"})
@@ -1174,8 +1175,8 @@ func TestRoutesChangePasswordHTMXRedirectsOnSuccess(t *testing.T) {
 	if location := rec.Header().Get("Location"); location != "" {
 		t.Fatalf("Location = %q, want empty for HTMX redirect", location)
 	}
-	if redirect := rec.Header().Get("HX-Redirect"); redirect != "/login?status=password-changed" {
-		t.Fatalf("HX-Redirect = %q, want %q", redirect, "/login?status=password-changed")
+	if redirect := rec.Header().Get("HX-Redirect"); redirect != loginPathWithStatusChanged {
+		t.Fatalf("HX-Redirect = %q, want %q", redirect, loginPathWithStatusChanged)
 	}
 	session := cookieFromRecorder(t, rec, sessionCookieName)
 	if session.MaxAge != -1 {
@@ -1196,7 +1197,7 @@ func TestRoutesChangePasswordRejectsIncorrectCurrentPassword(t *testing.T) {
 		"confirm_password": []string{"new-password"},
 		csrfFieldName:      []string{"csrf"},
 	}
-	req := httptest.NewRequest(http.MethodPost, "/account/change-password", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, paths.ChangePassword, strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.AddCookie(&http.Cookie{Name: sessionCookieName, Value: "session-token"})
 	req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: "csrf"})
@@ -1224,7 +1225,7 @@ func TestRoutesChangePasswordRequiresCSRF(t *testing.T) {
 		"new_password":     []string{"new-password"},
 		"confirm_password": []string{"new-password"},
 	}
-	req := httptest.NewRequest(http.MethodPost, "/account/change-password", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, paths.ChangePassword, strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.AddCookie(&http.Cookie{Name: sessionCookieName, Value: "session-token"})
 	rec := httptest.NewRecorder()
@@ -1245,7 +1246,7 @@ func TestRoutesChangePasswordRequiresAuth(t *testing.T) {
 		"confirm_password": []string{"new-password"},
 		csrfFieldName:      []string{"csrf"},
 	}
-	req := httptest.NewRequest(http.MethodPost, "/account/change-password", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, paths.ChangePassword, strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: "csrf"})
 	rec := httptest.NewRecorder()
@@ -1269,7 +1270,7 @@ func TestRoutesChangePasswordRequiresVerifiedEmail(t *testing.T) {
 		"confirm_password": []string{"new-password"},
 		csrfFieldName:      []string{"csrf"},
 	}
-	req := httptest.NewRequest(http.MethodPost, "/account/change-password", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, paths.ChangePassword, strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.AddCookie(&http.Cookie{Name: sessionCookieName, Value: "session-token"})
 	req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: "csrf"})
@@ -1288,7 +1289,7 @@ func TestRoutesChangePasswordRequiresVerifiedEmail(t *testing.T) {
 func TestRoutesPublicResendVerificationForm(t *testing.T) {
 	srv := newAuthRouteTestServer(t, &fakeAuthLookup{})
 
-	req := httptest.NewRequest(http.MethodGet, "/account/resend-verification", nil)
+	req := httptest.NewRequest(http.MethodGet, paths.ResendVerification, nil)
 	rec := httptest.NewRecorder()
 
 	srv.Routes().ServeHTTP(rec, req)
@@ -1310,7 +1311,7 @@ func TestRoutesPublicResendVerification(t *testing.T) {
 		"email":       []string{"user@example.com"},
 		csrfFieldName: []string{"csrf"},
 	}
-	req := httptest.NewRequest(http.MethodPost, "/account/resend-verification", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, paths.ResendVerification, strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: "csrf"})
 	rec := httptest.NewRecorder()
@@ -1320,8 +1321,8 @@ func TestRoutesPublicResendVerification(t *testing.T) {
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusSeeOther)
 	}
-	if location := rec.Header().Get("Location"); location != "/account/resend-verification?status=sent" {
-		t.Fatalf("Location = %q, want %q", location, "/account/resend-verification?status=sent")
+	if location := rec.Header().Get("Location"); location != withQueryParam(paths.ResendVerification, queryKeyStatus, statusSent) {
+		t.Fatalf("Location = %q, want %q", location, withQueryParam(paths.ResendVerification, queryKeyStatus, statusSent))
 	}
 	if auth.publicResendCalls != 1 {
 		t.Fatalf("public resend calls = %d, want 1", auth.publicResendCalls)
@@ -1341,7 +1342,7 @@ func TestRoutesPublicResendVerificationRejectsInvalidEmail(t *testing.T) {
 		"email":       []string{"not-an-email"},
 		csrfFieldName: []string{"csrf"},
 	}
-	req := httptest.NewRequest(http.MethodPost, "/account/resend-verification", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, paths.ResendVerification, strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: "csrf"})
 	rec := httptest.NewRecorder()
@@ -1366,7 +1367,7 @@ func TestRoutesPublicResendVerificationHandlesError(t *testing.T) {
 		"email":       []string{"user@example.com"},
 		csrfFieldName: []string{"csrf"},
 	}
-	req := httptest.NewRequest(http.MethodPost, "/account/resend-verification", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, paths.ResendVerification, strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: "csrf"})
 	rec := httptest.NewRecorder()
@@ -1376,8 +1377,8 @@ func TestRoutesPublicResendVerificationHandlesError(t *testing.T) {
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusSeeOther)
 	}
-	if location := rec.Header().Get("Location"); location != "/account/resend-verification?status=error" {
-		t.Fatalf("Location = %q, want %q", location, "/account/resend-verification?status=error")
+	if location := rec.Header().Get("Location"); location != withQueryParam(paths.ResendVerification, queryKeyStatus, statusError) {
+		t.Fatalf("Location = %q, want %q", location, withQueryParam(paths.ResendVerification, queryKeyStatus, statusError))
 	}
 }
 
@@ -1389,7 +1390,7 @@ func TestRoutesPublicResendVerificationHTMXReturnsFragment(t *testing.T) {
 		"email":       []string{"user@example.com"},
 		csrfFieldName: []string{"csrf"},
 	}
-	req := httptest.NewRequest(http.MethodPost, "/account/resend-verification", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, paths.ResendVerification, strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("HX-Request", "true")
 	req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: "csrf"})
@@ -1418,7 +1419,7 @@ func TestRoutesPublicResendVerificationHTMXReturnsErrorFragment(t *testing.T) {
 		"email":       []string{"user@example.com"},
 		csrfFieldName: []string{"csrf"},
 	}
-	req := httptest.NewRequest(http.MethodPost, "/account/resend-verification", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, paths.ResendVerification, strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("HX-Request", "true")
 	req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: "csrf"})
@@ -1447,7 +1448,7 @@ func TestRoutesPublicResendVerificationHTMXRejectsInvalidEmail(t *testing.T) {
 		"email":       []string{"not-an-email"},
 		csrfFieldName: []string{"csrf"},
 	}
-	req := httptest.NewRequest(http.MethodPost, "/account/resend-verification", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, paths.ResendVerification, strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("HX-Request", "true")
 	req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: "csrf"})
@@ -1470,7 +1471,7 @@ func TestRoutesPublicResendVerificationRequiresCSRF(t *testing.T) {
 	srv := newAuthRouteTestServer(t, &fakeAuthLookup{})
 
 	form := url.Values{"email": []string{"user@example.com"}}
-	req := httptest.NewRequest(http.MethodPost, "/account/resend-verification", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, paths.ResendVerification, strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	rec := httptest.NewRecorder()
 
@@ -1487,7 +1488,7 @@ func TestRoutesPublicResendVerificationRedirectsAuthenticatedUser(t *testing.T) 
 	}
 	srv := newAuthRouteTestServer(t, auth)
 
-	req := httptest.NewRequest(http.MethodGet, "/account/resend-verification", nil)
+	req := httptest.NewRequest(http.MethodGet, paths.ResendVerification, nil)
 	req.AddCookie(&http.Cookie{Name: sessionCookieName, Value: "session-token"})
 	rec := httptest.NewRecorder()
 
@@ -1496,15 +1497,15 @@ func TestRoutesPublicResendVerificationRedirectsAuthenticatedUser(t *testing.T) 
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusSeeOther)
 	}
-	if location := rec.Header().Get("Location"); location != verifyEmailPath {
-		t.Fatalf("Location = %q, want %q", location, verifyEmailPath)
+	if location := rec.Header().Get("Location"); location != paths.VerifyEmail {
+		t.Fatalf("Location = %q, want %q", location, paths.VerifyEmail)
 	}
 }
 
 func TestRoutesForgotPasswordForm(t *testing.T) {
 	srv := newAuthRouteTestServer(t, &fakeAuthLookup{})
 
-	req := httptest.NewRequest(http.MethodGet, "/account/forgot-password", nil)
+	req := httptest.NewRequest(http.MethodGet, paths.ForgotPassword, nil)
 	rec := httptest.NewRecorder()
 
 	srv.Routes().ServeHTTP(rec, req)
@@ -1525,7 +1526,7 @@ func TestRoutesForgotPassword(t *testing.T) {
 		"email":       []string{"user@example.com"},
 		csrfFieldName: []string{"csrf"},
 	}
-	req := httptest.NewRequest(http.MethodPost, "/account/forgot-password", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, paths.ForgotPassword, strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: "csrf"})
 	rec := httptest.NewRecorder()
@@ -1535,8 +1536,8 @@ func TestRoutesForgotPassword(t *testing.T) {
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusSeeOther)
 	}
-	if location := rec.Header().Get("Location"); location != "/account/forgot-password?status=sent" {
-		t.Fatalf("Location = %q, want %q", location, "/account/forgot-password?status=sent")
+	if location := rec.Header().Get("Location"); location != withQueryParam(paths.ForgotPassword, queryKeyStatus, statusSent) {
+		t.Fatalf("Location = %q, want %q", location, withQueryParam(paths.ForgotPassword, queryKeyStatus, statusSent))
 	}
 	if auth.requestResetEmail != "user@example.com" {
 		t.Fatalf("request reset email = %q, want %q", auth.requestResetEmail, "user@example.com")
@@ -1553,7 +1554,7 @@ func TestRoutesForgotPasswordRejectsInvalidEmail(t *testing.T) {
 		"email":       []string{"not-an-email"},
 		csrfFieldName: []string{"csrf"},
 	}
-	req := httptest.NewRequest(http.MethodPost, "/account/forgot-password", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, paths.ForgotPassword, strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: "csrf"})
 	rec := httptest.NewRecorder()
@@ -1578,7 +1579,7 @@ func TestRoutesForgotPasswordHandlesError(t *testing.T) {
 		"email":       []string{"user@example.com"},
 		csrfFieldName: []string{"csrf"},
 	}
-	req := httptest.NewRequest(http.MethodPost, "/account/forgot-password", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, paths.ForgotPassword, strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: "csrf"})
 	rec := httptest.NewRecorder()
@@ -1588,8 +1589,8 @@ func TestRoutesForgotPasswordHandlesError(t *testing.T) {
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusSeeOther)
 	}
-	if location := rec.Header().Get("Location"); location != "/account/forgot-password?status=error" {
-		t.Fatalf("Location = %q, want %q", location, "/account/forgot-password?status=error")
+	if location := rec.Header().Get("Location"); location != withQueryParam(paths.ForgotPassword, queryKeyStatus, statusError) {
+		t.Fatalf("Location = %q, want %q", location, withQueryParam(paths.ForgotPassword, queryKeyStatus, statusError))
 	}
 }
 
@@ -1601,7 +1602,7 @@ func TestRoutesForgotPasswordHTMXReturnsFragment(t *testing.T) {
 		"email":       []string{"user@example.com"},
 		csrfFieldName: []string{"csrf"},
 	}
-	req := httptest.NewRequest(http.MethodPost, "/account/forgot-password", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, paths.ForgotPassword, strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("HX-Request", "true")
 	req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: "csrf"})
@@ -1630,7 +1631,7 @@ func TestRoutesForgotPasswordHTMXReturnsErrorFragment(t *testing.T) {
 		"email":       []string{"user@example.com"},
 		csrfFieldName: []string{"csrf"},
 	}
-	req := httptest.NewRequest(http.MethodPost, "/account/forgot-password", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, paths.ForgotPassword, strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("HX-Request", "true")
 	req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: "csrf"})
@@ -1659,7 +1660,7 @@ func TestRoutesForgotPasswordHTMXRejectsInvalidEmail(t *testing.T) {
 		"email":       []string{"not-an-email"},
 		csrfFieldName: []string{"csrf"},
 	}
-	req := httptest.NewRequest(http.MethodPost, "/account/forgot-password", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, paths.ForgotPassword, strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("HX-Request", "true")
 	req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: "csrf"})
@@ -1682,7 +1683,7 @@ func TestRoutesForgotPasswordRequiresCSRF(t *testing.T) {
 	srv := newAuthRouteTestServer(t, &fakeAuthLookup{})
 
 	form := url.Values{"email": []string{"user@example.com"}}
-	req := httptest.NewRequest(http.MethodPost, "/account/forgot-password", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, paths.ForgotPassword, strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	rec := httptest.NewRecorder()
 
@@ -1699,7 +1700,7 @@ func TestRoutesForgotPasswordRedirectsAuthenticatedUser(t *testing.T) {
 	}
 	srv := newAuthRouteTestServer(t, auth)
 
-	req := httptest.NewRequest(http.MethodGet, "/account/forgot-password", nil)
+	req := httptest.NewRequest(http.MethodGet, paths.ForgotPassword, nil)
 	req.AddCookie(&http.Cookie{Name: sessionCookieName, Value: "session-token"})
 	rec := httptest.NewRecorder()
 
@@ -1708,8 +1709,8 @@ func TestRoutesForgotPasswordRedirectsAuthenticatedUser(t *testing.T) {
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusSeeOther)
 	}
-	if location := rec.Header().Get("Location"); location != verifyEmailPath {
-		t.Fatalf("Location = %q, want %q", location, verifyEmailPath)
+	if location := rec.Header().Get("Location"); location != paths.VerifyEmail {
+		t.Fatalf("Location = %q, want %q", location, paths.VerifyEmail)
 	}
 }
 
@@ -1717,7 +1718,7 @@ func TestRoutesResetPasswordForm(t *testing.T) {
 	auth := &fakeAuthLookup{}
 	srv := newAuthRouteTestServer(t, auth)
 
-	req := httptest.NewRequest(http.MethodGet, "/account/reset-password?token=raw-token", nil)
+	req := httptest.NewRequest(http.MethodGet, paths.ResetPassword+"?token=raw-token", nil)
 	rec := httptest.NewRecorder()
 
 	srv.Routes().ServeHTTP(rec, req)
@@ -1739,7 +1740,7 @@ func TestRoutesResetPasswordFormRejectsInvalidToken(t *testing.T) {
 	}
 	srv := newAuthRouteTestServer(t, auth)
 
-	req := httptest.NewRequest(http.MethodGet, "/account/reset-password?token=bad-token", nil)
+	req := httptest.NewRequest(http.MethodGet, paths.ResetPassword+"?token=bad-token", nil)
 	rec := httptest.NewRecorder()
 
 	srv.Routes().ServeHTTP(rec, req)
@@ -1762,7 +1763,7 @@ func TestRoutesResetPassword(t *testing.T) {
 		"confirm_password": []string{"new-password"},
 		csrfFieldName:      []string{"csrf"},
 	}
-	req := httptest.NewRequest(http.MethodPost, "/account/reset-password", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, paths.ResetPassword, strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: "csrf"})
 	rec := httptest.NewRecorder()
@@ -1772,8 +1773,8 @@ func TestRoutesResetPassword(t *testing.T) {
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusSeeOther)
 	}
-	if location := rec.Header().Get("Location"); location != "/login?status=password-changed" {
-		t.Fatalf("Location = %q, want %q", location, "/login?status=password-changed")
+	if location := rec.Header().Get("Location"); location != loginPathWithStatusChanged {
+		t.Fatalf("Location = %q, want %q", location, loginPathWithStatusChanged)
 	}
 	if auth.resetToken != "raw-token" || auth.resetNewPassword != "new-password" {
 		t.Fatalf("reset inputs = %q/%q", auth.resetToken, auth.resetNewPassword)
@@ -1787,7 +1788,7 @@ func TestRoutesResetPasswordValidatesFields(t *testing.T) {
 		"token":       []string{"raw-token"},
 		csrfFieldName: []string{"csrf"},
 	}
-	req := httptest.NewRequest(http.MethodPost, "/account/reset-password", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, paths.ResetPassword, strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: "csrf"})
 	rec := httptest.NewRecorder()
@@ -1812,7 +1813,7 @@ func TestRoutesResetPasswordHTMXValidatesFields(t *testing.T) {
 		"token":       []string{"raw-token"},
 		csrfFieldName: []string{"csrf"},
 	}
-	req := httptest.NewRequest(http.MethodPost, "/account/reset-password", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, paths.ResetPassword, strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("HX-Request", "true")
 	req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: "csrf"})
@@ -1847,7 +1848,7 @@ func TestRoutesResetPasswordHTMXRedirectsOnSuccess(t *testing.T) {
 		"confirm_password": []string{"new-password"},
 		csrfFieldName:      []string{"csrf"},
 	}
-	req := httptest.NewRequest(http.MethodPost, "/account/reset-password", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, paths.ResetPassword, strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("HX-Request", "true")
 	req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: "csrf"})
@@ -1861,8 +1862,8 @@ func TestRoutesResetPasswordHTMXRedirectsOnSuccess(t *testing.T) {
 	if location := rec.Header().Get("Location"); location != "" {
 		t.Fatalf("Location = %q, want empty for HTMX redirect", location)
 	}
-	if redirect := rec.Header().Get("HX-Redirect"); redirect != "/login?status=password-changed" {
-		t.Fatalf("HX-Redirect = %q, want %q", redirect, "/login?status=password-changed")
+	if redirect := rec.Header().Get("HX-Redirect"); redirect != loginPathWithStatusChanged {
+		t.Fatalf("HX-Redirect = %q, want %q", redirect, loginPathWithStatusChanged)
 	}
 	if auth.resetToken != "raw-token" || auth.resetNewPassword != "new-password" {
 		t.Fatalf("reset inputs = %q/%q", auth.resetToken, auth.resetNewPassword)
@@ -1881,7 +1882,7 @@ func TestRoutesResetPasswordRejectsInvalidToken(t *testing.T) {
 		"confirm_password": []string{"new-password"},
 		csrfFieldName:      []string{"csrf"},
 	}
-	req := httptest.NewRequest(http.MethodPost, "/account/reset-password", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, paths.ResetPassword, strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: "csrf"})
 	rec := httptest.NewRecorder()
@@ -1904,7 +1905,7 @@ func TestRoutesResetPasswordRequiresCSRF(t *testing.T) {
 		"new_password":     []string{"new-password"},
 		"confirm_password": []string{"new-password"},
 	}
-	req := httptest.NewRequest(http.MethodPost, "/account/reset-password", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, paths.ResetPassword, strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	rec := httptest.NewRecorder()
 
@@ -1918,7 +1919,7 @@ func TestRoutesResetPasswordRequiresCSRF(t *testing.T) {
 func TestRoutesAccountRejectsAnonymousUser(t *testing.T) {
 	srv := newAuthRouteTestServer(t, &fakeAuthLookup{})
 
-	req := httptest.NewRequest(http.MethodGet, "/account", nil)
+	req := httptest.NewRequest(http.MethodGet, paths.Account, nil)
 	rec := httptest.NewRecorder()
 
 	srv.Routes().ServeHTTP(rec, req)
@@ -1926,8 +1927,8 @@ func TestRoutesAccountRejectsAnonymousUser(t *testing.T) {
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusSeeOther)
 	}
-	if location := rec.Header().Get("Location"); location != "/login?next=%2Faccount" {
-		t.Fatalf("Location = %q, want %q", location, "/login?next=%2Faccount")
+	if location := rec.Header().Get("Location"); location != paths.Login+"?next=%2Faccount" {
+		t.Fatalf("Location = %q, want %q", location, paths.Login+"?next=%2Faccount")
 	}
 }
 
@@ -1939,15 +1940,15 @@ func newAuthRouteTestServer(t *testing.T, auth authService) *Server {
 		auth:   auth,
 		logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
 		templates: testTemplates(t, map[string]string{
-			"home.html":                `home {{ if .Authenticated }}Account Sign out {{ .User.Email }}{{ else }}Sign in Create account{{ end }}`,
-			"register.html":            `{{ define "content" }}{{ template "register_form_section" . }}{{ end }}{{ define "register_form_section" }}register {{ .Error }} {{ with index .FieldErrors "email" }}{{ . }}{{ end }} {{ with index .FieldErrors "password" }}{{ . }}{{ end }} {{ with index .FieldErrors "confirm_password" }}{{ . }}{{ end }} {{ .Email }} {{ .PasswordMinLength }} {{ .CSRFToken }}{{ end }}`,
-			"login.html":               `{{ define "content" }}{{ template "login_form_section" . }} /account/forgot-password /account/resend-verification{{ end }}{{ define "login_form_section" }}login {{ .Error }} {{ with index .FieldErrors "email" }}{{ . }}{{ end }} {{ with index .FieldErrors "password" }}{{ . }}{{ end }} {{ .CSRFToken }} {{ .Next }} login-status={{ .LoginStatus }}{{ end }}`,
-			"account.html":             `{{ define "content" }}account {{ .User.Email }} {{ .CSRFToken }} {{ template "account_change_password_section" . }}{{ end }}{{ define "account_change_password_section" }}change-password-visible {{ .Error }} {{ with index .FieldErrors "current_password" }}{{ . }}{{ end }} {{ with index .FieldErrors "new_password" }}{{ . }}{{ end }} {{ with index .FieldErrors "confirm_password" }}{{ . }}{{ end }}{{ end }}`,
-			"confirm_email.html":       `confirm {{ if .Error }}{{ .Error }} {{ if .Authenticated }}Go to your account{{ else }}Sign in{{ end }}{{ else }}Email confirmed{{ end }}`,
-			"forgot_password.html":     `{{ define "content" }}{{ template "forgot_password_form_section" . }}{{ end }}{{ define "forgot_password_form_section" }}forgot-form {{ .Error }} {{ with index .FieldErrors "email" }}{{ . }}{{ end }} {{ .Email }} forgot-status={{ .ForgotPasswordStatus }} {{ .CSRFToken }}{{ end }}`,
-			"reset_password.html":      `{{ define "content" }}{{ if .ResetTokenInvalid }}{{ .Error }}{{ else }}{{ template "reset_password_form_section" . }}{{ end }}{{ end }}{{ define "reset_password_form_section" }}reset-form {{ .Error }} {{ with index .FieldErrors "new_password" }}{{ . }}{{ end }} {{ with index .FieldErrors "confirm_password" }}{{ . }}{{ end }} token={{ .ResetToken }} {{ if .ResetTokenInvalid }}invalid or has expired{{ end }} {{ .CSRFToken }}{{ end }}`,
-			"resend_verification.html": `{{ define "content" }}{{ template "resend_verification_form_section" . }}{{ end }}{{ define "resend_verification_form_section" }}resend-form {{ .Error }} {{ with index .FieldErrors "email" }}{{ . }}{{ end }} {{ .Email }} resend-status={{ .ResendStatus }} {{ .CSRFToken }}{{ end }}`,
-			"verify_email.html":        `{{ define "content" }}verify-email {{ .User.Email }} {{ template "verify_email_resend_section" . }}{{ end }}{{ define "verify_email_resend_section" }}resend-status={{ .ResendStatus }}{{ end }}`,
+			templateHome:               `home {{ if .Authenticated }}Account Sign out {{ .User.Email }}{{ else }}Sign in Create account{{ end }}`,
+			templateRegister:           `{{ define "content" }}{{ template "register_form_section" . }}{{ end }}{{ define "register_form_section" }}register {{ .Error }} {{ with index .FieldErrors "email" }}{{ . }}{{ end }} {{ with index .FieldErrors "password" }}{{ . }}{{ end }} {{ with index .FieldErrors "confirm_password" }}{{ . }}{{ end }} {{ .Email }} {{ .PasswordMinLength }} {{ .CSRFToken }}{{ end }}`,
+			templateLogin:              `{{ define "content" }}{{ template "login_form_section" . }} ` + paths.ForgotPassword + ` ` + paths.ResendVerification + `{{ end }}{{ define "login_form_section" }}login {{ .Error }} {{ with index .FieldErrors "email" }}{{ . }}{{ end }} {{ with index .FieldErrors "password" }}{{ . }}{{ end }} {{ .CSRFToken }} {{ .Next }} login-status={{ .LoginStatus }}{{ end }}`,
+			templateAccount:            `{{ define "content" }}account {{ .User.Email }} {{ .CSRFToken }} {{ template "account_change_password_section" . }}{{ end }}{{ define "account_change_password_section" }}change-password-visible {{ .Error }} {{ with index .FieldErrors "current_password" }}{{ . }}{{ end }} {{ with index .FieldErrors "new_password" }}{{ . }}{{ end }} {{ with index .FieldErrors "confirm_password" }}{{ . }}{{ end }}{{ end }}`,
+			templateConfirmEmail:       `confirm {{ if .Error }}{{ .Error }} {{ if .Authenticated }}Go to your account{{ else }}Sign in{{ end }}{{ else }}Email confirmed{{ end }}`,
+			templateForgotPassword:     `{{ define "content" }}{{ template "forgot_password_form_section" . }}{{ end }}{{ define "forgot_password_form_section" }}forgot-form {{ .Error }} {{ with index .FieldErrors "email" }}{{ . }}{{ end }} {{ .Email }} forgot-status={{ .ForgotPasswordStatus }} {{ .CSRFToken }}{{ end }}`,
+			templateResetPassword:      `{{ define "content" }}{{ if .ResetTokenInvalid }}{{ .Error }}{{ else }}{{ template "reset_password_form_section" . }}{{ end }}{{ end }}{{ define "reset_password_form_section" }}reset-form {{ .Error }} {{ with index .FieldErrors "new_password" }}{{ . }}{{ end }} {{ with index .FieldErrors "confirm_password" }}{{ . }}{{ end }} token={{ .ResetToken }} {{ if .ResetTokenInvalid }}invalid or has expired{{ end }} {{ .CSRFToken }}{{ end }}`,
+			templateResendVerification: `{{ define "content" }}{{ template "resend_verification_form_section" . }}{{ end }}{{ define "resend_verification_form_section" }}resend-form {{ .Error }} {{ with index .FieldErrors "email" }}{{ . }}{{ end }} {{ .Email }} resend-status={{ .ResendStatus }} {{ .CSRFToken }}{{ end }}`,
+			templateVerifyEmail:        `{{ define "content" }}verify-email {{ .User.Email }} {{ template "verify_email_resend_section" . }}{{ end }}{{ define "verify_email_resend_section" }}resend-status={{ .ResendStatus }}{{ end }}`,
 		}),
 		passwordMinLength: 8,
 	}

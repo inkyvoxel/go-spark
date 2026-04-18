@@ -55,6 +55,7 @@ Built-in email functionality includes:
 * Account confirmation emails on registration.
 * Confirmation links at `/account/confirm-email`.
 * Resend confirmation from the account page for signed-in, unverified users.
+* Password reset emails with reset links at `/account/reset-password`.
 * Durable email delivery intent via a database outbox worker.
 
 Email delivery defaults to `EMAIL_PROVIDER=log` for safe local development. Set `EMAIL_PROVIDER=smtp` with `SMTP_*` values to send real mail.
@@ -135,10 +136,12 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) before opening pull requests, and [CHANGE
 /internal/config    environment config
 /internal/database  SQLite connection setup
 /internal/db        SQL queries and generated sqlc package
+/internal/email     email rendering, sending, and outbox delivery
+/internal/paths     canonical public URL path constants
 /internal/server    HTTP routes and handlers
 /internal/services  business logic
 /migrations         goose migrations
-/templates          server-rendered HTML
+/templates          server-rendered HTML, with auth/account pages in /templates/account
 /static             CSS and static assets
 /docs               architecture and development notes
 .github/workflows   CI configuration
@@ -155,6 +158,7 @@ If you use this as a template for a new project:
 - [ ] Review `DATABASE_PATH`.
 - [ ] Run migrations.
 - [ ] Replace or remove example routes and templates.
+- [ ] Add new public paths to `internal/paths` instead of scattering route strings through handlers, emails, templates, or tests.
 - [ ] Update the copyright holder in `LICENSE`.
 - [ ] Review production settings before deployment.
 

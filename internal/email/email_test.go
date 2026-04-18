@@ -6,6 +6,8 @@ import (
 	"log/slog"
 	"strings"
 	"testing"
+
+	"github.com/inkyvoxel/go-spark/internal/paths"
 )
 
 func TestNewAccountConfirmationMessage(t *testing.T) {
@@ -26,10 +28,10 @@ func TestNewAccountConfirmationMessage(t *testing.T) {
 	if message.Subject != "Confirm your email address" {
 		t.Fatalf("Subject = %q, want confirmation subject", message.Subject)
 	}
-	if !strings.Contains(message.TextBody, "https://app.example.com/account/confirm-email?token=token+value") {
+	if !strings.Contains(message.TextBody, "https://app.example.com"+paths.ConfirmEmail+"?token=token+value") {
 		t.Fatalf("TextBody = %q, want confirmation URL", message.TextBody)
 	}
-	if !strings.Contains(message.HTMLBody, `href="https://app.example.com/account/confirm-email?token=token&#43;value"`) {
+	if !strings.Contains(message.HTMLBody, `href="https://app.example.com`+paths.ConfirmEmail+`?token=token&#43;value"`) {
 		t.Fatalf("HTMLBody = %q, want escaped confirmation URL", message.HTMLBody)
 	}
 }
@@ -43,7 +45,7 @@ func TestNewAccountConfirmationMessageKeepsBasePath(t *testing.T) {
 		t.Fatalf("NewAccountConfirmationMessage() error = %v", err)
 	}
 
-	if !strings.Contains(message.TextBody, "https://example.com/app/account/confirm-email?token=token") {
+	if !strings.Contains(message.TextBody, "https://example.com/app"+paths.ConfirmEmail+"?token=token") {
 		t.Fatalf("TextBody = %q, want confirmation URL under base path", message.TextBody)
 	}
 }
@@ -117,10 +119,10 @@ func TestNewPasswordResetMessage(t *testing.T) {
 	if message.Subject != "Reset your password" {
 		t.Fatalf("Subject = %q, want password reset subject", message.Subject)
 	}
-	if !strings.Contains(message.TextBody, "https://app.example.com/account/reset-password?token=token+value") {
+	if !strings.Contains(message.TextBody, "https://app.example.com"+paths.ResetPassword+"?token=token+value") {
 		t.Fatalf("TextBody = %q, want password reset URL", message.TextBody)
 	}
-	if !strings.Contains(message.HTMLBody, `href="https://app.example.com/account/reset-password?token=token&#43;value"`) {
+	if !strings.Contains(message.HTMLBody, `href="https://app.example.com`+paths.ResetPassword+`?token=token&#43;value"`) {
 		t.Fatalf("HTMLBody = %q, want escaped password reset URL", message.HTMLBody)
 	}
 }
@@ -210,8 +212,8 @@ func TestLogSenderLogsMessageBodiesWhenEnabled(t *testing.T) {
 		From:     "hello@example.com",
 		To:       "user@example.com",
 		Subject:  "Confirm your email address",
-		TextBody: "Confirm here: http://localhost:8080/account/confirm-email?token=secret",
-		HTMLBody: `<a href="http://localhost:8080/account/confirm-email?token=secret">Confirm</a>`,
+		TextBody: "Confirm here: http://localhost:8080" + paths.ConfirmEmail + "?token=secret",
+		HTMLBody: `<a href="http://localhost:8080` + paths.ConfirmEmail + `?token=secret">Confirm</a>`,
 	})
 	if err != nil {
 		t.Fatalf("Send() error = %v", err)

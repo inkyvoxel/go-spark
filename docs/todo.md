@@ -1,8 +1,6 @@
 ## Project architecture
 
 - Add a small `internal/server/routes.go` with grouped `registerAuthRoutes`, `registerAccountRoutes`, etc., so `Routes()` stays short.
-- Add a doc table of canonical routes in docs/architecture.md to make the starter easier to fork.
-- Consider package-level template name constants (for auth templates) to avoid string drift over time.
 
 ## Email features
 
@@ -17,13 +15,15 @@ What is still not implemented:
 
 ## Security
 
+- Convention: public paths live in `internal/paths`, templates receive links through `.Routes`, and server template/fragment names are centralized as package-level constants. Avoid inline string literals for routable endpoints, template links/actions, and render target templates/fragments.
+
 - Security audit report completed on 2026-04-17. Scope reviewed: HTTP routing and middleware, auth/session/password reset/email verification flows, CSRF, rate limiting, templates, config, SQLite storage, migrations, email worker/SMTP, docs, and tests. Existing tests pass with `go test ./...`. `govulncheck` has since been added as a pinned Go tool; run `make vulncheck` for dependency and standard-library vulnerability scanning.
 
 ### Executive summary
 
 - Overall foundation is solid for a starter: server-side sessions, HttpOnly cookies, SameSite=Lax, CSRF tokens, Argon2id password hashing, random 32-byte tokens, hashed reset/verification tokens, SQL parameterization through sqlc, safe redirect validation, transactional outbox writes, request timeouts, and auth rate limiting are all present.
 - No obvious SQL injection, reflected XSS through templates, open redirect, or token entropy issue was found during this review.
-- The biggest hardening gaps are production safety rails, browser security headers/CSP, request body limits, session token storage design, email verification policy, and operational maturity around rate limits, dependency scanning, and outbox recovery.
+- The biggest remaining hardening gaps are production safety rails, session token storage design, CSRF strengthening, cache-control for auth-sensitive pages, and operational maturity around shared rate limits, dependency scanning, and outbox recovery.
 
 ### High priority
 
@@ -35,14 +35,14 @@ What is still not implemented:
   - Progress: `AUTH_PASSWORD_PEPPER` now fails fast in production; remaining production safety checks are still pending.
 
 - [x] Add security response headers middleware.
-  - Evidence: responses currently set content type in render helpers, but no global headers are added. `templates/layout.html` loads vendored CSS and HTMX locally, so the app is well-positioned for a strict policy.
+  - Evidence: `templates/layout.html` loads vendored CSS and HTMX locally, so the app is well-positioned for a strict policy.
   - Risk: missing defense-in-depth against clickjacking, MIME sniffing, referrer leakage of reset tokens, and script injection impact.
   - Recommendation: add middleware for at least `Content-Security-Policy`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin` or `no-referrer`, `Frame-Options: DENY` or CSP `frame-ancestors 'none'`, and `Permissions-Policy`. In production over HTTPS, add `Strict-Transport-Security`.
   - Deployment note: set baseline app-owned headers in Go so the starter is secure by default in every hosting environment. A production reverse proxy such as Caddy or nginx may also set or override deployment-specific headers, especially `Strict-Transport-Security`, but avoid maintaining conflicting policies in two places.
   - Suggested CSP starting point: `default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; form-action 'self'; frame-ancestors 'none'; base-uri 'self'`.
 
 - [x] Put explicit max request body limits on all form POST routes.
-  - Evidence: handlers call `r.ParseForm()` directly in register, login, forgot password, reset password, resend verification, and change password flows.
+  - Evidence: form handlers call `r.ParseForm()` in register, login, forgot password, reset password, resend verification, and change password flows.
   - Risk: attackers can send large form bodies to consume memory/CPU before validation and rate limits complete.
   - Recommendation: wrap form parsing with `http.MaxBytesReader`, for example 32-64 KiB for auth forms, and return `413 Request Entity Too Large` for oversized bodies.
 

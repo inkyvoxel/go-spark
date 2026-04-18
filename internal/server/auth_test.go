@@ -12,6 +12,7 @@ import (
 	"time"
 
 	db "github.com/inkyvoxel/go-spark/internal/db/generated"
+	"github.com/inkyvoxel/go-spark/internal/paths"
 	"github.com/inkyvoxel/go-spark/internal/services"
 )
 
@@ -152,15 +153,15 @@ func TestRequireAuthRedirectsAnonymousGETToLogin(t *testing.T) {
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusSeeOther)
 	}
-	if location := rec.Header().Get("Location"); location != "/login?next=%2Fprivate%3Ftab%3Done" {
-		t.Fatalf("Location = %q, want %q", location, "/login?next=%2Fprivate%3Ftab%3Done")
+	if location := rec.Header().Get("Location"); location != paths.Login+"?next=%2Fprivate%3Ftab%3Done" {
+		t.Fatalf("Location = %q, want %q", location, paths.Login+"?next=%2Fprivate%3Ftab%3Done")
 	}
 }
 
 func TestRequireAnonymousRedirectsCurrentUserToAccount(t *testing.T) {
 	srv := newAuthMiddlewareTestServer(&fakeAuthLookup{})
 
-	req := httptest.NewRequest(http.MethodGet, "/login", nil)
+	req := httptest.NewRequest(http.MethodGet, paths.Login, nil)
 	req = req.WithContext(contextWithUser(req.Context(), db.User{
 		ID:    42,
 		Email: "user@example.com",
@@ -178,15 +179,15 @@ func TestRequireAnonymousRedirectsCurrentUserToAccount(t *testing.T) {
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusSeeOther)
 	}
-	if location := rec.Header().Get("Location"); location != "/account" {
-		t.Fatalf("Location = %q, want %q", location, "/account")
+	if location := rec.Header().Get("Location"); location != paths.Account {
+		t.Fatalf("Location = %q, want %q", location, paths.Account)
 	}
 }
 
 func TestRequireAnonymousRedirectsUnverifiedUserToVerifyEmail(t *testing.T) {
 	srv := newAuthMiddlewareTestServer(&fakeAuthLookup{})
 
-	req := httptest.NewRequest(http.MethodGet, "/login", nil)
+	req := httptest.NewRequest(http.MethodGet, paths.Login, nil)
 	req = req.WithContext(contextWithUser(req.Context(), db.User{ID: 42, Email: "user@example.com"}))
 	rec := httptest.NewRecorder()
 
@@ -197,15 +198,15 @@ func TestRequireAnonymousRedirectsUnverifiedUserToVerifyEmail(t *testing.T) {
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusSeeOther)
 	}
-	if location := rec.Header().Get("Location"); location != verifyEmailPath {
-		t.Fatalf("Location = %q, want %q", location, verifyEmailPath)
+	if location := rec.Header().Get("Location"); location != paths.VerifyEmail {
+		t.Fatalf("Location = %q, want %q", location, paths.VerifyEmail)
 	}
 }
 
 func TestRequireAnonymousAllowsAnonymousUser(t *testing.T) {
 	srv := newAuthMiddlewareTestServer(&fakeAuthLookup{})
 
-	req := httptest.NewRequest(http.MethodGet, "/login", nil)
+	req := httptest.NewRequest(http.MethodGet, paths.Login, nil)
 	rec := httptest.NewRecorder()
 
 	srv.requireAnonymous(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -220,7 +221,7 @@ func TestRequireAnonymousAllowsAnonymousUser(t *testing.T) {
 func TestRequireVerifiedAuthAllowsVerifiedUser(t *testing.T) {
 	srv := newAuthMiddlewareTestServer(&fakeAuthLookup{})
 
-	req := httptest.NewRequest(http.MethodPost, "/account/change-password", nil)
+	req := httptest.NewRequest(http.MethodPost, paths.ChangePassword, nil)
 	req = req.WithContext(contextWithUser(req.Context(), db.User{
 		ID:    42,
 		Email: "user@example.com",
@@ -243,7 +244,7 @@ func TestRequireVerifiedAuthAllowsVerifiedUser(t *testing.T) {
 func TestRequireVerifiedAuthRejectsUnverifiedUser(t *testing.T) {
 	srv := newAuthMiddlewareTestServer(&fakeAuthLookup{})
 
-	req := httptest.NewRequest(http.MethodPost, "/account/change-password", nil)
+	req := httptest.NewRequest(http.MethodPost, paths.ChangePassword, nil)
 	req = req.WithContext(contextWithUser(req.Context(), db.User{
 		ID:    42,
 		Email: "user@example.com",
@@ -276,8 +277,8 @@ func TestRequireVerifiedAuthRedirectsUnverifiedGETToVerifyPage(t *testing.T) {
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusSeeOther)
 	}
-	if location := rec.Header().Get("Location"); location != verifyEmailPath {
-		t.Fatalf("Location = %q, want %q", location, verifyEmailPath)
+	if location := rec.Header().Get("Location"); location != paths.VerifyEmail {
+		t.Fatalf("Location = %q, want %q", location, paths.VerifyEmail)
 	}
 }
 
@@ -302,8 +303,8 @@ func TestSafeRedirectPath(t *testing.T) {
 		value string
 		want  string
 	}{
-		{name: "path", value: "/account", want: "/account"},
-		{name: "path with query", value: "/account?tab=profile", want: "/account?tab=profile"},
+		{name: "path", value: paths.Account, want: paths.Account},
+		{name: "path with query", value: paths.Account + "?tab=profile", want: paths.Account + "?tab=profile"},
 		{name: "absolute URL", value: "https://evil.example/account", want: ""},
 		{name: "protocol relative URL", value: "//evil.example/account", want: ""},
 		{name: "missing leading slash", value: "account", want: ""},

@@ -10,6 +10,7 @@ import (
 
 	db "github.com/inkyvoxel/go-spark/internal/db/generated"
 	"github.com/inkyvoxel/go-spark/internal/email"
+	"github.com/inkyvoxel/go-spark/internal/paths"
 )
 
 func TestAuthServiceRegisterHashesPassword(t *testing.T) {
@@ -44,7 +45,7 @@ func TestAuthServiceRegisterHashesPassword(t *testing.T) {
 	if store.outbox[0].To != "<user@example.com>" {
 		t.Fatalf("confirmation email recipient = %q, want <user@example.com>", store.outbox[0].To)
 	}
-	if !strings.Contains(store.outbox[0].TextBody, "http://localhost:8080/account/confirm-email?token=") {
+	if !strings.Contains(store.outbox[0].TextBody, "http://localhost:8080"+paths.ConfirmEmail+"?token=") {
 		t.Fatalf("confirmation email text = %q, want confirmation URL", store.outbox[0].TextBody)
 	}
 }

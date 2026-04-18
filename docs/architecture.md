@@ -99,12 +99,14 @@ The intended codebase structure is:
 /internal
   /config           environment config
   /database         database connection setup
+  /email            email rendering, sending, and outbox delivery
+  /paths            canonical public URL path constants
   /server           HTTP routes and handlers
   /services         business logic
   /db
     /queries        SQL files for sqlc
     /generated      sqlc-generated code
-/templates          HTML templates
+/templates          HTML templates, with account/auth pages under /templates/account
 /migrations         goose migration files
 /static             CSS and assets
 ```
@@ -115,7 +117,67 @@ Guidelines:
 * Services own business logic.
 * Services define the small storage interfaces they need.
 * The DB layer owns persistence, generated queries, and database-driver error translation.
+* Shared public URL paths live in `internal/paths` so server code, email links, tests, and templates do not drift apart.
 * Templates render data and avoid business rules.
+
+### Route and Template Constants
+
+Public URL paths are centralized in `internal/paths`.
+
+Use those constants when:
+
+* Registering routes.
+* Redirecting from handlers or middleware.
+* Generating email links.
+* Building route-aware template data.
+* Asserting route behavior in tests.
+
+Server mux patterns should be composed at registration time instead of duplicated as separate constants:
+
+```go
+dynamic.Handle(route(http.MethodGet, paths.Account), s.requireVerifiedAuth(http.HandlerFunc(s.account)))
+dynamic.Handle(route(http.MethodPost, paths.ChangePassword), s.requireVerifiedAuth(http.HandlerFunc(s.changePassword)))
+```
+
+Templates cannot import Go packages directly, so handlers pass a route catalog into `templateData` as `.Routes`. Template links and form actions should use those helpers:
+
+```html
+<a href="{{ .Routes.Login }}">Sign in</a>
+<form method="post" action="{{ .Routes.ForgotPassword }}" hx-post="{{ .Routes.ForgotPassword }}">
+```
+
+Template keys and fragment names are centralized in the server package. Use those constants in render calls and tests instead of inline strings such as `"login.html"` or `"login_form_section"`.
+
+### Canonical Routes
+
+Core routes:
+
+| Method | Path | Purpose | Auth policy |
+| --- | --- | --- | --- |
+| `GET` | `/` | Home page | Optional session |
+| `GET` | `/healthz` | Health check | Public |
+| `GET` | `/static/*` | Static assets | Public |
+
+Auth and account routes:
+
+| Method | Path | Purpose | Auth policy |
+| --- | --- | --- | --- |
+| `GET` | `/login` | Sign-in form | Anonymous only |
+| `POST` | `/login` | Sign in | Anonymous only, rate limited |
+| `GET` | `/register` | Registration form | Anonymous only |
+| `POST` | `/register` | Create account | Anonymous only, rate limited |
+| `POST` | `/logout` | Sign out | Authenticated |
+| `GET` | `/account` | Account page | Verified authenticated |
+| `POST` | `/account/change-password` | Change password | Verified authenticated |
+| `GET` | `/account/verify-email` | Unverified-account interstitial | Authenticated |
+| `POST` | `/account/verify-email/resend` | Resend confirmation for signed-in user | Authenticated, rate limited |
+| `GET` | `/account/confirm-email` | Consume email confirmation token | Public |
+| `GET` | `/account/forgot-password` | Password reset request form | Anonymous only |
+| `POST` | `/account/forgot-password` | Request password reset email | Anonymous only, rate limited |
+| `GET` | `/account/reset-password` | Reset password form | Anonymous only |
+| `POST` | `/account/reset-password` | Reset password | Anonymous only |
+| `GET` | `/account/resend-verification` | Public resend confirmation form | Anonymous only |
+| `POST` | `/account/resend-verification` | Public resend confirmation request | Anonymous only, rate limited |
 
 ### Thin Templates
 
@@ -188,6 +250,7 @@ Authentication uses:
 
 * Email and password login.
 * Account email verification via confirmation links.
+* Password reset via email.
 * Server-side sessions stored in SQLite.
 * HTTP-only cookies for session IDs.
 * Minimal external dependencies.
@@ -239,6 +302,22 @@ CREATE TABLE email_verification_tokens (
 
 Only token hashes are stored. The raw token is generated once, sent to the user, and treated as a secret.
 
+### Password Reset Tokens Table
+
+```sql
+CREATE TABLE password_reset_tokens (
+    id INTEGER PRIMARY KEY,
+    user_id INTEGER NOT NULL,
+    token_hash TEXT NOT NULL UNIQUE,
+    expires_at TIMESTAMP NOT NULL,
+    consumed_at TIMESTAMP,
+    created_at TIMESTAMP NOT NULL,
+    FOREIGN KEY (user_id) REFERENCES users(id)
+);
+```
+
+Only token hashes are stored. The raw reset token is sent to the user once and must be treated as a bearer credential.
+
 ### Email Outbox Table
 
 ```sql
@@ -285,17 +364,20 @@ Handlers should not handle auth logic directly.
 Routes should express their auth policy at registration time:
 
 ```go
-dynamic.Handle("GET /dashboard", s.requireAuth(http.HandlerFunc(s.dashboard)))
-dynamic.Handle("GET /login", s.requireAnonymous(http.HandlerFunc(s.loginForm)))
+dynamic.Handle(route(http.MethodGet, paths.Account), s.requireVerifiedAuth(http.HandlerFunc(s.account)))
+dynamic.Handle(route(http.MethodGet, paths.Login), s.requireAnonymous(http.HandlerFunc(s.loginForm)))
 ```
 
 Use:
 
 * `loadSession` for dynamic routes that should know who the current user is when a valid session cookie is present.
 * `requireAuth` for protected pages and actions.
+* `requireVerifiedAuth` for pages and actions that require both a signed-in user and a verified email address.
 * `requireAnonymous` for sign-in and registration pages that should redirect signed-in users back to their account.
 
 For browser page requests, anonymous `GET` requests to protected pages should redirect to `/login` with a safe `next` path. Unsafe requests such as `POST` should return `401 Unauthorized` when the user is not signed in.
+
+Account-specific routes should live under `/account` unless there is a clear product reason not to. This keeps auth/account URLs from colliding with future application features.
 
 Redirect destinations must be validated before use. Only local paths such as `/account` or `/dashboard?tab=home` should be accepted. Absolute URLs like `https://example.com` and protocol-relative URLs like `//example.com` must be rejected to avoid open redirect vulnerabilities.
 
@@ -359,10 +441,9 @@ token := hex.EncodeToString(b)
 
 These can be added later if a project needs them:
 
-* Password reset via email.
 * Remember-me sessions.
 * OAuth login with providers such as Google or GitHub.
-* Rate limiting on login attempts.
+* Production-grade shared rate limiting for multi-instance deployments.
 
 ### Auth Non-Goals
 

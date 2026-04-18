@@ -7,12 +7,12 @@
   </p>
   <p>
     {{ if .Authenticated }}
-    <a href="/account" role="button">Account</a>
+    <a href="{{ .Routes.Account }}" role="button">Account</a>
     {{ else }}
-    <a href="/register" role="button">Create account</a>
-    <a href="/login" role="button" class="secondary">Sign in</a>
+    <a href="{{ .Routes.Register }}" role="button">Create account</a>
+    <a href="{{ .Routes.Login }}" role="button" class="secondary">Sign in</a>
     {{ end }}
-    <a href="/healthz" role="button" class="contrast">Check health</a>
+    <a href="{{ .Routes.Healthz }}" role="button" class="contrast">Check health</a>
   </p>
 </section>
 {{ end }}

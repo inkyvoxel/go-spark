@@ -10,6 +10,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/inkyvoxel/go-spark/internal/paths"
+
 	_ "modernc.org/sqlite"
 )
 
@@ -26,7 +28,7 @@ func TestNewRequiresAuthService(t *testing.T) {
 func TestRoutesHome(t *testing.T) {
 	srv := testServer(t)
 
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req := httptest.NewRequest(http.MethodGet, paths.Home, nil)
 	rec := httptest.NewRecorder()
 
 	srv.Routes().ServeHTTP(rec, req)
@@ -42,7 +44,7 @@ func TestRoutesHome(t *testing.T) {
 func TestRoutesHealthz(t *testing.T) {
 	srv := testServer(t)
 
-	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
+	req := httptest.NewRequest(http.MethodGet, paths.Healthz, nil)
 	rec := httptest.NewRecorder()
 
 	srv.Routes().ServeHTTP(rec, req)
@@ -61,7 +63,7 @@ func TestRoutesHealthzReturnsUnavailableWhenDatabaseIsClosed(t *testing.T) {
 		t.Fatalf("Close() error = %v", err)
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
+	req := httptest.NewRequest(http.MethodGet, paths.Healthz, nil)
 	rec := httptest.NewRecorder()
 
 	srv.Routes().ServeHTTP(rec, req)
@@ -74,7 +76,7 @@ func TestRoutesHealthzReturnsUnavailableWhenDatabaseIsClosed(t *testing.T) {
 func TestRoutesSetSecurityHeaders(t *testing.T) {
 	srv := testServer(t)
 
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req := httptest.NewRequest(http.MethodGet, paths.Home, nil)
 	rec := httptest.NewRecorder()
 
 	srv.Routes().ServeHTTP(rec, req)
@@ -103,7 +105,7 @@ func TestRoutesSetHSTSWhenSecureCookiesEnabled(t *testing.T) {
 	srv := testServer(t)
 	srv.cookieSecure = true
 
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req := httptest.NewRequest(http.MethodGet, paths.Home, nil)
 	rec := httptest.NewRecorder()
 
 	srv.Routes().ServeHTTP(rec, req)
@@ -134,7 +136,7 @@ func testServer(t *testing.T) *Server {
 		db:     testDB(t),
 		logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
 		templates: testTemplates(t, map[string]string{
-			"home.html": `<h1>{{ .Title }}</h1>`,
+			templateHome: `<h1>{{ .Title }}</h1>`,
 		}),
 	}
 }
@@ -163,14 +165,13 @@ func testTemplates(t *testing.T, pages map[string]string) map[string]*template.T
 			parsedContent = content
 		}
 
-		templates[name] = template.Must(template.New("layout.html").Parse(`
-			{{ define "layout.html" }}
+		templates[name] = template.Must(template.New(templateLayout).Parse(
+			`{{ define "` + templateLayout + `" }}
 				<!doctype html>
 				<title>{{ .Title }}</title>
 				{{ template "content" . }}
-			{{ end }}
-			` + parsedContent + `
-		`))
+			{{ end }}` + parsedContent,
+		))
 	}
 
 	return templates
