@@ -122,6 +122,28 @@ func TestCSRFRejectsPostWithMismatchedToken(t *testing.T) {
 	}
 }
 
+func TestCSRFRejectsOversizedFormBody(t *testing.T) {
+	srv := newAuthMiddlewareTestServer(nil)
+
+	oversizedPayload := strings.Repeat("a", maxRequestBodyBytes+1024)
+	form := url.Values{
+		csrfFieldName: []string{"token"},
+		"payload":     []string{oversizedPayload},
+	}
+	req := httptest.NewRequest(http.MethodPost, "/submit", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: "token"})
+	rec := httptest.NewRecorder()
+
+	srv.limitRequestBody(srv.csrf(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatal("next handler should not run")
+	}))).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusRequestEntityTooLarge)
+	}
+}
+
 func TestIsUnsafeMethod(t *testing.T) {
 	safe := []string{http.MethodGet, http.MethodHead, http.MethodOptions, http.MethodTrace}
 	for _, method := range safe {

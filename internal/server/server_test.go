@@ -71,6 +71,48 @@ func TestRoutesHealthzReturnsUnavailableWhenDatabaseIsClosed(t *testing.T) {
 	}
 }
 
+func TestRoutesSetSecurityHeaders(t *testing.T) {
+	srv := testServer(t)
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+
+	srv.Routes().ServeHTTP(rec, req)
+
+	if got := rec.Header().Get("Content-Security-Policy"); got != cspHeaderValue {
+		t.Fatalf("Content-Security-Policy = %q, want %q", got, cspHeaderValue)
+	}
+	if got := rec.Header().Get("X-Content-Type-Options"); got != "nosniff" {
+		t.Fatalf("X-Content-Type-Options = %q, want %q", got, "nosniff")
+	}
+	if got := rec.Header().Get("Referrer-Policy"); got != "no-referrer" {
+		t.Fatalf("Referrer-Policy = %q, want %q", got, "no-referrer")
+	}
+	if got := rec.Header().Get("X-Frame-Options"); got != "DENY" {
+		t.Fatalf("X-Frame-Options = %q, want %q", got, "DENY")
+	}
+	if got := rec.Header().Get("Permissions-Policy"); got != "geolocation=(), microphone=(), camera=()" {
+		t.Fatalf("Permissions-Policy = %q, want expected policy", got)
+	}
+	if got := rec.Header().Get("Strict-Transport-Security"); got != "" {
+		t.Fatalf("Strict-Transport-Security = %q, want empty for insecure requests", got)
+	}
+}
+
+func TestRoutesSetHSTSWhenSecureCookiesEnabled(t *testing.T) {
+	srv := testServer(t)
+	srv.cookieSecure = true
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+
+	srv.Routes().ServeHTTP(rec, req)
+
+	if got := rec.Header().Get("Strict-Transport-Security"); got != "max-age=31536000" {
+		t.Fatalf("Strict-Transport-Security = %q, want %q", got, "max-age=31536000")
+	}
+}
+
 func TestRenderReturnsInternalServerErrorForTemplateError(t *testing.T) {
 	srv := testServer(t)
 

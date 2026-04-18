@@ -70,3 +70,33 @@ func TestAuthSenderFromUsesEmailFromByDefault(t *testing.T) {
 		t.Fatalf("authSenderFrom() = %q, want EMAIL_FROM", from)
 	}
 }
+
+func TestValidateSecurityConfigRequiresPepperInProduction(t *testing.T) {
+	err := validateSecurityConfig(config.Config{
+		Env:            "production",
+		PasswordPepper: "",
+	})
+	if err == nil {
+		t.Fatal("validateSecurityConfig() error = nil, want error")
+	}
+}
+
+func TestValidateSecurityConfigAllowsProductionWithPepper(t *testing.T) {
+	err := validateSecurityConfig(config.Config{
+		Env:            "production",
+		PasswordPepper: "pepper",
+	})
+	if err != nil {
+		t.Fatalf("validateSecurityConfig() error = %v, want nil", err)
+	}
+}
+
+func TestValidateSecurityConfigAllowsNonProductionWithoutPepper(t *testing.T) {
+	err := validateSecurityConfig(config.Config{
+		Env:            "development",
+		PasswordPepper: "",
+	})
+	if err != nil {
+		t.Fatalf("validateSecurityConfig() error = %v, want nil", err)
+	}
+}

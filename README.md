@@ -115,13 +115,14 @@ make test
 make fmt
 make tidy
 make sqlc
+make vulncheck
 make migrate-up
 make migrate-down
 make migrate-status
 make tools
 ```
 
-`sqlc` and `goose` are pinned as Go tool dependencies in `go.mod`, so the Makefile runs them through `go tool`. You do not need separate global installs.
+`sqlc`, `goose`, and `govulncheck` are pinned as Go tool dependencies in `go.mod`, so the Makefile runs them through `go tool`. You do not need separate global installs.
 
 See [docs/development.md](docs/development.md) for tool and workflow details. See [docs/email.md](docs/email.md) for the staged email and account-confirmation plan.
 

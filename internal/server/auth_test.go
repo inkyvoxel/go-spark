@@ -2,12 +2,14 @@ package server
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	db "github.com/inkyvoxel/go-spark/internal/db/generated"
 	"github.com/inkyvoxel/go-spark/internal/services"
@@ -159,7 +161,14 @@ func TestRequireAnonymousRedirectsCurrentUserToAccount(t *testing.T) {
 	srv := newAuthMiddlewareTestServer(&fakeAuthLookup{})
 
 	req := httptest.NewRequest(http.MethodGet, "/login", nil)
-	req = req.WithContext(contextWithUser(req.Context(), db.User{ID: 42, Email: "user@example.com"}))
+	req = req.WithContext(contextWithUser(req.Context(), db.User{
+		ID:    42,
+		Email: "user@example.com",
+		EmailVerifiedAt: sql.NullTime{
+			Time:  time.Now().UTC(),
+			Valid: true,
+		},
+	}))
 	rec := httptest.NewRecorder()
 
 	srv.requireAnonymous(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -171,6 +180,25 @@ func TestRequireAnonymousRedirectsCurrentUserToAccount(t *testing.T) {
 	}
 	if location := rec.Header().Get("Location"); location != "/account" {
 		t.Fatalf("Location = %q, want %q", location, "/account")
+	}
+}
+
+func TestRequireAnonymousRedirectsUnverifiedUserToVerifyEmail(t *testing.T) {
+	srv := newAuthMiddlewareTestServer(&fakeAuthLookup{})
+
+	req := httptest.NewRequest(http.MethodGet, "/login", nil)
+	req = req.WithContext(contextWithUser(req.Context(), db.User{ID: 42, Email: "user@example.com"}))
+	rec := httptest.NewRecorder()
+
+	srv.requireAnonymous(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatal("next handler should not run")
+	})).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusSeeOther)
+	}
+	if location := rec.Header().Get("Location"); location != verifyEmailPath {
+		t.Fatalf("Location = %q, want %q", location, verifyEmailPath)
 	}
 }
 
@@ -186,6 +214,85 @@ func TestRequireAnonymousAllowsAnonymousUser(t *testing.T) {
 
 	if rec.Code != http.StatusNoContent {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusNoContent)
+	}
+}
+
+func TestRequireVerifiedAuthAllowsVerifiedUser(t *testing.T) {
+	srv := newAuthMiddlewareTestServer(&fakeAuthLookup{})
+
+	req := httptest.NewRequest(http.MethodPost, "/account/change-password", nil)
+	req = req.WithContext(contextWithUser(req.Context(), db.User{
+		ID:    42,
+		Email: "user@example.com",
+		EmailVerifiedAt: sql.NullTime{
+			Time:  time.Now().UTC(),
+			Valid: true,
+		},
+	}))
+	rec := httptest.NewRecorder()
+
+	srv.requireVerifiedAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	})).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusNoContent)
+	}
+}
+
+func TestRequireVerifiedAuthRejectsUnverifiedUser(t *testing.T) {
+	srv := newAuthMiddlewareTestServer(&fakeAuthLookup{})
+
+	req := httptest.NewRequest(http.MethodPost, "/account/change-password", nil)
+	req = req.WithContext(contextWithUser(req.Context(), db.User{
+		ID:    42,
+		Email: "user@example.com",
+	}))
+	rec := httptest.NewRecorder()
+
+	srv.requireVerifiedAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatal("next handler should not run")
+	})).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusForbidden)
+	}
+}
+
+func TestRequireVerifiedAuthRedirectsUnverifiedGETToVerifyPage(t *testing.T) {
+	srv := newAuthMiddlewareTestServer(&fakeAuthLookup{})
+
+	req := httptest.NewRequest(http.MethodGet, "/private", nil)
+	req = req.WithContext(contextWithUser(req.Context(), db.User{
+		ID:    42,
+		Email: "user@example.com",
+	}))
+	rec := httptest.NewRecorder()
+
+	srv.requireVerifiedAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatal("next handler should not run")
+	})).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusSeeOther)
+	}
+	if location := rec.Header().Get("Location"); location != verifyEmailPath {
+		t.Fatalf("Location = %q, want %q", location, verifyEmailPath)
+	}
+}
+
+func TestRequireVerifiedAuthRejectsAnonymousPost(t *testing.T) {
+	srv := newAuthMiddlewareTestServer(&fakeAuthLookup{})
+
+	req := httptest.NewRequest(http.MethodPost, "/private", nil)
+	rec := httptest.NewRecorder()
+
+	srv.requireVerifiedAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatal("next handler should not run")
+	})).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusUnauthorized)
 	}
 }
 

@@ -8,13 +8,14 @@ This document covers local setup and developer workflow for the starter template
 
 ## Project Tools
 
-`sqlc` and `goose` are pinned as Go tool dependencies in `go.mod`.
+`sqlc`, `goose`, and `govulncheck` are pinned as Go tool dependencies in `go.mod`.
 
 You do not need separate global installs for this project. The Makefile runs them through `go tool`, which uses the versions recorded by the module:
 
 ```sh
 go tool sqlc version
 go tool goose --version
+go tool govulncheck -h
 ```
 
 To update a tool version later:
@@ -22,6 +23,7 @@ To update a tool version later:
 ```sh
 go get -tool github.com/sqlc-dev/sqlc/cmd/sqlc@v1.30.0
 go get -tool github.com/pressly/goose/v3/cmd/goose@v3.27.0
+go get -tool golang.org/x/vuln/cmd/govulncheck@v1.2.0
 go mod tidy
 ```
 
@@ -32,6 +34,7 @@ Global installs can still be useful for ad-hoc terminal use, but this project sh
 ```sh
 go install github.com/sqlc-dev/sqlc/cmd/sqlc@latest
 go install github.com/pressly/goose/v3/cmd/goose@latest
+go install golang.org/x/vuln/cmd/govulncheck@latest
 ```
 
 When using global installs, make sure your Go binary directory is on `PATH`. For a default Go setup, installed tools are usually available under:

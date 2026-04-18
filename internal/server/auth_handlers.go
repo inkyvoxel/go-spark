@@ -28,6 +28,7 @@ type templateData struct {
 	ResetToken           string
 	ResetTokenInvalid    bool
 	Authenticated        bool
+	Verified             bool
 	User                 db.User
 	PasswordMinLength    int
 	ResendStatus         string
@@ -42,6 +43,7 @@ func newTemplateData(r *http.Request, title string) templateData {
 	}
 	if user, ok := currentUser(r.Context()); ok {
 		data.Authenticated = true
+		data.Verified = user.EmailVerifiedAt.Valid
 		data.User = user
 	}
 	return data
@@ -77,7 +79,7 @@ func (s *Server) register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, session, err := s.auth.Login(r.Context(), email, password)
+	user, session, err := s.auth.Login(r.Context(), email, password)
 	if err != nil {
 		data := s.newTemplateData(r, "Create Account")
 		data.Email = strings.TrimSpace(email)
@@ -86,7 +88,11 @@ func (s *Server) register(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.setSessionCookie(w, r, session)
-	s.redirectWithHTMX(w, r, "/account")
+	redirect := "/account"
+	if !user.EmailVerifiedAt.Valid {
+		redirect = verifyEmailPath
+	}
+	s.redirectWithHTMX(w, r, redirect)
 }
 
 func (s *Server) loginForm(w http.ResponseWriter, r *http.Request) {
@@ -198,7 +204,7 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, session, err := s.auth.Login(r.Context(), r.FormValue("email"), r.FormValue("password"))
+	user, session, err := s.auth.Login(r.Context(), r.FormValue("email"), r.FormValue("password"))
 	if err != nil {
 		data := s.newTemplateData(r, "Sign In")
 		data.Email = strings.TrimSpace(r.FormValue("email"))
@@ -208,7 +214,9 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	next := safeRedirectPath(r.FormValue("next"))
-	if next == "" {
+	if !user.EmailVerifiedAt.Valid {
+		next = verifyEmailPath
+	} else if next == "" {
 		next = "/account"
 	}
 
@@ -231,12 +239,20 @@ func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) account(w http.ResponseWriter, r *http.Request) {
-	data := s.newTemplateData(r, "Account")
+	s.render(w, "account.html", s.newTemplateData(r, "Account"))
+}
+
+func (s *Server) verifyEmail(w http.ResponseWriter, r *http.Request) {
+	data := s.newTemplateData(r, "Verify Email")
+	if data.Verified {
+		http.Redirect(w, r, "/account", http.StatusSeeOther)
+		return
+	}
 	status := strings.TrimSpace(r.URL.Query().Get("resend"))
 	if status == "sent" || status == "error" {
 		data.ResendStatus = status
 	}
-	s.render(w, "account.html", data)
+	s.render(w, "verify_email.html", data)
 }
 
 func (s *Server) resendVerification(w http.ResponseWriter, r *http.Request) {
@@ -246,24 +262,24 @@ func (s *Server) resendVerification(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	data := s.newTemplateData(r, "Account")
+	data := s.newTemplateData(r, "Verify Email")
 	if err := s.auth.ResendVerificationEmail(r.Context(), user); err != nil {
 		s.logger.Error("resend verification email", "user_id", user.ID, "err", err)
 		if isHXRequest(r) {
 			data.ResendStatus = "error"
-			s.renderFragmentStatus(w, http.StatusOK, "account.html", "account_resend_section", data)
+			s.renderFragmentStatus(w, http.StatusOK, "verify_email.html", "verify_email_resend_section", data)
 			return
 		}
-		http.Redirect(w, r, "/account?resend=error", http.StatusSeeOther)
+		http.Redirect(w, r, verifyEmailPath+"?resend=error", http.StatusSeeOther)
 		return
 	}
 
 	if isHXRequest(r) {
 		data.ResendStatus = "sent"
-		s.renderFragmentStatus(w, http.StatusOK, "account.html", "account_resend_section", data)
+		s.renderFragmentStatus(w, http.StatusOK, "verify_email.html", "verify_email_resend_section", data)
 		return
 	}
-	http.Redirect(w, r, "/account?resend=sent", http.StatusSeeOther)
+	http.Redirect(w, r, verifyEmailPath+"?resend=sent", http.StatusSeeOther)
 }
 
 func (s *Server) changePassword(w http.ResponseWriter, r *http.Request) {

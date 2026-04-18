@@ -16,6 +16,7 @@ func TestHTMXFormTemplatesIncludeLoadingAffordances(t *testing.T) {
 		"resend_verification.html",
 		"reset_password.html",
 		"account.html",
+		"verify_email.html",
 	}
 
 	for _, name := range templateFiles {

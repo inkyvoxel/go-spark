@@ -9,48 +9,27 @@
 {{ define "register_form_section" }}
 <section id="register-form-section">
   {{ if .Error }}<p role="alert">{{ .Error }}</p>{{ end }}
-  <form
-    method="post"
-    action="/register"
-    hx-post="/register"
-    hx-target="#register-form-section"
-    hx-swap="outerHTML"
+  <form method="post" action="/register" hx-post="/register" hx-target="#register-form-section" hx-swap="outerHTML"
     hx-disabled-elt="button[type='submit']"
     hx-on::before-request="this.querySelector('button[type=submit]').setAttribute('aria-busy','true')"
     hx-on::after-request="this.querySelector('button[type=submit]').removeAttribute('aria-busy')">
     <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
     <label>
       Email
-      <input
-        type="email"
-        name="email"
-        value="{{ .Email }}"
-        autocomplete="email"
-        pattern="{{ .EmailPattern }}"
-        {{ if index .FieldErrors "email" }}aria-invalid="true"{{ end }}
-        required>
+      <input type="email" name="email" value="{{ .Email }}" autocomplete="email" pattern="{{ .EmailPattern }}" {{ if
+        index .FieldErrors "email" }}aria-invalid="true" {{ end }} required>
       {{ with index .FieldErrors "email" }}<small role="alert">{{ . }}</small>{{ end }}
     </label>
     <label>
       Password
-      <input
-        type="password"
-        name="password"
-        autocomplete="new-password"
-        minlength="{{ .PasswordMinLength }}"
-        {{ if index .FieldErrors "password" }}aria-invalid="true"{{ end }}
-        required>
+      <input type="password" name="password" autocomplete="new-password" minlength="{{ .PasswordMinLength }}" {{ if
+        index .FieldErrors "password" }}aria-invalid="true" {{ end }} required>
       {{ with index .FieldErrors "password" }}<small role="alert">{{ . }}</small>{{ end }}
     </label>
     <label>
       Confirm password
-      <input
-        type="password"
-        name="confirm_password"
-        autocomplete="new-password"
-        minlength="{{ .PasswordMinLength }}"
-        {{ if index .FieldErrors "confirm_password" }}aria-invalid="true"{{ end }}
-        required>
+      <input type="password" name="confirm_password" autocomplete="new-password" minlength="{{ .PasswordMinLength }}" {{
+        if index .FieldErrors "confirm_password" }}aria-invalid="true" {{ end }} required>
       {{ with index .FieldErrors "confirm_password" }}<small role="alert">{{ . }}</small>{{ end }}
     </label>
     <button type="submit">Create account</button>

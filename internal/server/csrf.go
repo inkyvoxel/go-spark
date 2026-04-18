@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"crypto/subtle"
 	"encoding/hex"
+	"errors"
 	"net/http"
 	"time"
 )
@@ -28,9 +29,21 @@ func (s *Server) csrf(next http.Handler) http.Handler {
 			s.setCSRFCookie(w, r, token)
 		}
 
-		if isUnsafeMethod(r.Method) && !validCSRFToken(token, csrfTokenFromRequest(r)) {
-			http.Error(w, http.StatusText(http.StatusForbidden), http.StatusForbidden)
-			return
+		if isUnsafeMethod(r.Method) {
+			requestToken, err := csrfTokenFromRequest(r)
+			if err != nil {
+				var maxBytesErr *http.MaxBytesError
+				if errors.As(err, &maxBytesErr) {
+					http.Error(w, http.StatusText(http.StatusRequestEntityTooLarge), http.StatusRequestEntityTooLarge)
+					return
+				}
+				http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+				return
+			}
+			if !validCSRFToken(token, requestToken) {
+				http.Error(w, http.StatusText(http.StatusForbidden), http.StatusForbidden)
+				return
+			}
 		}
 
 		next.ServeHTTP(w, r.WithContext(contextWithCSRFToken(r.Context(), token)))
@@ -45,11 +58,14 @@ func csrfTokenFromCookie(r *http.Request) string {
 	return cookie.Value
 }
 
-func csrfTokenFromRequest(r *http.Request) string {
+func csrfTokenFromRequest(r *http.Request) (string, error) {
 	if token := r.Header.Get(csrfHeaderName); token != "" {
-		return token
+		return token, nil
 	}
-	return r.FormValue(csrfFieldName)
+	if err := r.ParseForm(); err != nil {
+		return "", err
+	}
+	return r.FormValue(csrfFieldName), nil
 }
 
 func validCSRFToken(cookieToken, requestToken string) bool {

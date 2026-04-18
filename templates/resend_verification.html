@@ -9,29 +9,20 @@
 
 {{ define "resend_verification_form_section" }}
 <section id="resend-verification-form-section">
-  {{ if eq .ResendStatus "sent" }}<p role="status">If that email can be verified, we sent a confirmation link.</p>{{ end }}
-  {{ if eq .ResendStatus "error" }}<p role="alert">We couldn't send a verification email right now. Please try again.</p>{{ end }}
+  {{ if eq .ResendStatus "sent" }}<p role="status">If that email can be verified, we sent a confirmation link.</p>{{ end
+  }}
+  {{ if eq .ResendStatus "error" }}<p role="alert">We couldn't send a verification email right now. Please try again.
+  </p>{{ end }}
   {{ if .Error }}<p role="alert">{{ .Error }}</p>{{ end }}
-  <form
-    method="post"
-    action="/resend-verification"
-    hx-post="/resend-verification"
-    hx-target="#resend-verification-form-section"
-    hx-swap="outerHTML"
-    hx-disabled-elt="button[type='submit']"
+  <form method="post" action="/resend-verification" hx-post="/resend-verification"
+    hx-target="#resend-verification-form-section" hx-swap="outerHTML" hx-disabled-elt="button[type='submit']"
     hx-on::before-request="this.querySelector('button[type=submit]').setAttribute('aria-busy','true')"
     hx-on::after-request="this.querySelector('button[type=submit]').removeAttribute('aria-busy')">
     <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
     <label>
       Email
-      <input
-        type="email"
-        name="email"
-        value="{{ .Email }}"
-        autocomplete="email"
-        pattern="{{ .EmailPattern }}"
-        {{ if index .FieldErrors "email" }}aria-invalid="true"{{ end }}
-        required>
+      <input type="email" name="email" value="{{ .Email }}" autocomplete="email" pattern="{{ .EmailPattern }}" {{ if
+        index .FieldErrors "email" }}aria-invalid="true" {{ end }} required>
       {{ with index .FieldErrors "email" }}<small role="alert">{{ . }}</small>{{ end }}
     </label>
     <button type="submit">Send verification email</button>
