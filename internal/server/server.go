@@ -74,6 +74,7 @@ func mustParseTemplates() map[string]*template.Template {
 func parseTemplates() (map[string]*template.Template, error) {
 	pages := map[string]string{
 		templateAccount:            filepath.Join("account", "account.html"),
+		templateChangePassword:     filepath.Join("account", "change_password.html"),
 		templateConfirmEmail:       filepath.Join("account", "confirm_email.html"),
 		templateForgotPassword:     filepath.Join("account", "forgot_password.html"),
 		templateHome:               "home.html",
@@ -141,13 +142,19 @@ func (s *Server) Routes() http.Handler {
 	dynamic.Handle(route(http.MethodPost, paths.Logout), s.requireAuth(http.HandlerFunc(s.logout)))
 	dynamic.Handle(route(http.MethodGet, paths.VerifyEmail), s.requireAuth(http.HandlerFunc(s.verifyEmail)))
 	dynamic.Handle(route(http.MethodGet, paths.Account), s.requireVerifiedAuth(http.HandlerFunc(s.account)))
+	dynamic.Handle(route(http.MethodGet, paths.ChangePassword), s.requireVerifiedAuth(http.HandlerFunc(s.changePasswordForm)))
 	dynamic.Handle(
 		route(http.MethodPost, paths.VerifyEmailResend),
 		s.requireAuth(
 			s.withRateLimit("resend-verification-account", s.rateLimitPolicies.AccountResendVerification, rateLimitKeyByIPAndUser(), http.HandlerFunc(s.resendVerification)),
 		),
 	)
-	dynamic.Handle(route(http.MethodPost, paths.ChangePassword), s.requireVerifiedAuth(http.HandlerFunc(s.changePassword)))
+	dynamic.Handle(
+		route(http.MethodPost, paths.ChangePassword),
+		s.requireVerifiedAuth(
+			s.withRateLimit("change-password", s.rateLimitPolicies.ChangePassword, rateLimitKeyByIPAndUser(), http.HandlerFunc(s.changePassword)),
+		),
+	)
 	dynamic.HandleFunc(route(http.MethodGet, paths.Home), s.home)
 
 	mux.Handle(paths.Home, s.securityHeaders(s.limitRequestBody(s.csrf(s.loadSession(dynamic)))))

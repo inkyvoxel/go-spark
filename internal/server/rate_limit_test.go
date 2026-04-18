@@ -8,7 +8,6 @@ import (
 	"testing"
 	"time"
 
-	db "github.com/inkyvoxel/go-spark/internal/db/generated"
 	"github.com/inkyvoxel/go-spark/internal/paths"
 )
 
@@ -105,7 +104,7 @@ func TestNormalizedEmailForRateLimit(t *testing.T) {
 
 func TestRouteRateLimitProtectedPostRoutesReturn429AfterThreshold(t *testing.T) {
 	auth := &fakeAuthLookup{
-		user: db.User{ID: 1, Email: "user@example.com"},
+		user: verifiedRouteUser(),
 	}
 	srv := newAuthRouteTestServer(t, auth)
 	srv.rateLimitPolicies = RateLimitPolicies{
@@ -114,6 +113,7 @@ func TestRouteRateLimitProtectedPostRoutesReturn429AfterThreshold(t *testing.T) 
 		ForgotPassword:            RateLimitPolicy{MaxRequests: 1, Window: time.Hour},
 		PublicResendVerification:  RateLimitPolicy{MaxRequests: 1, Window: time.Hour},
 		AccountResendVerification: RateLimitPolicy{MaxRequests: 1, Window: time.Hour},
+		ChangePassword:            RateLimitPolicy{MaxRequests: 1, Window: time.Hour},
 	}
 	routes := srv.Routes()
 
@@ -147,6 +147,16 @@ func TestRouteRateLimitProtectedPostRoutesReturn429AfterThreshold(t *testing.T) 
 			name:         "resend-verification-account",
 			path:         paths.VerifyEmailResend,
 			form:         url.Values{},
+			sessionToken: "session-token",
+		},
+		{
+			name: "change-password",
+			path: paths.ChangePassword,
+			form: url.Values{
+				"current_password": []string{"old-password"},
+				"new_password":     []string{"new-password"},
+				"confirm_password": []string{"new-password"},
+			},
 			sessionToken: "session-token",
 		},
 	}
@@ -194,26 +204,34 @@ func TestRouteRateLimitKeyingByIPAndEmail(t *testing.T) {
 }
 
 func TestRouteRateLimitKeyingByIPAndUser(t *testing.T) {
-	auth := &fakeAuthLookup{user: db.User{ID: 1, Email: "user1@example.com"}}
+	auth := &fakeAuthLookup{user: verifiedRouteUser()}
 	srv := newAuthRouteTestServer(t, auth)
 	srv.rateLimitPolicies = RateLimitPolicies{
 		AccountResendVerification: RateLimitPolicy{MaxRequests: 1, Window: time.Hour},
+		ChangePassword:            RateLimitPolicy{MaxRequests: 1, Window: time.Hour},
 	}
 	routes := srv.Routes()
 
-	first := postFormWithCSRF(routes, paths.VerifyEmailResend, url.Values{}, "session-token")
+	changePasswordForm := url.Values{
+		"current_password": []string{"old-password"},
+		"new_password":     []string{"new-password"},
+		"confirm_password": []string{"new-password"},
+	}
+	first := postFormWithCSRF(routes, paths.ChangePassword, changePasswordForm, "session-token")
 	if first.Code == http.StatusTooManyRequests {
 		t.Fatalf("first status = %d, want non-429", first.Code)
 	}
 
-	auth.user = db.User{ID: 2, Email: "user2@example.com"}
-	second := postFormWithCSRF(routes, paths.VerifyEmailResend, url.Values{}, "session-token")
+	auth.user = verifiedRouteUser()
+	auth.user.ID = 2
+	auth.user.Email = "user2@example.com"
+	second := postFormWithCSRF(routes, paths.ChangePassword, changePasswordForm, "session-token")
 	if second.Code == http.StatusTooManyRequests {
 		t.Fatalf("second status = %d, want non-429 for different user", second.Code)
 	}
 
-	auth.user = db.User{ID: 1, Email: "user1@example.com"}
-	third := postFormWithCSRF(routes, paths.VerifyEmailResend, url.Values{}, "session-token")
+	auth.user = verifiedRouteUser()
+	third := postFormWithCSRF(routes, paths.ChangePassword, changePasswordForm, "session-token")
 	if third.Code != http.StatusTooManyRequests {
 		t.Fatalf("third status = %d, want %d for original user", third.Code, http.StatusTooManyRequests)
 	}

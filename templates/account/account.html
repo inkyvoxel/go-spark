@@ -2,39 +2,8 @@
 <article>
   <h1>Account</h1>
   <p>You are signed in as {{ .User.Email }} (verified).</p>
-  {{ template "account_change_password_section" . }}
+  <ul>
+    <li><a href="{{ .Routes.ChangePassword }}">Change password</a></li>
+  </ul>
 </article>
-{{ end }}
-
-{{ define "account_change_password_section" }}
-<section id="account-change-password-section">
-  <h2>Change password</h2>
-  {{ if .Error }}<p role="alert">{{ .Error }}</p>{{ end }}
-  <form method="post" action="{{ .Routes.ChangePassword }}" hx-post="{{ .Routes.ChangePassword }}"
-    hx-target="#account-change-password-section" hx-swap="outerHTML" hx-disabled-elt="button[type='submit']"
-    hx-on::before-request="this.querySelector('button[type=submit]').setAttribute('aria-busy','true')"
-    hx-on::after-request="this.querySelector('button[type=submit]').removeAttribute('aria-busy')">
-    <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
-    <label>
-      Current password
-      <input type="password" name="current_password" autocomplete="current-password" {{ if index
-        .FieldErrors "current_password" }}aria-invalid="true" {{ end }} required>
-      {{ with index .FieldErrors "current_password" }}<small role="alert">{{ . }}</small>{{ end }}
-    </label>
-    <label>
-      New password
-      <input type="password" name="new_password" autocomplete="new-password" minlength="{{ .PasswordMinLength }}" {{ if
-        index .FieldErrors "new_password" }}aria-invalid="true" {{ end }} required>
-      <small>Use at least {{ .PasswordMinLength }} characters.</small>
-      {{ with index .FieldErrors "new_password" }}<small role="alert">{{ . }}</small>{{ end }}
-    </label>
-    <label>
-      Confirm new password
-      <input type="password" name="confirm_password" autocomplete="new-password" minlength="{{ .PasswordMinLength }}" {{
-        if index .FieldErrors "confirm_password" }}aria-invalid="true" {{ end }} required>
-      {{ with index .FieldErrors "confirm_password" }}<small role="alert">{{ . }}</small>{{ end }}
-    </label>
-    <button type="submit">Change password</button>
-  </form>
-</section>
 {{ end }}

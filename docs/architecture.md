@@ -136,7 +136,7 @@ Server mux patterns should be composed at registration time instead of duplicate
 
 ```go
 dynamic.Handle(route(http.MethodGet, paths.Account), s.requireVerifiedAuth(http.HandlerFunc(s.account)))
-dynamic.Handle(route(http.MethodPost, paths.ChangePassword), s.requireVerifiedAuth(http.HandlerFunc(s.changePassword)))
+dynamic.Handle(route(http.MethodGet, paths.ChangePassword), s.requireVerifiedAuth(http.HandlerFunc(s.changePasswordForm)))
 ```
 
 Templates cannot import Go packages directly, so handlers pass a route catalog into `templateData` as `.Routes`. Template links and form actions should use those helpers:
@@ -168,7 +168,8 @@ Auth and account routes:
 | `POST` | `/register` | Create account | Anonymous only, rate limited |
 | `POST` | `/logout` | Sign out | Authenticated |
 | `GET` | `/account` | Account page | Verified authenticated |
-| `POST` | `/account/change-password` | Change password | Verified authenticated |
+| `GET` | `/account/change-password` | Change password form | Verified authenticated |
+| `POST` | `/account/change-password` | Change password | Verified authenticated, rate limited |
 | `GET` | `/account/verify-email` | Unverified-account interstitial | Authenticated |
 | `POST` | `/account/verify-email/resend` | Resend confirmation for signed-in user | Authenticated, rate limited |
 | `GET` | `/account/confirm-email` | Consume email confirmation token | Public |

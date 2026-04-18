@@ -256,6 +256,10 @@ func (s *Server) account(w http.ResponseWriter, r *http.Request) {
 	s.render(w, templateAccount, s.newTemplateData(r, "Account"))
 }
 
+func (s *Server) changePasswordForm(w http.ResponseWriter, r *http.Request) {
+	s.render(w, templateChangePassword, s.newTemplateData(r, "Change Password"))
+}
+
 func (s *Server) verifyEmail(w http.ResponseWriter, r *http.Request) {
 	data := s.newTemplateData(r, "Verify Email")
 	if data.Verified {
@@ -320,28 +324,28 @@ func (s *Server) changePassword(w http.ResponseWriter, r *http.Request) {
 		fieldErrors[key] = value
 	}
 	if len(fieldErrors) > 0 {
-		data := s.newTemplateData(r, "Account")
+		data := s.newTemplateData(r, "Change Password")
 		data.Error = "Check your details and try again."
 		data.FieldErrors = fieldErrors
-		s.renderStatusForRequest(w, r, http.StatusUnprocessableEntity, templateAccount, fragmentAccountChangePassword, data)
+		s.renderStatusForRequest(w, r, http.StatusUnprocessableEntity, templateChangePassword, fragmentChangePasswordForm, data)
 		return
 	}
 
 	if err := s.auth.ChangePassword(r.Context(), user, currentPassword, newPassword); err != nil {
-		data := s.newTemplateData(r, "Account")
+		data := s.newTemplateData(r, "Change Password")
 		data.Error = "Check your details and try again."
 		switch {
 		case errors.Is(err, services.ErrCurrentPasswordIncorrect):
 			data.FieldErrors = map[string]string{"current_password": "Current password is not correct."}
-			s.renderStatusForRequest(w, r, http.StatusUnprocessableEntity, templateAccount, fragmentAccountChangePassword, data)
+			s.renderStatusForRequest(w, r, http.StatusUnprocessableEntity, templateChangePassword, fragmentChangePasswordForm, data)
 			return
 		case errors.Is(err, services.ErrInvalidPassword):
 			data.FieldErrors = map[string]string{"new_password": fmt.Sprintf("Use at least %d characters.", data.PasswordMinLength)}
-			s.renderStatusForRequest(w, r, http.StatusUnprocessableEntity, templateAccount, fragmentAccountChangePassword, data)
+			s.renderStatusForRequest(w, r, http.StatusUnprocessableEntity, templateChangePassword, fragmentChangePasswordForm, data)
 			return
 		case errors.Is(err, services.ErrPasswordUnchanged):
 			data.FieldErrors = map[string]string{"new_password": "Choose a different password."}
-			s.renderStatusForRequest(w, r, http.StatusUnprocessableEntity, templateAccount, fragmentAccountChangePassword, data)
+			s.renderStatusForRequest(w, r, http.StatusUnprocessableEntity, templateChangePassword, fragmentChangePasswordForm, data)
 			return
 		default:
 			s.logger.Error("change password", "user_id", user.ID, "err", err)

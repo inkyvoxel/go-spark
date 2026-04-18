@@ -27,6 +27,7 @@ type RateLimitPolicies struct {
 	ForgotPassword            RateLimitPolicy
 	PublicResendVerification  RateLimitPolicy
 	AccountResendVerification RateLimitPolicy
+	ChangePassword            RateLimitPolicy
 }
 
 var defaultRateLimitPolicies = RateLimitPolicies{
@@ -35,6 +36,7 @@ var defaultRateLimitPolicies = RateLimitPolicies{
 	ForgotPassword:            RateLimitPolicy{MaxRequests: 3, Window: 15 * time.Minute},
 	PublicResendVerification:  RateLimitPolicy{MaxRequests: 3, Window: 15 * time.Minute},
 	AccountResendVerification: RateLimitPolicy{MaxRequests: 5, Window: 15 * time.Minute},
+	ChangePassword:            RateLimitPolicy{MaxRequests: 5, Window: 15 * time.Minute},
 }
 
 type rateLimitKeyFunc func(*http.Request) (key string, keyType string)
@@ -110,6 +112,7 @@ func rateLimitPoliciesWithDefaults(policies RateLimitPolicies) RateLimitPolicies
 		ForgotPassword:            mergeRateLimitPolicy(defaultRateLimitPolicies.ForgotPassword, policies.ForgotPassword),
 		PublicResendVerification:  mergeRateLimitPolicy(defaultRateLimitPolicies.PublicResendVerification, policies.PublicResendVerification),
 		AccountResendVerification: mergeRateLimitPolicy(defaultRateLimitPolicies.AccountResendVerification, policies.AccountResendVerification),
+		ChangePassword:            mergeRateLimitPolicy(defaultRateLimitPolicies.ChangePassword, policies.ChangePassword),
 	}
 }
 
