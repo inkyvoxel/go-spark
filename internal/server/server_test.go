@@ -7,6 +7,9 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -127,6 +130,56 @@ func TestRenderReturnsInternalServerErrorForTemplateError(t *testing.T) {
 	if rec.Body.String() != http.StatusText(http.StatusInternalServerError)+"\n" {
 		t.Fatalf("body = %q, want internal server error", rec.Body.String())
 	}
+}
+
+func TestParseTemplatesIncludesBreadcrumbPartial(t *testing.T) {
+	chdirProjectRoot(t)
+
+	templates, err := parseTemplates()
+	if err != nil {
+		t.Fatalf("parseTemplates() error = %v", err)
+	}
+
+	var body strings.Builder
+	err = templates[templateChangePassword].ExecuteTemplate(&body, templateLayout, templateData{
+		Title:  "Change Password",
+		Routes: paths.TemplateRoutes,
+		Breadcrumbs: []breadcrumbItem{
+			{Label: "Account", URL: paths.Account},
+			{Label: "Change password", Current: true},
+		},
+	})
+	if err != nil {
+		t.Fatalf("ExecuteTemplate() error = %v", err)
+	}
+
+	rendered := body.String()
+	for _, want := range []string{`aria-label="breadcrumb"`, `href="/account"`, `aria-current="page"`} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("rendered template = %q, want %q", rendered, want)
+		}
+	}
+}
+
+func chdirProjectRoot(t *testing.T) {
+	t.Helper()
+
+	_, currentFile, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("runtime.Caller failed")
+	}
+
+	originalWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("get working directory: %v", err)
+	}
+	projectRoot := filepath.Clean(filepath.Join(filepath.Dir(currentFile), "..", ".."))
+	if err := os.Chdir(projectRoot); err != nil {
+		t.Fatalf("chdir project root: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(originalWD)
+	})
 }
 
 func testServer(t *testing.T) *Server {

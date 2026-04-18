@@ -3,6 +3,7 @@ package server
 const (
 	templateLayout             = "layout.html"
 	templateAccount            = "account.html"
+	templateBreadcrumb         = "breadcrumb.html"
 	templateChangePassword     = "change_password.html"
 	templateConfirmEmail       = "confirm_email.html"
 	templateForgotPassword     = "forgot_password.html"

@@ -86,9 +86,14 @@ func parseTemplates() (map[string]*template.Template, error) {
 	}
 	templates := make(map[string]*template.Template, len(pages))
 	layout := filepath.Join("templates", templateLayout)
+	partials := []string{
+		filepath.Join("templates", templateBreadcrumb),
+	}
 
 	for name, filePath := range pages {
-		parsed, err := template.ParseFiles(layout, filepath.Join("templates", filePath))
+		files := append([]string{layout}, partials...)
+		files = append(files, filepath.Join("templates", filePath))
+		parsed, err := template.ParseFiles(files...)
 		if err != nil {
 			return nil, err
 		}

@@ -15,7 +15,7 @@ What is still not implemented:
   - Add rate limiting to `POST /account/change-password` while this handler is being touched, matching the security todo item.
   - Update route/template constants and route tests for GET, POST, HTMX fragment responses, auth requirements, verified-email requirements, rate limiting, and successful redirect.
 
-- [ ] Stage 2: Add reusable PicoCSS breadcrumbs for account subpages.
+- [x] Stage 2: Add reusable PicoCSS breadcrumbs for account subpages.
   - Add a small template partial, for example `breadcrumb.html`, that accepts breadcrumb items from template data.
   - Extend `templateData` with a reusable breadcrumb model such as `[]BreadcrumbItem{Label, URL, Current}`.
   - Render breadcrumbs on `/account/change-password` as Account > Change password.

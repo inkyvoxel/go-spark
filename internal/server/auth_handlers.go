@@ -31,6 +31,7 @@ type templateData struct {
 	Title                string
 	CSRFToken            string
 	Routes               paths.TemplateRouteSet
+	Breadcrumbs          []breadcrumbItem
 	Error                string
 	FieldErrors          map[string]string
 	Email                string
@@ -45,6 +46,12 @@ type templateData struct {
 	User                 db.User
 	PasswordMinLength    int
 	ResendStatus         string
+}
+
+type breadcrumbItem struct {
+	Label   string
+	URL     string
+	Current bool
 }
 
 func newTemplateData(r *http.Request, title string) templateData {
@@ -257,7 +264,7 @@ func (s *Server) account(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) changePasswordForm(w http.ResponseWriter, r *http.Request) {
-	s.render(w, templateChangePassword, s.newTemplateData(r, "Change Password"))
+	s.render(w, templateChangePassword, s.newChangePasswordTemplateData(r))
 }
 
 func (s *Server) verifyEmail(w http.ResponseWriter, r *http.Request) {
@@ -324,7 +331,7 @@ func (s *Server) changePassword(w http.ResponseWriter, r *http.Request) {
 		fieldErrors[key] = value
 	}
 	if len(fieldErrors) > 0 {
-		data := s.newTemplateData(r, "Change Password")
+		data := s.newChangePasswordTemplateData(r)
 		data.Error = "Check your details and try again."
 		data.FieldErrors = fieldErrors
 		s.renderStatusForRequest(w, r, http.StatusUnprocessableEntity, templateChangePassword, fragmentChangePasswordForm, data)
@@ -332,7 +339,7 @@ func (s *Server) changePassword(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := s.auth.ChangePassword(r.Context(), user, currentPassword, newPassword); err != nil {
-		data := s.newTemplateData(r, "Change Password")
+		data := s.newChangePasswordTemplateData(r)
 		data.Error = "Check your details and try again."
 		switch {
 		case errors.Is(err, services.ErrCurrentPasswordIncorrect):
@@ -515,6 +522,15 @@ func (s *Server) newTemplateData(r *http.Request, title string) templateData {
 	data := newTemplateData(r, title)
 	if s.passwordMinLength > 0 {
 		data.PasswordMinLength = s.passwordMinLength
+	}
+	return data
+}
+
+func (s *Server) newChangePasswordTemplateData(r *http.Request) templateData {
+	data := s.newTemplateData(r, "Change Password")
+	data.Breadcrumbs = []breadcrumbItem{
+		{Label: "Account", URL: paths.Account},
+		{Label: "Change password", Current: true},
 	}
 	return data
 }
