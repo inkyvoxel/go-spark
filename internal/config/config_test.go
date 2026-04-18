@@ -74,6 +74,7 @@ func unsetEnvForTest(t *testing.T, key string) {
 
 func TestFromEnvUsesDefaults(t *testing.T) {
 	t.Setenv("APP_ADDR", "")
+	t.Setenv("APP_PROCESS", "")
 	t.Setenv("APP_ENV", "")
 	t.Setenv("DATABASE_PATH", "")
 	t.Setenv("APP_COOKIE_SECURE", "")
@@ -91,6 +92,9 @@ func TestFromEnvUsesDefaults(t *testing.T) {
 
 	if cfg.Addr != ":8080" {
 		t.Fatalf("Addr = %q, want %q", cfg.Addr, ":8080")
+	}
+	if cfg.Process != ProcessAll {
+		t.Fatalf("Process = %q, want %q", cfg.Process, ProcessAll)
 	}
 	if cfg.Env != "development" {
 		t.Fatalf("Env = %q, want %q", cfg.Env, "development")
@@ -123,6 +127,7 @@ func TestFromEnvUsesDefaults(t *testing.T) {
 
 func TestFromEnvUsesEnvironment(t *testing.T) {
 	t.Setenv("APP_ADDR", ":9090")
+	t.Setenv("APP_PROCESS", "WORKER")
 	t.Setenv("APP_ENV", "test")
 	t.Setenv("DATABASE_PATH", "/tmp/app-test.db")
 	t.Setenv("APP_COOKIE_SECURE", "true")
@@ -142,6 +147,9 @@ func TestFromEnvUsesEnvironment(t *testing.T) {
 
 	if cfg.Addr != ":9090" {
 		t.Fatalf("Addr = %q, want %q", cfg.Addr, ":9090")
+	}
+	if cfg.Process != ProcessWorker {
+		t.Fatalf("Process = %q, want %q", cfg.Process, ProcessWorker)
 	}
 	if cfg.Env != "test" {
 		t.Fatalf("Env = %q, want %q", cfg.Env, "test")
@@ -236,6 +244,58 @@ func TestFromEnvRejectsInvalidCookieSecureBool(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "APP_COOKIE_SECURE") {
 		t.Fatalf("FromEnv() error = %v, want APP_COOKIE_SECURE", err)
+	}
+}
+
+func TestFromEnvParsesProcessModes(t *testing.T) {
+	tests := []string{ProcessAll, ProcessWeb, ProcessWorker}
+
+	for _, process := range tests {
+		t.Run(process, func(t *testing.T) {
+			t.Setenv("APP_PROCESS", process)
+
+			cfg, err := FromEnv(services.DefaultPasswordMinLength)
+			if err != nil {
+				t.Fatalf("FromEnv() error = %v", err)
+			}
+			if cfg.Process != process {
+				t.Fatalf("Process = %q, want %q", cfg.Process, process)
+			}
+		})
+	}
+}
+
+func TestFromEnvRejectsInvalidProcess(t *testing.T) {
+	t.Setenv("APP_PROCESS", "jobs")
+
+	_, err := FromEnv(services.DefaultPasswordMinLength)
+	if err == nil {
+		t.Fatal("FromEnv() error = nil, want error")
+	}
+	if !strings.Contains(err.Error(), "APP_PROCESS") {
+		t.Fatalf("FromEnv() error = %v, want APP_PROCESS", err)
+	}
+}
+
+func TestFromEnvWithProcessOverridesEnvironmentProcess(t *testing.T) {
+	t.Setenv("APP_PROCESS", "jobs")
+
+	cfg, err := FromEnvWithProcess(services.DefaultPasswordMinLength, ProcessWeb)
+	if err != nil {
+		t.Fatalf("FromEnvWithProcess() error = %v", err)
+	}
+	if cfg.Process != ProcessWeb {
+		t.Fatalf("Process = %q, want %q", cfg.Process, ProcessWeb)
+	}
+}
+
+func TestFromEnvWithProcessRejectsInvalidOverride(t *testing.T) {
+	_, err := FromEnvWithProcess(services.DefaultPasswordMinLength, "jobs")
+	if err == nil {
+		t.Fatal("FromEnvWithProcess() error = nil, want error")
+	}
+	if !strings.Contains(err.Error(), "process mode") {
+		t.Fatalf("FromEnvWithProcess() error = %v, want process mode context", err)
 	}
 }
 

@@ -47,6 +47,9 @@ $(go env GOPATH)/bin
 
 ```sh
 make run
+make run-all
+make run-web
+make run-worker
 make test
 make fmt
 make tidy
@@ -58,6 +61,15 @@ make tools
 ```
 
 `make run` starts the app with `go run ./cmd/app`. On startup, the app loads `.env` when the file exists. Existing shell environment variables take precedence over `.env` values.
+
+The app binary supports process modes:
+
+* `make run` starts the default `all` mode, which runs the HTTP server and email worker together.
+* `make run-all` starts the same all-in-one mode explicitly.
+* `make run-web` starts only the HTTP server.
+* `make run-worker` starts only the email outbox worker.
+
+For deployed environments, set `APP_PROCESS=web` and `APP_PROCESS=worker` in separate process manager entries, or pass `web` or `worker` as the first binary argument.
 
 This starter includes basic transactional email out of the box for account confirmation, resend-verification, and password reset flows.
 

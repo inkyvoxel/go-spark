@@ -46,6 +46,20 @@ The app listens on `:8080` by default, stores its SQLite database at `./data/app
 
 `make run` loads `.env` when the file exists. Environment variables already set in your shell take precedence over values in `.env`.
 
+`APP_PROCESS` selects which long-running process the binary should run:
+
+* `all` starts the HTTP server and email worker together. This is the default and is best for local development.
+* `web` starts only the HTTP server.
+* `worker` starts only the email outbox worker.
+
+You can also pass the process mode as the first CLI argument. The CLI argument wins over `APP_PROCESS`:
+
+```sh
+./go-spark web
+./go-spark worker
+./go-spark all
+```
+
 `AUTH_PASSWORD_PEPPER` is optional. When set, the app uses it as an application-level secret in password hashing by applying an HMAC-SHA256 pre-hash before Argon2id. When blank, no pepper is applied.
 
 ## Emails
@@ -112,6 +126,9 @@ RATE_LIMIT_FORGOT_PASSWORD_WINDOW=30m
 
 ```sh
 make run
+make run-all
+make run-web
+make run-worker
 make test
 make fmt
 make tidy
@@ -171,12 +188,15 @@ Before deploying an app based on this template:
 * Keep secrets out of Git and load them from environment or your deployment platform.
 * Back up the SQLite database file.
 * Run migrations as part of deploy or a controlled release step.
+* Use `APP_PROCESS=web` for the HTTP process and `APP_PROCESS=worker` for the email worker when you want to run them separately.
 * Set file permissions so the app can read and write the database path, but does not expose it publicly.
 * Set `APP_COOKIE_SECURE=true` when the app is served over HTTPS by a reverse proxy or load balancer.
 * Keep `AUTH_PASSWORD_MIN_LENGTH` at 12 or higher unless you have a clear compatibility reason.
 * Set `AUTH_PASSWORD_PEPPER` in production for defense in depth.
 * Plan pepper rotation carefully: changing `AUTH_PASSWORD_PEPPER` invalidates existing password verification until users reset passwords.
 * Add request timeouts and deployment-specific logging/metrics as the app grows.
+
+A simple deployment can run the same binary as two services, for example one service with `APP_PROCESS=web` behind Caddy, nginx, or another reverse proxy, and one service with `APP_PROCESS=worker` for email delivery.
 
 ## Replacing SQLite
 

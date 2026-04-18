@@ -179,9 +179,11 @@ Reset confirmation should:
 
 ## Delivery Model
 
-Start with an in-process worker:
+Start with a worker that can run either in the same process as the web server or as a separate process from the same binary:
 
-* Runs from `cmd/app` alongside the HTTP server.
+* `APP_PROCESS=all` runs the HTTP server and email worker together. This is the default for local development.
+* `APP_PROCESS=web` runs only the HTTP server.
+* `APP_PROCESS=worker` runs only the email outbox worker.
 * Polls pending outbox rows at a small interval.
 * Claims a small batch.
 * Sends each message through the configured `email.Sender`.
@@ -190,9 +192,11 @@ Start with an in-process worker:
 * Marks rows as permanently failed after a small maximum attempt count.
 * Stops cleanly when the app context is canceled.
 
-This worker is intentionally modest. It is enough for a starter app and keeps all local development in one process.
+The same modes can also be selected with the first CLI argument, such as `./go-spark web` or `./go-spark worker`. A CLI argument wins over `APP_PROCESS`.
 
-If a project later needs multiple app instances or higher email throughput, the outbox table still helps: the worker can move to a separate process, or the outbox can be replaced with an external queue.
+This worker is intentionally modest. It is enough for a starter app, keeps local development in one process, and still gives production deployments a simple web/worker split.
+
+If a project later needs multiple worker replicas or higher email throughput, strengthen stale-claim recovery first so rows left in `sending` after a crash can be retried safely. The outbox can also be replaced with an external queue if the app grows beyond the database-backed queue model.
 
 ## Configuration
 
@@ -322,7 +326,7 @@ Confirmation token errors should be user-safe. Expired, missing, malformed, or a
 
 ## When To Revisit
 
-Reconsider the in-process worker if:
+Reconsider the database-backed worker if:
 
 * the app runs multiple instances,
 * email volume grows significantly,

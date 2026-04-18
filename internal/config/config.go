@@ -13,6 +13,12 @@ import (
 	"github.com/joho/godotenv"
 )
 
+const (
+	ProcessAll    = "all"
+	ProcessWeb    = "web"
+	ProcessWorker = "worker"
+)
+
 type RateLimitPolicyConfig struct {
 	MaxRequests int
 	Window      time.Duration
@@ -28,6 +34,7 @@ type RateLimitPoliciesConfig struct {
 
 type Config struct {
 	Addr              string
+	Process           string
 	Env               string
 	DatabasePath      string
 	CookieSecure      bool
@@ -62,6 +69,15 @@ func LoadDotEnv(path string) error {
 }
 
 func FromEnv(defaultPasswordMinLength int) (Config, error) {
+	return FromEnvWithProcess(defaultPasswordMinLength, "")
+}
+
+func FromEnvWithProcess(defaultPasswordMinLength int, processOverride string) (Config, error) {
+	process, err := processFromOverrideOrEnv(processOverride)
+	if err != nil {
+		return Config{}, err
+	}
+
 	cookieSecure, err := envBool("APP_COOKIE_SECURE")
 	if err != nil {
 		return Config{}, err
@@ -94,6 +110,7 @@ func FromEnv(defaultPasswordMinLength int) (Config, error) {
 
 	cfg := Config{
 		Addr:              envOrDefault("APP_ADDR", ":8080"),
+		Process:           process,
 		Env:               envOrDefault("APP_ENV", "development"),
 		DatabasePath:      envOrDefault("DATABASE_PATH", "./data/app.db"),
 		CookieSecure:      cookieSecure,
@@ -151,6 +168,18 @@ func FromEnv(defaultPasswordMinLength int) (Config, error) {
 	cfg.SMTPFrom = smtpFrom
 	cfg.SMTPTLS = smtpTLS
 	return cfg, nil
+}
+
+func processFromOverrideOrEnv(processOverride string) (string, error) {
+	processOverride = strings.ToLower(strings.TrimSpace(processOverride))
+	if processOverride != "" {
+		if !IsProcess(processOverride) {
+			return "", fmt.Errorf("process mode must be %q, %q, or %q", ProcessAll, ProcessWeb, ProcessWorker)
+		}
+		return processOverride, nil
+	}
+
+	return envProcess("APP_PROCESS", ProcessAll)
 }
 
 func envOrDefault(key, fallback string) string {
@@ -285,6 +314,24 @@ func envEmailProvider(key, fallback string) (string, error) {
 	}
 
 	return provider, nil
+}
+
+func envProcess(key, fallback string) (string, error) {
+	process := strings.ToLower(strings.TrimSpace(envOrDefault(key, fallback)))
+	if !IsProcess(process) {
+		return "", fmt.Errorf("%s must be %q, %q, or %q", key, ProcessAll, ProcessWeb, ProcessWorker)
+	}
+
+	return process, nil
+}
+
+func IsProcess(process string) bool {
+	switch process {
+	case ProcessAll, ProcessWeb, ProcessWorker:
+		return true
+	default:
+		return false
+	}
 }
 
 func rateLimitPoliciesFromEnv() (RateLimitPoliciesConfig, error) {

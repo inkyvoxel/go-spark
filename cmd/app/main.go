@@ -22,25 +22,33 @@ import (
 func main() {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 
-	if err := config.LoadDotEnv(".env"); err != nil {
-		logger.Error("load .env", "err", err)
+	if err := run(os.Args[1:], logger); err != nil {
+		logger.Error("application failed", "err", err)
 		os.Exit(1)
+	}
+}
+
+func run(args []string, logger *slog.Logger) error {
+	if err := config.LoadDotEnv(".env"); err != nil {
+		return fmt.Errorf("load .env: %w", err)
 	}
 
-	cfg, err := config.FromEnv(services.DefaultPasswordMinLength)
+	processOverride, err := processArg(args)
 	if err != nil {
-		logger.Error("load config", "err", err)
-		os.Exit(1)
+		return err
+	}
+
+	cfg, err := config.FromEnvWithProcess(services.DefaultPasswordMinLength, processOverride)
+	if err != nil {
+		return fmt.Errorf("load config: %w", err)
 	}
 	if err := validateSecurityConfig(cfg); err != nil {
-		logger.Error("invalid security configuration", "err", err)
-		os.Exit(1)
+		return fmt.Errorf("invalid security configuration: %w", err)
 	}
 
 	db, err := database.Open(cfg.DatabasePath)
 	if err != nil {
-		logger.Error("open database", "err", err)
-		os.Exit(1)
+		return fmt.Errorf("open database: %w", err)
 	}
 	defer db.Close()
 
@@ -59,8 +67,7 @@ func main() {
 
 	emailSender, err := newEmailSender(cfg, logger)
 	if err != nil {
-		logger.Error("configure email sender", "err", err)
-		os.Exit(1)
+		return fmt.Errorf("configure email sender: %w", err)
 	}
 
 	emailWorker := email.NewWorker(database.NewEmailOutboxStore(db), emailSender, email.WorkerOptions{
@@ -88,9 +95,37 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
+	switch cfg.Process {
+	case config.ProcessAll:
+		return runAll(ctx, logger, cfg, httpServer, emailWorker)
+	case config.ProcessWeb:
+		return runWeb(ctx, logger, cfg, httpServer)
+	case config.ProcessWorker:
+		return runWorker(ctx, logger, cfg, emailWorker)
+	default:
+		return fmt.Errorf("APP_PROCESS must be %q, %q, or %q", config.ProcessAll, config.ProcessWeb, config.ProcessWorker)
+	}
+}
+
+func processArg(args []string) (string, error) {
+	if len(args) == 0 {
+		return "", nil
+	}
+	if len(args) > 1 {
+		return "", fmt.Errorf("expected at most one process mode argument (%q, %q, or %q)", config.ProcessAll, config.ProcessWeb, config.ProcessWorker)
+	}
+
+	process := strings.ToLower(strings.TrimSpace(args[0]))
+	if !config.IsProcess(process) {
+		return "", fmt.Errorf("process mode must be %q, %q, or %q", config.ProcessAll, config.ProcessWeb, config.ProcessWorker)
+	}
+	return process, nil
+}
+
+func runAll(ctx context.Context, logger *slog.Logger, cfg config.Config, httpServer *http.Server, emailWorker *email.Worker) error {
 	errs := make(chan error, 2)
 	go func() {
-		logger.Info("server listening", "addr", cfg.Addr, "env", cfg.Env, "email_provider", cfg.EmailProvider)
+		logger.Info("server listening", "addr", cfg.Addr, "env", cfg.Env, "email_provider", cfg.EmailProvider, "process", cfg.Process)
 		errs <- httpServer.ListenAndServe()
 	}()
 
@@ -106,16 +141,49 @@ func main() {
 		defer cancel()
 
 		if err := httpServer.Shutdown(shutdownCtx); err != nil {
-			logger.Error("shutdown server", "err", err)
-			os.Exit(1)
+			return fmt.Errorf("shutdown server: %w", err)
 		}
 		logger.Info("server stopped")
 	case err := <-errs:
 		if !errors.Is(err, http.ErrServerClosed) {
-			logger.Error("application failed", "err", err)
-			os.Exit(1)
+			return err
 		}
 	}
+	return nil
+}
+
+func runWeb(ctx context.Context, logger *slog.Logger, cfg config.Config, httpServer *http.Server) error {
+	errs := make(chan error, 1)
+	go func() {
+		logger.Info("server listening", "addr", cfg.Addr, "env", cfg.Env, "email_provider", cfg.EmailProvider, "process", cfg.Process)
+		errs <- httpServer.ListenAndServe()
+	}()
+
+	select {
+	case <-ctx.Done():
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		if err := httpServer.Shutdown(shutdownCtx); err != nil {
+			return fmt.Errorf("shutdown server: %w", err)
+		}
+		logger.Info("server stopped")
+		return nil
+	case err := <-errs:
+		if errors.Is(err, http.ErrServerClosed) {
+			return nil
+		}
+		return err
+	}
+}
+
+func runWorker(ctx context.Context, logger *slog.Logger, cfg config.Config, emailWorker *email.Worker) error {
+	logger.Info("email worker starting", "env", cfg.Env, "email_provider", cfg.EmailProvider, "process", cfg.Process)
+	if err := emailWorker.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
+		return err
+	}
+	logger.Info("email worker stopped")
+	return nil
 }
 
 func newEmailSender(cfg config.Config, logger *slog.Logger) (email.Sender, error) {

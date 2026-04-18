@@ -6,7 +6,6 @@
 
 What is still not implemented:
 - Admin/ops visibility for failed outbox rows.
-- Separate worker process mode.
 - HTML email styling beyond the simple message body.
 
 ## Account features

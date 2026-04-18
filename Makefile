@@ -1,4 +1,4 @@
-.PHONY: run test fmt tidy sqlc vulncheck migrate-up migrate-down migrate-status tools
+.PHONY: run run-all run-web run-worker test fmt tidy sqlc vulncheck migrate-up migrate-down migrate-status tools
 
 DB_PATH ?= ./data/app.db
 GOOSE_DRIVER ?= sqlite3
@@ -7,6 +7,15 @@ GOOSE_MIGRATION_DIR ?= ./migrations
 
 run:
 	go run ./cmd/app
+
+run-all:
+	go run ./cmd/app all
+
+run-web:
+	go run ./cmd/app web
+
+run-worker:
+	go run ./cmd/app worker
 
 test:
 	go test ./...
