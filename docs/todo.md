@@ -1,3 +1,9 @@
+## Project architecture
+
+- Add a small `internal/server/routes.go` with grouped `registerAuthRoutes`, `registerAccountRoutes`, etc., so `Routes()` stays short.
+- Add a doc table of canonical routes in docs/architecture.md to make the starter easier to fork.
+- Consider package-level template name constants (for auth templates) to avoid string drift over time.
+
 ## Email features
 
 What is still not implemented:
@@ -51,7 +57,7 @@ What is still not implemented:
   - Risk: apps cloned from the template may assume verified email means trusted account ownership, while unverified users can still access account features.
   - Recommendation: for this security-first starter, block sensitive account access until verified, allow resend/logout only, and show a clear interstitial.
   - Decision: make verified-email gating a proper implementation task.
-  - Progress: implemented with a dedicated `/verify-email` interstitial, global `requireVerifiedAuth` middleware for verified-only pages/actions, login/register redirects to `/verify-email` for unverified users, and verified-only access to `/account`.
+  - Progress: implemented with a dedicated `/account/verify-email` interstitial, global `requireVerifiedAuth` middleware for verified-only pages/actions, login/register redirects to `/account/verify-email` for unverified users, and verified-only access to `/account`.
 
 ### Medium priority
 
@@ -61,12 +67,12 @@ What is still not implemented:
   - Recommendation: sign the CSRF token with an app secret or store the token server-side/session-side. Rotate CSRF token on login/logout or session changes.
 
 - [ ] Replace hidden reset-token form flow with a short-lived HttpOnly reset cookie flow.
-  - Evidence: `/reset-password?token=...` validates the token and renders it into a hidden form field.
+  - Evidence: `/account/reset-password?token=...` validates the token and renders it into a hidden form field.
   - Risk: reset tokens can appear in browser history, server/proxy logs, screenshots, extensions, and page source until consumed. The app should assume reset tokens are bearer credentials.
-  - Recommendation: on GET, exchange a valid URL token for a short-lived HttpOnly reset cookie and redirect to `/reset-password` without the query string. On POST, consume the reset cookie plus CSRF token.
+  - Recommendation: on GET, exchange a valid URL token for a short-lived HttpOnly reset cookie and redirect to `/account/reset-password` without the query string. On POST, consume the reset cookie plus CSRF token.
   - Decision: keep this on the list. The exact pattern is not universal in small apps, but reducing bearer-token exposure in URLs and HTML is a strong security practice for a starter template.
 
-- [ ] Add rate limiting to `POST /reset-password` and `POST /account/change-password`.
+- [ ] Add rate limiting to `POST /account/reset-password` and `POST /account/change-password`.
   - Evidence: login, register, forgot password, and resend verification are rate-limited; reset password and change password are not.
   - Risk: reset token guessing is impractical with 32 random bytes, but rate limiting still reduces abuse, CPU burn from Argon2, and online attempts against current passwords in change-password.
   - Recommendation: add policies keyed by IP plus reset-token hash prefix for reset, and IP plus user ID for change-password.
@@ -101,7 +107,7 @@ What is still not implemented:
 - [ ] Add cache-control headers for auth-sensitive pages.
   - Evidence: account and reset pages are rendered normally without explicit cache headers.
   - Risk: shared/private browser caches may retain account pages or reset forms.
-  - Recommendation: set `Cache-Control: no-store` for `/account`, `/login`, `/register`, `/forgot-password`, `/reset-password`, `/confirm-email`, and form POST responses.
+  - Recommendation: set `Cache-Control: no-store` for `/account`, `/login`, `/register`, `/account/forgot-password`, `/account/reset-password`, `/account/confirm-email`, and form POST responses.
 
 - [ ] Add `MaxAge` to the session cookie in addition to `Expires`.
   - Evidence: `setSessionCookie` sets `Expires` but not `MaxAge`.

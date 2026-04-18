@@ -10,13 +10,13 @@ import (
 
 func TestHTMXFormTemplatesIncludeLoadingAffordances(t *testing.T) {
 	templateFiles := []string{
-		"login.html",
-		"register.html",
-		"forgot_password.html",
-		"resend_verification.html",
-		"reset_password.html",
-		"account.html",
-		"verify_email.html",
+		"account/login.html",
+		"account/register.html",
+		"account/forgot_password.html",
+		"account/resend_verification.html",
+		"account/reset_password.html",
+		"account/account.html",
+		"account/verify_email.html",
 	}
 
 	for _, name := range templateFiles {

@@ -104,7 +104,7 @@ func NewAccountConfirmationMessage(opts AccountConfirmationOptions, to, token st
 		return Message{}, err
 	}
 
-	confirmURL, err := tokenURL(opts.AppBaseURL, "confirm-email", token, "confirmation")
+	confirmURL, err := tokenURL(opts.AppBaseURL, "account/confirm-email", token, "confirmation")
 	if err != nil {
 		return Message{}, err
 	}
@@ -141,7 +141,7 @@ func NewPasswordResetMessage(opts PasswordResetOptions, to, token string) (Messa
 		return Message{}, err
 	}
 
-	resetURL, err := tokenURL(opts.AppBaseURL, "reset-password", token, "password reset")
+	resetURL, err := tokenURL(opts.AppBaseURL, "account/reset-password", token, "password reset")
 	if err != nil {
 		return Message{}, err
 	}

@@ -44,7 +44,7 @@ func TestAuthServiceRegisterHashesPassword(t *testing.T) {
 	if store.outbox[0].To != "<user@example.com>" {
 		t.Fatalf("confirmation email recipient = %q, want <user@example.com>", store.outbox[0].To)
 	}
-	if !strings.Contains(store.outbox[0].TextBody, "http://localhost:8080/confirm-email?token=") {
+	if !strings.Contains(store.outbox[0].TextBody, "http://localhost:8080/account/confirm-email?token=") {
 		t.Fatalf("confirmation email text = %q, want confirmation URL", store.outbox[0].TextBody)
 	}
 }

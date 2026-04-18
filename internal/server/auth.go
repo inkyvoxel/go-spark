@@ -13,7 +13,17 @@ import (
 )
 
 const sessionCookieName = "session"
-const verifyEmailPath = "/verify-email"
+
+const (
+	accountPath                   = "/account"
+	verifyEmailPath               = accountPath + "/verify-email"
+	accountConfirmEmailPath       = accountPath + "/confirm-email"
+	accountForgotPasswordPath     = accountPath + "/forgot-password"
+	accountResetPasswordPath      = accountPath + "/reset-password"
+	accountResendVerificationPath = accountPath + "/resend-verification"
+	accountVerifyEmailResendPath  = accountPath + "/verify-email/resend"
+	accountChangePasswordPath     = accountPath + "/change-password"
+)
 
 type authService interface {
 	ChangePassword(context.Context, db.User, string, string) error
@@ -116,7 +126,7 @@ func (s *Server) requireAnonymous(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if user, ok := currentUser(r.Context()); ok {
 			if user.EmailVerifiedAt.Valid {
-				http.Redirect(w, r, "/account", http.StatusSeeOther)
+				http.Redirect(w, r, accountPath, http.StatusSeeOther)
 				return
 			}
 			http.Redirect(w, r, verifyEmailPath, http.StatusSeeOther)

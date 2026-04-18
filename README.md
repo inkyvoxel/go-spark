@@ -53,7 +53,7 @@ The app listens on `:8080` by default, stores its SQLite database at `./data/app
 Built-in email functionality includes:
 
 * Account confirmation emails on registration.
-* Confirmation links at `/confirm-email`.
+* Confirmation links at `/account/confirm-email`.
 * Resend confirmation from the account page for signed-in, unverified users.
 * Durable email delivery intent via a database outbox worker.
 
@@ -65,9 +65,9 @@ Sensitive auth POST endpoints are protected by an in-memory fixed-window limiter
 
 * `POST /login` keyed by `IP + normalized email`
 * `POST /register` keyed by `IP + normalized email`
-* `POST /forgot-password` keyed by `IP + normalized email`
-* `POST /resend-verification` keyed by `IP + normalized email`
-* `POST /account/resend-verification` keyed by `IP + userID`
+* `POST /account/forgot-password` keyed by `IP + normalized email`
+* `POST /account/resend-verification` keyed by `IP + normalized email`
+* `POST /account/verify-email/resend` keyed by `IP + userID`
 
 Default policies:
 

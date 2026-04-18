@@ -71,26 +71,26 @@ func mustParseTemplates() map[string]*template.Template {
 }
 
 func parseTemplates() (map[string]*template.Template, error) {
-	pages := []string{
-		"account.html",
-		"confirm_email.html",
-		"forgot_password.html",
-		"home.html",
-		"login.html",
-		"reset_password.html",
-		"register.html",
-		"resend_verification.html",
-		"verify_email.html",
+	pages := map[string]string{
+		"account.html":             filepath.Join("account", "account.html"),
+		"confirm_email.html":       filepath.Join("account", "confirm_email.html"),
+		"forgot_password.html":     filepath.Join("account", "forgot_password.html"),
+		"home.html":                "home.html",
+		"login.html":               filepath.Join("account", "login.html"),
+		"reset_password.html":      filepath.Join("account", "reset_password.html"),
+		"register.html":            filepath.Join("account", "register.html"),
+		"resend_verification.html": filepath.Join("account", "resend_verification.html"),
+		"verify_email.html":        filepath.Join("account", "verify_email.html"),
 	}
 	templates := make(map[string]*template.Template, len(pages))
 	layout := filepath.Join("templates", "layout.html")
 
-	for _, page := range pages {
-		parsed, err := template.ParseFiles(layout, filepath.Join("templates", page))
+	for name, filePath := range pages {
+		parsed, err := template.ParseFiles(layout, filepath.Join("templates", filePath))
 		if err != nil {
 			return nil, err
 		}
-		templates[page] = parsed
+		templates[name] = parsed
 	}
 
 	return templates, nil
@@ -113,10 +113,10 @@ func (s *Server) Routes() http.Handler {
 			s.withRateLimit("register", s.rateLimitPolicies.Register, rateLimitKeyByIPAndEmail("email"), http.HandlerFunc(s.register)),
 		),
 	)
-	dynamic.HandleFunc("GET /confirm-email", s.confirmEmail)
-	dynamic.Handle("GET /forgot-password", s.requireAnonymous(http.HandlerFunc(s.forgotPasswordForm)))
+	dynamic.HandleFunc("GET "+accountConfirmEmailPath, s.confirmEmail)
+	dynamic.Handle("GET "+accountForgotPasswordPath, s.requireAnonymous(http.HandlerFunc(s.forgotPasswordForm)))
 	dynamic.Handle(
-		"POST /forgot-password",
+		"POST "+accountForgotPasswordPath,
 		s.requireAnonymous(
 			s.withRateLimit("forgot-password", s.rateLimitPolicies.ForgotPassword, rateLimitKeyByIPAndEmail("email"), http.HandlerFunc(s.forgotPassword)),
 		),
@@ -128,25 +128,25 @@ func (s *Server) Routes() http.Handler {
 			s.withRateLimit("login", s.rateLimitPolicies.Login, rateLimitKeyByIPAndEmail("email"), http.HandlerFunc(s.login)),
 		),
 	)
-	dynamic.Handle("GET /reset-password", s.requireAnonymous(http.HandlerFunc(s.resetPasswordForm)))
-	dynamic.Handle("POST /reset-password", s.requireAnonymous(http.HandlerFunc(s.resetPassword)))
-	dynamic.Handle("GET /resend-verification", s.requireAnonymous(http.HandlerFunc(s.resendVerificationForm)))
+	dynamic.Handle("GET "+accountResetPasswordPath, s.requireAnonymous(http.HandlerFunc(s.resetPasswordForm)))
+	dynamic.Handle("POST "+accountResetPasswordPath, s.requireAnonymous(http.HandlerFunc(s.resetPassword)))
+	dynamic.Handle("GET "+accountResendVerificationPath, s.requireAnonymous(http.HandlerFunc(s.resendVerificationForm)))
 	dynamic.Handle(
-		"POST /resend-verification",
+		"POST "+accountResendVerificationPath,
 		s.requireAnonymous(
 			s.withRateLimit("resend-verification-public", s.rateLimitPolicies.PublicResendVerification, rateLimitKeyByIPAndEmail("email"), http.HandlerFunc(s.resendVerificationPublic)),
 		),
 	)
 	dynamic.Handle("POST /logout", s.requireAuth(http.HandlerFunc(s.logout)))
-	dynamic.Handle("GET /verify-email", s.requireAuth(http.HandlerFunc(s.verifyEmail)))
-	dynamic.Handle("GET /account", s.requireVerifiedAuth(http.HandlerFunc(s.account)))
+	dynamic.Handle("GET "+verifyEmailPath, s.requireAuth(http.HandlerFunc(s.verifyEmail)))
+	dynamic.Handle("GET "+accountPath, s.requireVerifiedAuth(http.HandlerFunc(s.account)))
 	dynamic.Handle(
-		"POST /account/resend-verification",
+		"POST "+accountVerifyEmailResendPath,
 		s.requireAuth(
 			s.withRateLimit("resend-verification-account", s.rateLimitPolicies.AccountResendVerification, rateLimitKeyByIPAndUser(), http.HandlerFunc(s.resendVerification)),
 		),
 	)
-	dynamic.Handle("POST /account/change-password", s.requireVerifiedAuth(http.HandlerFunc(s.changePassword)))
+	dynamic.Handle("POST "+accountChangePasswordPath, s.requireVerifiedAuth(http.HandlerFunc(s.changePassword)))
 	dynamic.HandleFunc("GET /", s.home)
 
 	mux.Handle("/", s.securityHeaders(s.limitRequestBody(s.csrf(s.loadSession(dynamic)))))

@@ -134,17 +134,17 @@ func TestRouteRateLimitProtectedPostRoutesReturn429AfterThreshold(t *testing.T) 
 		},
 		{
 			name: "forgot-password",
-			path: "/forgot-password",
+			path: "/account/forgot-password",
 			form: url.Values{"email": []string{"user@example.com"}},
 		},
 		{
 			name: "resend-verification-public",
-			path: "/resend-verification",
+			path: "/account/resend-verification",
 			form: url.Values{"email": []string{"user@example.com"}},
 		},
 		{
 			name:         "resend-verification-account",
-			path:         "/account/resend-verification",
+			path:         "/account/verify-email/resend",
 			form:         url.Values{},
 			sessionToken: "session-token",
 		},
@@ -176,17 +176,17 @@ func TestRouteRateLimitKeyingByIPAndEmail(t *testing.T) {
 	}
 	routes := srv.Routes()
 
-	first := postFormWithCSRF(routes, "/forgot-password", url.Values{"email": []string{"a@example.com"}}, "")
+	first := postFormWithCSRF(routes, "/account/forgot-password", url.Values{"email": []string{"a@example.com"}}, "")
 	if first.Code == http.StatusTooManyRequests {
 		t.Fatalf("first status = %d, want non-429", first.Code)
 	}
 
-	second := postFormWithCSRF(routes, "/forgot-password", url.Values{"email": []string{"a@example.com"}}, "")
+	second := postFormWithCSRF(routes, "/account/forgot-password", url.Values{"email": []string{"a@example.com"}}, "")
 	if second.Code != http.StatusTooManyRequests {
 		t.Fatalf("second status = %d, want %d", second.Code, http.StatusTooManyRequests)
 	}
 
-	third := postFormWithCSRF(routes, "/forgot-password", url.Values{"email": []string{"b@example.com"}}, "")
+	third := postFormWithCSRF(routes, "/account/forgot-password", url.Values{"email": []string{"b@example.com"}}, "")
 	if third.Code == http.StatusTooManyRequests {
 		t.Fatalf("third status = %d, want non-429 for different email", third.Code)
 	}
@@ -200,19 +200,19 @@ func TestRouteRateLimitKeyingByIPAndUser(t *testing.T) {
 	}
 	routes := srv.Routes()
 
-	first := postFormWithCSRF(routes, "/account/resend-verification", url.Values{}, "session-token")
+	first := postFormWithCSRF(routes, "/account/verify-email/resend", url.Values{}, "session-token")
 	if first.Code == http.StatusTooManyRequests {
 		t.Fatalf("first status = %d, want non-429", first.Code)
 	}
 
 	auth.user = db.User{ID: 2, Email: "user2@example.com"}
-	second := postFormWithCSRF(routes, "/account/resend-verification", url.Values{}, "session-token")
+	second := postFormWithCSRF(routes, "/account/verify-email/resend", url.Values{}, "session-token")
 	if second.Code == http.StatusTooManyRequests {
 		t.Fatalf("second status = %d, want non-429 for different user", second.Code)
 	}
 
 	auth.user = db.User{ID: 1, Email: "user1@example.com"}
-	third := postFormWithCSRF(routes, "/account/resend-verification", url.Values{}, "session-token")
+	third := postFormWithCSRF(routes, "/account/verify-email/resend", url.Values{}, "session-token")
 	if third.Code != http.StatusTooManyRequests {
 		t.Fatalf("third status = %d, want %d for original user", third.Code, http.StatusTooManyRequests)
 	}

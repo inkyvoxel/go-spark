@@ -14,7 +14,7 @@
   {{ if eq .ResendStatus "error" }}<p role="alert">We couldn't send a verification email right now. Please try again.
   </p>{{ end }}
   {{ if .Error }}<p role="alert">{{ .Error }}</p>{{ end }}
-  <form method="post" action="/resend-verification" hx-post="/resend-verification"
+  <form method="post" action="/account/resend-verification" hx-post="/account/resend-verification"
     hx-target="#resend-verification-form-section" hx-swap="outerHTML" hx-disabled-elt="button[type='submit']"
     hx-on::before-request="this.querySelector('button[type=submit]').setAttribute('aria-busy','true')"
     hx-on::after-request="this.querySelector('button[type=submit]').removeAttribute('aria-busy')">

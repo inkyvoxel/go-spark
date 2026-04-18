@@ -88,7 +88,7 @@ func (s *Server) register(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.setSessionCookie(w, r, session)
-	redirect := "/account"
+	redirect := accountPath
 	if !user.EmailVerifiedAt.Valid {
 		redirect = verifyEmailPath
 	}
@@ -138,7 +138,7 @@ func (s *Server) forgotPassword(w http.ResponseWriter, r *http.Request) {
 			s.renderFragmentStatus(w, http.StatusOK, "forgot_password.html", "forgot_password_form_section", data)
 			return
 		}
-		http.Redirect(w, r, "/forgot-password?status=error", http.StatusSeeOther)
+		http.Redirect(w, r, accountForgotPasswordPath+"?status=error", http.StatusSeeOther)
 		return
 	}
 
@@ -148,7 +148,7 @@ func (s *Server) forgotPassword(w http.ResponseWriter, r *http.Request) {
 		s.renderFragmentStatus(w, http.StatusOK, "forgot_password.html", "forgot_password_form_section", data)
 		return
 	}
-	http.Redirect(w, r, "/forgot-password?status=sent", http.StatusSeeOther)
+	http.Redirect(w, r, accountForgotPasswordPath+"?status=sent", http.StatusSeeOther)
 }
 
 func (s *Server) resetPasswordForm(w http.ResponseWriter, r *http.Request) {
@@ -217,7 +217,7 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 	if !user.EmailVerifiedAt.Valid {
 		next = verifyEmailPath
 	} else if next == "" {
-		next = "/account"
+		next = accountPath
 	}
 
 	s.setSessionCookie(w, r, session)
@@ -245,7 +245,7 @@ func (s *Server) account(w http.ResponseWriter, r *http.Request) {
 func (s *Server) verifyEmail(w http.ResponseWriter, r *http.Request) {
 	data := s.newTemplateData(r, "Verify Email")
 	if data.Verified {
-		http.Redirect(w, r, "/account", http.StatusSeeOther)
+		http.Redirect(w, r, accountPath, http.StatusSeeOther)
 		return
 	}
 	status := strings.TrimSpace(r.URL.Query().Get("resend"))
@@ -408,7 +408,7 @@ func (s *Server) resendVerificationPublic(w http.ResponseWriter, r *http.Request
 			s.renderFragmentStatus(w, http.StatusOK, "resend_verification.html", "resend_verification_form_section", data)
 			return
 		}
-		http.Redirect(w, r, "/resend-verification?status=error", http.StatusSeeOther)
+		http.Redirect(w, r, accountResendVerificationPath+"?status=error", http.StatusSeeOther)
 		return
 	}
 
@@ -418,7 +418,7 @@ func (s *Server) resendVerificationPublic(w http.ResponseWriter, r *http.Request
 		s.renderFragmentStatus(w, http.StatusOK, "resend_verification.html", "resend_verification_form_section", data)
 		return
 	}
-	http.Redirect(w, r, "/resend-verification?status=sent", http.StatusSeeOther)
+	http.Redirect(w, r, accountResendVerificationPath+"?status=sent", http.StatusSeeOther)
 }
 
 func (s *Server) handleAuthFormError(w http.ResponseWriter, r *http.Request, templateName, fragmentName string, data templateData, err error) {
