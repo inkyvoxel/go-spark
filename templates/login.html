@@ -10,14 +10,10 @@
 
 {{ define "login_form_section" }}
 <section id="login-form-section">
-  {{ if eq .LoginStatus "password-changed" }}<p role="status">Your password has changed. Sign in with your new password.</p>{{ end }}
+  {{ if eq .LoginStatus "password-changed" }}<p role="status">Your password has changed. Sign in with your new password.
+  </p>{{ end }}
   {{ if .Error }}<p role="alert">{{ .Error }}</p>{{ end }}
-  <form
-    method="post"
-    action="/login"
-    hx-post="/login"
-    hx-target="#login-form-section"
-    hx-swap="outerHTML"
+  <form method="post" action="/login" hx-post="/login" hx-target="#login-form-section" hx-swap="outerHTML"
     hx-disabled-elt="button[type='submit']"
     hx-on::before-request="this.querySelector('button[type=submit]').setAttribute('aria-busy','true')"
     hx-on::after-request="this.querySelector('button[type=submit]').removeAttribute('aria-busy')">
@@ -25,24 +21,14 @@
     {{ if .Next }}<input type="hidden" name="next" value="{{ .Next }}">{{ end }}
     <label>
       Email
-      <input
-        type="email"
-        name="email"
-        value="{{ .Email }}"
-        autocomplete="email"
-        pattern="{{ .EmailPattern }}"
-        {{ if index .FieldErrors "email" }}aria-invalid="true"{{ end }}
-        required>
+      <input type="email" name="email" value="{{ .Email }}" autocomplete="email" pattern="{{ .EmailPattern }}" {{ if
+        index .FieldErrors "email" }}aria-invalid="true" {{ end }} required>
       {{ with index .FieldErrors "email" }}<small role="alert">{{ . }}</small>{{ end }}
     </label>
     <label>
       Password
-      <input
-        type="password"
-        name="password"
-        autocomplete="current-password"
-        {{ if index .FieldErrors "password" }}aria-invalid="true"{{ end }}
-        required>
+      <input type="password" name="password" autocomplete="current-password" {{ if index .FieldErrors "password"
+        }}aria-invalid="true" {{ end }} required>
       {{ with index .FieldErrors "password" }}<small role="alert">{{ . }}</small>{{ end }}
     </label>
     <button type="submit">Sign in</button>

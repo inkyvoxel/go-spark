@@ -80,6 +80,7 @@ func parseTemplates() (map[string]*template.Template, error) {
 		"reset_password.html",
 		"register.html",
 		"resend_verification.html",
+		"verify_email.html",
 	}
 	templates := make(map[string]*template.Template, len(pages))
 	layout := filepath.Join("templates", "layout.html")
@@ -137,14 +138,15 @@ func (s *Server) Routes() http.Handler {
 		),
 	)
 	dynamic.Handle("POST /logout", s.requireAuth(http.HandlerFunc(s.logout)))
-	dynamic.Handle("GET /account", s.requireAuth(http.HandlerFunc(s.account)))
+	dynamic.Handle("GET /verify-email", s.requireAuth(http.HandlerFunc(s.verifyEmail)))
+	dynamic.Handle("GET /account", s.requireVerifiedAuth(http.HandlerFunc(s.account)))
 	dynamic.Handle(
 		"POST /account/resend-verification",
 		s.requireAuth(
 			s.withRateLimit("resend-verification-account", s.rateLimitPolicies.AccountResendVerification, rateLimitKeyByIPAndUser(), http.HandlerFunc(s.resendVerification)),
 		),
 	)
-	dynamic.Handle("POST /account/change-password", s.requireAuth(http.HandlerFunc(s.changePassword)))
+	dynamic.Handle("POST /account/change-password", s.requireVerifiedAuth(http.HandlerFunc(s.changePassword)))
 	dynamic.HandleFunc("GET /", s.home)
 
 	mux.Handle("/", s.securityHeaders(s.limitRequestBody(s.csrf(s.loadSession(dynamic)))))

@@ -1,0 +1,27 @@
+{{ define "content" }}
+<article>
+  <h1>Verify your email</h1>
+  <p>You are signed in as {{ .User.Email }}. Verify your email address to continue.</p>
+  {{ template "verify_email_resend_section" . }}
+  <p>If this is not your account, you can sign out above.</p>
+</article>
+{{ end }}
+
+{{ define "verify_email_resend_section" }}
+<section id="verify-email-resend-section">
+  {{ if eq .ResendStatus "error" }}
+  <p role="alert">We couldn't send a verification email right now. Please try again.</p>
+  {{ else if eq .ResendStatus "sent" }}
+  <p role="status">Check your email to confirm your account. We sent a new verification email.</p>
+  {{ else }}
+  <p role="status">Check your email to confirm your account.</p>
+  {{ end }}
+  <form method="post" action="/account/resend-verification" hx-post="/account/resend-verification"
+    hx-target="#verify-email-resend-section" hx-swap="outerHTML" hx-disabled-elt="button[type='submit']"
+    hx-on::before-request="this.querySelector('button[type=submit]').setAttribute('aria-busy','true')"
+    hx-on::after-request="this.querySelector('button[type=submit]').removeAttribute('aria-busy')">
+    <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
+    <button type="submit">Resend verification email</button>
+  </form>
+</section>
+{{ end }}

@@ -1,7 +1,6 @@
 ## Email features
 
 What is still not implemented:
-- Block login/account access until email is verified. Security decision: make this a default template behavior, not just optional app guidance.
 - Admin/ops visibility for failed outbox rows.
 - Separate worker process mode.
 - HTML email styling beyond the simple message body.
@@ -47,11 +46,12 @@ What is still not implemented:
   - Recommendation: store `session_token_hash`, compare/query by hash, and keep only the raw token in the browser cookie. Plan a migration path that invalidates existing sessions or supports both columns briefly.
   - Decision: keep this on the list. This is a common best-practice hardening pattern for database-backed opaque session tokens because it reduces the blast radius of a database-only leak.
 
-- [ ] Block login/account access until email is verified, then implement consistently.
+- [x] Block login/account access until email is verified, then implement consistently.
   - Evidence: `register` immediately logs the new user in after sending a verification email, and `Login` does not check `email_verified_at`. This is also listed under Email features.
   - Risk: apps cloned from the template may assume verified email means trusted account ownership, while unverified users can still access account features.
   - Recommendation: for this security-first starter, block sensitive account access until verified, allow resend/logout only, and show a clear interstitial.
   - Decision: make verified-email gating a proper implementation task.
+  - Progress: implemented with a dedicated `/verify-email` interstitial, global `requireVerifiedAuth` middleware for verified-only pages/actions, login/register redirects to `/verify-email` for unverified users, and verified-only access to `/account`.
 
 ### Medium priority
 

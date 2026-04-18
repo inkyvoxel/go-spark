@@ -13,6 +13,7 @@ import (
 )
 
 const sessionCookieName = "session"
+const verifyEmailPath = "/verify-email"
 
 type authService interface {
 	ChangePassword(context.Context, db.User, string, string) error
@@ -113,8 +114,36 @@ func (s *Server) requireAuth(next http.Handler) http.Handler {
 
 func (s *Server) requireAnonymous(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if _, ok := currentUser(r.Context()); ok {
-			http.Redirect(w, r, "/account", http.StatusSeeOther)
+		if user, ok := currentUser(r.Context()); ok {
+			if user.EmailVerifiedAt.Valid {
+				http.Redirect(w, r, "/account", http.StatusSeeOther)
+				return
+			}
+			http.Redirect(w, r, verifyEmailPath, http.StatusSeeOther)
+			return
+		}
+
+		next.ServeHTTP(w, r)
+	})
+}
+
+func (s *Server) requireVerifiedAuth(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		user, ok := currentUser(r.Context())
+		if !ok {
+			if r.Method == http.MethodGet {
+				redirectToLogin(w, r)
+				return
+			}
+			http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+			return
+		}
+		if !user.EmailVerifiedAt.Valid {
+			if r.Method == http.MethodGet {
+				http.Redirect(w, r, verifyEmailPath, http.StatusSeeOther)
+				return
+			}
+			http.Error(w, http.StatusText(http.StatusForbidden), http.StatusForbidden)
 			return
 		}
 

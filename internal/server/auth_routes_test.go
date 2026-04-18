@@ -20,7 +20,7 @@ import (
 
 func TestRoutesLogin(t *testing.T) {
 	auth := &fakeAuthLookup{
-		user: db.User{ID: 1, Email: "user@example.com"},
+		user: verifiedRouteUser(),
 		loginSession: db.Session{
 			Token:     "session-token",
 			ExpiresAt: time.Now().Add(time.Hour),
@@ -60,7 +60,7 @@ func TestRoutesLogin(t *testing.T) {
 
 func TestRoutesLoginHTMXReturnsRedirectHeaderAndSession(t *testing.T) {
 	auth := &fakeAuthLookup{
-		user: db.User{ID: 1, Email: "user@example.com"},
+		user: verifiedRouteUser(),
 		loginSession: db.Session{
 			Token:     "session-token",
 			ExpiresAt: time.Now().Add(time.Hour),
@@ -160,7 +160,7 @@ func TestRoutesLoginSetsSecureSessionCookieWhenConfigured(t *testing.T) {
 
 func TestRoutesLoginRedirectsToSafeNextPath(t *testing.T) {
 	auth := &fakeAuthLookup{
-		user: db.User{ID: 1, Email: "user@example.com"},
+		user: verifiedRouteUser(),
 		loginSession: db.Session{
 			Token:     "session-token",
 			ExpiresAt: time.Now().Add(time.Hour),
@@ -191,7 +191,7 @@ func TestRoutesLoginRedirectsToSafeNextPath(t *testing.T) {
 
 func TestRoutesLoginRejectsUnsafeNextPath(t *testing.T) {
 	auth := &fakeAuthLookup{
-		user: db.User{ID: 1, Email: "user@example.com"},
+		user: verifiedRouteUser(),
 		loginSession: db.Session{
 			Token:     "session-token",
 			ExpiresAt: time.Now().Add(time.Hour),
@@ -302,7 +302,7 @@ func TestRoutesLoginFormShowsPasswordChangedStatus(t *testing.T) {
 
 func TestRoutesLoginRedirectsAuthenticatedUserToAccount(t *testing.T) {
 	auth := &fakeAuthLookup{
-		user: db.User{ID: 1, Email: "user@example.com"},
+		user: verifiedRouteUser(),
 	}
 	srv := newAuthRouteTestServer(t, auth)
 
@@ -317,6 +317,57 @@ func TestRoutesLoginRedirectsAuthenticatedUserToAccount(t *testing.T) {
 	}
 	if location := rec.Header().Get("Location"); location != "/account" {
 		t.Fatalf("Location = %q, want %q", location, "/account")
+	}
+}
+
+func TestRoutesLoginRedirectsAuthenticatedUnverifiedUserToVerifyEmail(t *testing.T) {
+	auth := &fakeAuthLookup{
+		user: db.User{ID: 1, Email: "user@example.com"},
+	}
+	srv := newAuthRouteTestServer(t, auth)
+
+	req := httptest.NewRequest(http.MethodGet, "/login", nil)
+	req.AddCookie(&http.Cookie{Name: sessionCookieName, Value: "session-token"})
+	rec := httptest.NewRecorder()
+
+	srv.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusSeeOther)
+	}
+	if location := rec.Header().Get("Location"); location != verifyEmailPath {
+		t.Fatalf("Location = %q, want %q", location, verifyEmailPath)
+	}
+}
+
+func TestRoutesLoginRedirectsUnverifiedUserToVerifyEmail(t *testing.T) {
+	auth := &fakeAuthLookup{
+		user: db.User{ID: 1, Email: "user@example.com"},
+		loginSession: db.Session{
+			Token:     "session-token",
+			ExpiresAt: time.Now().Add(time.Hour),
+		},
+	}
+	srv := newAuthRouteTestServer(t, auth)
+
+	form := url.Values{
+		"email":       []string{"user@example.com"},
+		"password":    []string{"password"},
+		"next":        []string{"/dashboard?tab=home"},
+		csrfFieldName: []string{"csrf"},
+	}
+	req := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: "csrf"})
+	rec := httptest.NewRecorder()
+
+	srv.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusSeeOther)
+	}
+	if location := rec.Header().Get("Location"); location != verifyEmailPath {
+		t.Fatalf("Location = %q, want %q", location, verifyEmailPath)
 	}
 }
 
@@ -346,8 +397,8 @@ func TestRoutesRegister(t *testing.T) {
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusSeeOther)
 	}
-	if location := rec.Header().Get("Location"); location != "/account" {
-		t.Fatalf("Location = %q, want %q", location, "/account")
+	if location := rec.Header().Get("Location"); location != verifyEmailPath {
+		t.Fatalf("Location = %q, want %q", location, verifyEmailPath)
 	}
 	if !auth.registered {
 		t.Fatal("Register() was not called")
@@ -391,8 +442,8 @@ func TestRoutesRegisterHTMXReturnsRedirectHeaderAndSession(t *testing.T) {
 	if location := rec.Header().Get("Location"); location != "" {
 		t.Fatalf("Location = %q, want empty for HTMX redirect", location)
 	}
-	if redirect := rec.Header().Get("HX-Redirect"); redirect != "/account" {
-		t.Fatalf("HX-Redirect = %q, want %q", redirect, "/account")
+	if redirect := rec.Header().Get("HX-Redirect"); redirect != verifyEmailPath {
+		t.Fatalf("HX-Redirect = %q, want %q", redirect, verifyEmailPath)
 	}
 	if !auth.registered {
 		t.Fatal("Register() was not called")
@@ -722,7 +773,7 @@ func TestRoutesHomeShowsAuthenticatedNav(t *testing.T) {
 
 func TestRoutesAccountRequiresAuth(t *testing.T) {
 	auth := &fakeAuthLookup{
-		user: db.User{ID: 1, Email: "user@example.com"},
+		user: verifiedRouteUser(),
 	}
 	srv := newAuthRouteTestServer(t, auth)
 
@@ -755,18 +806,67 @@ func TestRoutesAccountShowsResendForUnverifiedUser(t *testing.T) {
 
 	srv.Routes().ServeHTTP(rec, req)
 
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusSeeOther)
+	}
+	if location := rec.Header().Get("Location"); location != verifyEmailPath {
+		t.Fatalf("Location = %q, want %q", location, verifyEmailPath)
+	}
+}
+
+func TestRoutesVerifyEmailRequiresAuth(t *testing.T) {
+	srv := newAuthRouteTestServer(t, &fakeAuthLookup{})
+
+	req := httptest.NewRequest(http.MethodGet, verifyEmailPath, nil)
+	rec := httptest.NewRecorder()
+
+	srv.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusSeeOther)
+	}
+	if location := rec.Header().Get("Location"); location != "/login?next=%2Fverify-email" {
+		t.Fatalf("Location = %q, want %q", location, "/login?next=%2Fverify-email")
+	}
+}
+
+func TestRoutesVerifyEmailShowsInterstitialForUnverifiedUser(t *testing.T) {
+	auth := &fakeAuthLookup{
+		user: db.User{ID: 1, Email: "user@example.com"},
+	}
+	srv := newAuthRouteTestServer(t, auth)
+
+	req := httptest.NewRequest(http.MethodGet, verifyEmailPath, nil)
+	req.AddCookie(&http.Cookie{Name: sessionCookieName, Value: "session-token"})
+	rec := httptest.NewRecorder()
+
+	srv.Routes().ServeHTTP(rec, req)
+
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
 	}
-	body := rec.Body.String()
-	if !strings.Contains(body, "resend-visible") {
-		t.Fatalf("body = %q, want resend control", body)
+	if !strings.Contains(rec.Body.String(), "verify-email") {
+		t.Fatalf("body = %q, want verify-email marker", rec.Body.String())
 	}
-	if !strings.Contains(body, "check-email-visible") {
-		t.Fatalf("body = %q, want unverified check-email message", body)
+}
+
+func TestRoutesVerifyEmailRedirectsVerifiedUserToAccount(t *testing.T) {
+	auth := &fakeAuthLookup{
+		user: verifiedRouteUser(),
 	}
-	if !strings.Contains(body, "change-password-visible") {
-		t.Fatalf("body = %q, want change password form", body)
+	srv := newAuthRouteTestServer(t, auth)
+
+	req := httptest.NewRequest(http.MethodGet, verifyEmailPath, nil)
+	req.AddCookie(&http.Cookie{Name: sessionCookieName, Value: "session-token"})
+	rec := httptest.NewRecorder()
+
+	srv.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusSeeOther)
+	}
+	if location := rec.Header().Get("Location"); location != "/account" {
+		t.Fatalf("Location = %q, want %q", location, "/account")
 	}
 }
 
@@ -793,11 +893,8 @@ func TestRoutesAccountHidesResendForVerifiedUser(t *testing.T) {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
 	}
 	body := rec.Body.String()
-	if strings.Contains(body, "resend-visible") {
-		t.Fatalf("body = %q, did not want resend control", body)
-	}
-	if strings.Contains(body, "check-email-visible") {
-		t.Fatalf("body = %q, did not want unverified check-email message", body)
+	if !strings.Contains(body, "change-password-visible") {
+		t.Fatalf("body = %q, want change password form", body)
 	}
 }
 
@@ -819,8 +916,8 @@ func TestRoutesResendVerification(t *testing.T) {
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusSeeOther)
 	}
-	if location := rec.Header().Get("Location"); location != "/account?resend=sent" {
-		t.Fatalf("Location = %q, want %q", location, "/account?resend=sent")
+	if location := rec.Header().Get("Location"); location != verifyEmailPath+"?resend=sent" {
+		t.Fatalf("Location = %q, want %q", location, verifyEmailPath+"?resend=sent")
 	}
 	if !auth.resendCalled {
 		t.Fatal("ResendVerificationEmail() was not called")
@@ -849,8 +946,8 @@ func TestRoutesResendVerificationHandlesError(t *testing.T) {
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusSeeOther)
 	}
-	if location := rec.Header().Get("Location"); location != "/account?resend=error" {
-		t.Fatalf("Location = %q, want %q", location, "/account?resend=error")
+	if location := rec.Header().Get("Location"); location != verifyEmailPath+"?resend=error" {
+		t.Fatalf("Location = %q, want %q", location, verifyEmailPath+"?resend=error")
 	}
 }
 
@@ -945,7 +1042,7 @@ func TestRoutesResendVerificationRequiresAuth(t *testing.T) {
 
 func TestRoutesChangePassword(t *testing.T) {
 	auth := &fakeAuthLookup{
-		user: db.User{ID: 1, Email: "user@example.com"},
+		user: verifiedRouteUser(),
 	}
 	srv := newAuthRouteTestServer(t, auth)
 
@@ -986,7 +1083,7 @@ func TestRoutesChangePassword(t *testing.T) {
 
 func TestRoutesChangePasswordValidatesFields(t *testing.T) {
 	auth := &fakeAuthLookup{
-		user: db.User{ID: 1, Email: "user@example.com"},
+		user: verifiedRouteUser(),
 	}
 	srv := newAuthRouteTestServer(t, auth)
 
@@ -1017,7 +1114,7 @@ func TestRoutesChangePasswordValidatesFields(t *testing.T) {
 
 func TestRoutesChangePasswordHTMXValidatesFields(t *testing.T) {
 	auth := &fakeAuthLookup{
-		user: db.User{ID: 1, Email: "user@example.com"},
+		user: verifiedRouteUser(),
 	}
 	srv := newAuthRouteTestServer(t, auth)
 
@@ -1052,7 +1149,7 @@ func TestRoutesChangePasswordHTMXValidatesFields(t *testing.T) {
 
 func TestRoutesChangePasswordHTMXRedirectsOnSuccess(t *testing.T) {
 	auth := &fakeAuthLookup{
-		user: db.User{ID: 1, Email: "user@example.com"},
+		user: verifiedRouteUser(),
 	}
 	srv := newAuthRouteTestServer(t, auth)
 
@@ -1088,7 +1185,7 @@ func TestRoutesChangePasswordHTMXRedirectsOnSuccess(t *testing.T) {
 
 func TestRoutesChangePasswordRejectsIncorrectCurrentPassword(t *testing.T) {
 	auth := &fakeAuthLookup{
-		user:              db.User{ID: 1, Email: "user@example.com"},
+		user:              verifiedRouteUser(),
 		changePasswordErr: services.ErrCurrentPasswordIncorrect,
 	}
 	srv := newAuthRouteTestServer(t, auth)
@@ -1118,7 +1215,7 @@ func TestRoutesChangePasswordRejectsIncorrectCurrentPassword(t *testing.T) {
 
 func TestRoutesChangePasswordRequiresCSRF(t *testing.T) {
 	auth := &fakeAuthLookup{
-		user: db.User{ID: 1, Email: "user@example.com"},
+		user: verifiedRouteUser(),
 	}
 	srv := newAuthRouteTestServer(t, auth)
 
@@ -1157,6 +1254,34 @@ func TestRoutesChangePasswordRequiresAuth(t *testing.T) {
 
 	if rec.Code != http.StatusUnauthorized {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusUnauthorized)
+	}
+}
+
+func TestRoutesChangePasswordRequiresVerifiedEmail(t *testing.T) {
+	auth := &fakeAuthLookup{
+		user: db.User{ID: 1, Email: "user@example.com"},
+	}
+	srv := newAuthRouteTestServer(t, auth)
+
+	form := url.Values{
+		"current_password": []string{"old-password"},
+		"new_password":     []string{"new-password"},
+		"confirm_password": []string{"new-password"},
+		csrfFieldName:      []string{"csrf"},
+	}
+	req := httptest.NewRequest(http.MethodPost, "/account/change-password", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(&http.Cookie{Name: sessionCookieName, Value: "session-token"})
+	req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: "csrf"})
+	rec := httptest.NewRecorder()
+
+	srv.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusForbidden)
+	}
+	if auth.changePasswordCalled {
+		t.Fatal("ChangePassword() was called")
 	}
 }
 
@@ -1371,8 +1496,8 @@ func TestRoutesPublicResendVerificationRedirectsAuthenticatedUser(t *testing.T) 
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusSeeOther)
 	}
-	if location := rec.Header().Get("Location"); location != "/account" {
-		t.Fatalf("Location = %q, want %q", location, "/account")
+	if location := rec.Header().Get("Location"); location != verifyEmailPath {
+		t.Fatalf("Location = %q, want %q", location, verifyEmailPath)
 	}
 }
 
@@ -1583,8 +1708,8 @@ func TestRoutesForgotPasswordRedirectsAuthenticatedUser(t *testing.T) {
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusSeeOther)
 	}
-	if location := rec.Header().Get("Location"); location != "/account" {
-		t.Fatalf("Location = %q, want %q", location, "/account")
+	if location := rec.Header().Get("Location"); location != verifyEmailPath {
+		t.Fatalf("Location = %q, want %q", location, verifyEmailPath)
 	}
 }
 
@@ -1817,11 +1942,12 @@ func newAuthRouteTestServer(t *testing.T, auth authService) *Server {
 			"home.html":                `home {{ if .Authenticated }}Account Sign out {{ .User.Email }}{{ else }}Sign in Create account{{ end }}`,
 			"register.html":            `{{ define "content" }}{{ template "register_form_section" . }}{{ end }}{{ define "register_form_section" }}register {{ .Error }} {{ with index .FieldErrors "email" }}{{ . }}{{ end }} {{ with index .FieldErrors "password" }}{{ . }}{{ end }} {{ with index .FieldErrors "confirm_password" }}{{ . }}{{ end }} {{ .Email }} {{ .PasswordMinLength }} {{ .CSRFToken }}{{ end }}`,
 			"login.html":               `{{ define "content" }}{{ template "login_form_section" . }} /forgot-password /resend-verification{{ end }}{{ define "login_form_section" }}login {{ .Error }} {{ with index .FieldErrors "email" }}{{ . }}{{ end }} {{ with index .FieldErrors "password" }}{{ . }}{{ end }} {{ .CSRFToken }} {{ .Next }} login-status={{ .LoginStatus }}{{ end }}`,
-			"account.html":             `{{ define "content" }}account {{ .User.Email }} {{ .CSRFToken }} {{ template "account_change_password_section" . }} {{ if not .User.EmailVerifiedAt.Valid }}resend-visible check-email-visible{{ end }} {{ template "account_resend_section" . }}{{ end }}{{ define "account_change_password_section" }}change-password-visible {{ .Error }} {{ with index .FieldErrors "current_password" }}{{ . }}{{ end }} {{ with index .FieldErrors "new_password" }}{{ . }}{{ end }} {{ with index .FieldErrors "confirm_password" }}{{ . }}{{ end }}{{ end }}{{ define "account_resend_section" }}resend-status={{ .ResendStatus }}{{ end }}`,
+			"account.html":             `{{ define "content" }}account {{ .User.Email }} {{ .CSRFToken }} {{ template "account_change_password_section" . }}{{ end }}{{ define "account_change_password_section" }}change-password-visible {{ .Error }} {{ with index .FieldErrors "current_password" }}{{ . }}{{ end }} {{ with index .FieldErrors "new_password" }}{{ . }}{{ end }} {{ with index .FieldErrors "confirm_password" }}{{ . }}{{ end }}{{ end }}`,
 			"confirm_email.html":       `confirm {{ if .Error }}{{ .Error }} {{ if .Authenticated }}Go to your account{{ else }}Sign in{{ end }}{{ else }}Email confirmed{{ end }}`,
 			"forgot_password.html":     `{{ define "content" }}{{ template "forgot_password_form_section" . }}{{ end }}{{ define "forgot_password_form_section" }}forgot-form {{ .Error }} {{ with index .FieldErrors "email" }}{{ . }}{{ end }} {{ .Email }} forgot-status={{ .ForgotPasswordStatus }} {{ .CSRFToken }}{{ end }}`,
 			"reset_password.html":      `{{ define "content" }}{{ if .ResetTokenInvalid }}{{ .Error }}{{ else }}{{ template "reset_password_form_section" . }}{{ end }}{{ end }}{{ define "reset_password_form_section" }}reset-form {{ .Error }} {{ with index .FieldErrors "new_password" }}{{ . }}{{ end }} {{ with index .FieldErrors "confirm_password" }}{{ . }}{{ end }} token={{ .ResetToken }} {{ if .ResetTokenInvalid }}invalid or has expired{{ end }} {{ .CSRFToken }}{{ end }}`,
 			"resend_verification.html": `{{ define "content" }}{{ template "resend_verification_form_section" . }}{{ end }}{{ define "resend_verification_form_section" }}resend-form {{ .Error }} {{ with index .FieldErrors "email" }}{{ . }}{{ end }} {{ .Email }} resend-status={{ .ResendStatus }} {{ .CSRFToken }}{{ end }}`,
+			"verify_email.html":        `{{ define "content" }}verify-email {{ .User.Email }} {{ template "verify_email_resend_section" . }}{{ end }}{{ define "verify_email_resend_section" }}resend-status={{ .ResendStatus }}{{ end }}`,
 		}),
 		passwordMinLength: 8,
 	}
@@ -1838,4 +1964,15 @@ func cookieFromRecorder(t *testing.T, rec *httptest.ResponseRecorder, name strin
 
 	t.Fatalf("missing %q cookie", name)
 	return nil
+}
+
+func verifiedRouteUser() db.User {
+	return db.User{
+		ID:    1,
+		Email: "user@example.com",
+		EmailVerifiedAt: sql.NullTime{
+			Time:  time.Now().UTC(),
+			Valid: true,
+		},
+	}
 }
