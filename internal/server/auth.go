@@ -16,6 +16,8 @@ import (
 const sessionCookieName = "session"
 
 type authService interface {
+	RequestEmailChange(context.Context, db.User, string, string) error
+	ConfirmEmailChange(context.Context, string) (db.User, error)
 	ChangePassword(context.Context, db.User, string, string) error
 	Login(context.Context, string, string) (db.User, db.Session, error)
 	Logout(context.Context, string) error

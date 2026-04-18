@@ -14,6 +14,12 @@ FROM users
 WHERE email = ?
 LIMIT 1;
 
+-- name: GetUserByID :one
+SELECT id, email, password_hash, created_at, email_verified_at
+FROM users
+WHERE id = ?
+LIMIT 1;
+
 -- name: GetUserBySessionToken :one
 SELECT users.id, users.email, users.password_hash, users.created_at, users.email_verified_at
 FROM users
@@ -59,6 +65,20 @@ INSERT INTO password_reset_tokens (
 )
 RETURNING id, user_id, token_hash, expires_at, consumed_at, created_at;
 
+-- name: CreateEmailChangeToken :one
+INSERT INTO email_change_tokens (
+    user_id,
+    new_email,
+    token_hash,
+    expires_at
+) VALUES (
+    ?,
+    ?,
+    ?,
+    ?
+)
+RETURNING id, user_id, new_email, token_hash, expires_at, consumed_at, created_at;
+
 -- name: GetValidPasswordResetTokenByHash :one
 SELECT id, user_id, token_hash, expires_at, consumed_at, created_at
 FROM password_reset_tokens
@@ -95,8 +115,23 @@ WHERE token_hash = ?
   AND expires_at > ?
 RETURNING id, user_id, token_hash, expires_at, consumed_at, created_at;
 
+-- name: ConsumeEmailChangeToken :one
+UPDATE email_change_tokens
+SET consumed_at = ?
+WHERE token_hash = ?
+  AND consumed_at IS NULL
+  AND expires_at > ?
+RETURNING id, user_id, new_email, token_hash, expires_at, consumed_at, created_at;
+
 -- name: MarkUserEmailVerified :one
 UPDATE users
 SET email_verified_at = ?
+WHERE id = ?
+RETURNING id, email, password_hash, created_at, email_verified_at;
+
+-- name: UpdateUserEmail :one
+UPDATE users
+SET email = ?,
+    email_verified_at = ?
 WHERE id = ?
 RETURNING id, email, password_hash, created_at, email_verified_at;

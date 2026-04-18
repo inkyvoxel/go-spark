@@ -9,6 +9,16 @@ import (
 	"time"
 )
 
+type EmailChangeToken struct {
+	ID         int64
+	UserID     int64
+	NewEmail   string
+	TokenHash  string
+	ExpiresAt  time.Time
+	ConsumedAt sql.NullTime
+	CreatedAt  time.Time
+}
+
 type EmailOutbox struct {
 	ID          int64
 	Sender      string

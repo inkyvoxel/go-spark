@@ -38,6 +38,7 @@ type templateData struct {
 	EmailPattern         string
 	ForgotPasswordStatus string
 	LoginStatus          string
+	ChangeEmailStatus    string
 	Next                 string
 	ResetToken           string
 	ResetTokenInvalid    bool
@@ -219,6 +220,33 @@ func (s *Server) confirmEmail(w http.ResponseWriter, r *http.Request) {
 	s.render(w, templateConfirmEmail, data)
 }
 
+func (s *Server) confirmEmailChange(w http.ResponseWriter, r *http.Request) {
+	data := s.newTemplateData(r, "Confirm Email Change")
+
+	if _, err := s.auth.ConfirmEmailChange(r.Context(), r.URL.Query().Get("token")); err != nil {
+		switch {
+		case errors.Is(err, services.ErrInvalidEmailChangeToken):
+			data.Error = "This email change link is invalid or has expired."
+			s.renderStatus(w, http.StatusBadRequest, templateConfirmEmailChange, data)
+			return
+		case errors.Is(err, services.ErrEmailAlreadyRegistered):
+			data.Error = "This email address is already used by another account."
+			s.renderStatus(w, http.StatusConflict, templateConfirmEmailChange, data)
+			return
+		default:
+			s.logger.Error("confirm email change", "err", err)
+			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+			return
+		}
+	}
+
+	s.clearSessionCookie(w, r)
+	data.Authenticated = false
+	data.Verified = false
+	data.User = db.User{}
+	s.render(w, templateConfirmEmailChange, data)
+}
+
 func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
@@ -265,6 +293,15 @@ func (s *Server) account(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) changePasswordForm(w http.ResponseWriter, r *http.Request) {
 	s.render(w, templateChangePassword, s.newChangePasswordTemplateData(r))
+}
+
+func (s *Server) changeEmailForm(w http.ResponseWriter, r *http.Request) {
+	data := s.newChangeEmailTemplateData(r)
+	status := strings.TrimSpace(r.URL.Query().Get(queryKeyStatus))
+	if status == statusSent {
+		data.ChangeEmailStatus = status
+	}
+	s.render(w, templateChangeEmail, data)
 }
 
 func (s *Server) verifyEmail(w http.ResponseWriter, r *http.Request) {
@@ -363,6 +400,68 @@ func (s *Server) changePassword(w http.ResponseWriter, r *http.Request) {
 
 	s.clearSessionCookie(w, r)
 	s.redirectWithHTMX(w, r, loginPathWithStatusChanged)
+}
+
+func (s *Server) changeEmail(w http.ResponseWriter, r *http.Request) {
+	user, ok := currentUser(r.Context())
+	if !ok {
+		http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+		return
+	}
+
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+		return
+	}
+
+	newEmail := r.FormValue("email")
+	currentPassword := r.FormValue("current_password")
+
+	fieldErrors := make(map[string]string)
+	if strings.TrimSpace(newEmail) == "" {
+		fieldErrors["email"] = "Enter your new email address."
+	}
+	if currentPassword == "" {
+		fieldErrors["current_password"] = "Enter your current password."
+	}
+	if len(fieldErrors) > 0 {
+		data := s.newChangeEmailTemplateData(r)
+		data.Email = strings.TrimSpace(newEmail)
+		data.Error = "Check your details and try again."
+		data.FieldErrors = fieldErrors
+		s.renderStatusForRequest(w, r, http.StatusUnprocessableEntity, templateChangeEmail, fragmentChangeEmailForm, data)
+		return
+	}
+
+	if err := s.auth.RequestEmailChange(r.Context(), user, currentPassword, newEmail); err != nil {
+		data := s.newChangeEmailTemplateData(r)
+		data.Email = strings.TrimSpace(newEmail)
+		data.Error = "Check your details and try again."
+		switch {
+		case errors.Is(err, services.ErrCurrentPasswordIncorrect):
+			data.FieldErrors = map[string]string{"current_password": "Current password is not correct."}
+		case errors.Is(err, services.ErrInvalidEmail):
+			data.FieldErrors = map[string]string{"email": "Enter a valid email address."}
+		case errors.Is(err, services.ErrEmailUnchanged):
+			data.FieldErrors = map[string]string{"email": "Choose a different email address."}
+		case errors.Is(err, services.ErrEmailAlreadyRegistered):
+			data.FieldErrors = map[string]string{"email": "An account with this email already exists."}
+		default:
+			s.logger.Error("change email", "user_id", user.ID, "err", err)
+			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+			return
+		}
+		s.renderStatusForRequest(w, r, http.StatusUnprocessableEntity, templateChangeEmail, fragmentChangeEmailForm, data)
+		return
+	}
+
+	if isHXRequest(r) {
+		data := s.newChangeEmailTemplateData(r)
+		data.ChangeEmailStatus = statusSent
+		s.renderFragmentStatus(w, http.StatusOK, templateChangeEmail, fragmentChangeEmailForm, data)
+		return
+	}
+	http.Redirect(w, r, withQueryParam(paths.ChangeEmail, queryKeyStatus, statusSent), http.StatusSeeOther)
 }
 
 func (s *Server) resetPassword(w http.ResponseWriter, r *http.Request) {
@@ -531,6 +630,15 @@ func (s *Server) newChangePasswordTemplateData(r *http.Request) templateData {
 	data.Breadcrumbs = []breadcrumbItem{
 		{Label: "Account", URL: paths.Account},
 		{Label: "Change password", Current: true},
+	}
+	return data
+}
+
+func (s *Server) newChangeEmailTemplateData(r *http.Request) templateData {
+	data := s.newTemplateData(r, "Change Email")
+	data.Breadcrumbs = []breadcrumbItem{
+		{Label: "Account", URL: paths.Account},
+		{Label: "Change email", Current: true},
 	}
 	return data
 }

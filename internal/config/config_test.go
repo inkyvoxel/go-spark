@@ -141,6 +141,8 @@ func TestFromEnvUsesEnvironment(t *testing.T) {
 	t.Setenv("RATE_LIMIT_LOGIN_WINDOW", "2m")
 	t.Setenv("RATE_LIMIT_CHANGE_PASSWORD_MAX_REQUESTS", "4")
 	t.Setenv("RATE_LIMIT_CHANGE_PASSWORD_WINDOW", "20m")
+	t.Setenv("RATE_LIMIT_CHANGE_EMAIL_MAX_REQUESTS", "6")
+	t.Setenv("RATE_LIMIT_CHANGE_EMAIL_WINDOW", "25m")
 
 	cfg, err := FromEnv(services.DefaultPasswordMinLength)
 	if err != nil {
@@ -191,6 +193,12 @@ func TestFromEnvUsesEnvironment(t *testing.T) {
 	}
 	if cfg.RateLimitPolicies.ChangePassword.Window != 20*time.Minute {
 		t.Fatalf("RateLimitPolicies.ChangePassword.Window = %v, want %v", cfg.RateLimitPolicies.ChangePassword.Window, 20*time.Minute)
+	}
+	if cfg.RateLimitPolicies.ChangeEmail.MaxRequests != 6 {
+		t.Fatalf("RateLimitPolicies.ChangeEmail.MaxRequests = %d, want %d", cfg.RateLimitPolicies.ChangeEmail.MaxRequests, 6)
+	}
+	if cfg.RateLimitPolicies.ChangeEmail.Window != 25*time.Minute {
+		t.Fatalf("RateLimitPolicies.ChangeEmail.Window = %v, want %v", cfg.RateLimitPolicies.ChangeEmail.Window, 25*time.Minute)
 	}
 }
 

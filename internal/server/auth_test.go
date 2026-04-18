@@ -355,6 +355,13 @@ type fakeAuthLookup struct {
 	changePasswordNew    string
 	changePasswordErr    error
 	changePasswordCalled bool
+	changeEmailUser      db.User
+	changeEmailPassword  string
+	changeEmailNewEmail  string
+	changeEmailErr       error
+	changeEmailCalled    bool
+	confirmEmailToken    string
+	confirmEmailErr      error
 	requestResetEmail    string
 	requestResetErr      error
 	validateResetToken   string
@@ -416,6 +423,19 @@ func (f *fakeAuthLookup) ChangePassword(ctx context.Context, user db.User, curre
 	f.changePasswordOld = currentPassword
 	f.changePasswordNew = newPassword
 	return f.changePasswordErr
+}
+
+func (f *fakeAuthLookup) RequestEmailChange(ctx context.Context, user db.User, currentPassword, newEmail string) error {
+	f.changeEmailCalled = true
+	f.changeEmailUser = user
+	f.changeEmailPassword = currentPassword
+	f.changeEmailNewEmail = newEmail
+	return f.changeEmailErr
+}
+
+func (f *fakeAuthLookup) ConfirmEmailChange(ctx context.Context, token string) (db.User, error) {
+	f.confirmEmailToken = token
+	return f.user, f.confirmEmailErr
 }
 
 func (f *fakeAuthLookup) RequestPasswordReset(ctx context.Context, email string) error {

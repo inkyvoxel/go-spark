@@ -1,0 +1,13 @@
+{{ define "content" }}
+<article>
+  {{ if .Error }}
+  <h1>Invalid email change link</h1>
+  <p role="alert">{{ .Error }}</p>
+  <p><a href="{{ .Routes.Account }}">Go to your account</a></p>
+  {{ else }}
+  <h1>Email address changed</h1>
+  <p>Your email address has been changed. Sign in again with your new email address.</p>
+  <p><a href="{{ .Routes.Login }}">Sign in</a></p>
+  {{ end }}
+</article>
+{{ end }}

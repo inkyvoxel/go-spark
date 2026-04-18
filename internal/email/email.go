@@ -81,6 +81,15 @@ type PasswordResetOptions struct {
 	From       string
 }
 
+type EmailChangeOptions struct {
+	AppBaseURL string
+	From       string
+}
+
+type EmailChangeNoticeOptions struct {
+	From string
+}
+
 //go:embed templates/*
 var emailTemplateFS embed.FS
 
@@ -156,6 +165,68 @@ func NewPasswordResetMessage(opts PasswordResetOptions, to, token string) (Messa
 			ResetURL: resetURL,
 		},
 	)
+	if err != nil {
+		return Message{}, err
+	}
+
+	return Message{
+		From:     from,
+		To:       recipient,
+		Subject:  subject,
+		TextBody: textBody,
+		HTMLBody: htmlBody,
+	}, nil
+}
+
+func NewEmailChangeMessage(opts EmailChangeOptions, to, token string) (Message, error) {
+	from, err := normalizeAddress("from", opts.From)
+	if err != nil {
+		return Message{}, err
+	}
+
+	recipient, err := normalizeAddress("to", to)
+	if err != nil {
+		return Message{}, err
+	}
+
+	changeURL, err := tokenURL(opts.AppBaseURL, strings.TrimPrefix(paths.ConfirmEmailChange, "/"), token, "email change")
+	if err != nil {
+		return Message{}, err
+	}
+
+	subject, textBody, htmlBody, err := renderEmailTemplates(
+		"email_change",
+		struct {
+			ChangeURL string
+		}{
+			ChangeURL: changeURL,
+		},
+	)
+	if err != nil {
+		return Message{}, err
+	}
+
+	return Message{
+		From:     from,
+		To:       recipient,
+		Subject:  subject,
+		TextBody: textBody,
+		HTMLBody: htmlBody,
+	}, nil
+}
+
+func NewEmailChangeNoticeMessage(opts EmailChangeNoticeOptions, to string) (Message, error) {
+	from, err := normalizeAddress("from", opts.From)
+	if err != nil {
+		return Message{}, err
+	}
+
+	recipient, err := normalizeAddress("to", to)
+	if err != nil {
+		return Message{}, err
+	}
+
+	subject, textBody, htmlBody, err := renderEmailTemplates("email_change_notice", struct{}{})
 	if err != nil {
 		return Message{}, err
 	}

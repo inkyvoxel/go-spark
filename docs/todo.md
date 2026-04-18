@@ -6,46 +6,7 @@ What is still not implemented:
 
 ## Account features
 
-- [x] Stage 1: Extract change password into its own verified account page at `/account/change-password`.
-  - Reuse existing `paths.ChangePassword` and `Routes.ChangePassword`.
-  - Add a GET route protected by `requireVerifiedAuth`.
-  - Move the change-password form from `templates/account/account.html` into a dedicated `templates/account/change_password.html` page and keep an HTMX fragment for validation errors.
-  - Update the account page to link to change password instead of embedding the form.
-  - Keep POST behavior equivalent: CSRF, body limits, verified-auth gate, validation messages, session revocation, and success redirect/status.
-  - Add rate limiting to `POST /account/change-password` while this handler is being touched, matching the security todo item.
-  - Update route/template constants and route tests for GET, POST, HTMX fragment responses, auth requirements, verified-email requirements, rate limiting, and successful redirect.
-
-- [x] Stage 2: Add reusable PicoCSS breadcrumbs for account subpages.
-  - Add a small template partial, for example `breadcrumb.html`, that accepts breadcrumb items from template data.
-  - Extend `templateData` with a reusable breadcrumb model such as `[]BreadcrumbItem{Label, URL, Current}`.
-  - Render breadcrumbs on `/account/change-password` as Account > Change password.
-  - Use the same pattern for `/account/change-email` once that page exists.
-  - Keep the account overview page un-breadcrumbed unless a broader site navigation pattern is introduced.
-
-- [ ] Stage 3: Add change-email request page at `/account/change-email`.
-  - Add `paths.ChangeEmail`, route/template constants, template route wiring, and GET/POST routes protected by `requireVerifiedAuth`.
-  - Add a dedicated form requiring the current password, new email, and confirmation of the new email if desired.
-  - Validate current password using the same password verification path as change password.
-  - Validate and normalize the new email with the existing email rules.
-  - Reject unchanged emails and emails already owned by another account.
-  - Create a pending email-change token rather than updating `users.email` immediately.
-  - Enqueue a verification email to the new address with a link to a confirmation route such as `/account/confirm-email-change?token=...`.
-  - Add HTMX fragment behavior, validation errors, success copy, auth tests, verified-email tests, rate-limit tests, and service/store tests.
-
-- [ ] Stage 4: Add email-change verification and database support.
-  - Add a migration for pending email-change tokens, probably including `user_id`, `new_email`, `token_hash`, `expires_at`, `consumed_at`, and `created_at`.
-  - Add sqlc queries and store methods to create, consume, and atomically apply pending email changes.
-  - On valid confirmation, update `users.email`, keep `email_verified_at` valid for the new address, and consume the token in the same transaction.
-  - Consider revoking existing sessions after email change, or at least document the chosen behavior.
-  - Add an email template for change-email verification, plus tests for generated links and outbox enqueueing.
-  - Add tests for expired, consumed, malformed, duplicate, and already-owned-email tokens.
-
-- [ ] Decisions needed before Stage 3/4.
-  - Should the change-email form ask users to type the new email once or twice? (answer = once)
-  - Should a successful email change revoke all sessions, only other sessions, or no sessions? (answer = yes, all sessions)
-  - Should the old email address receive a notification that the account email was changed? (answer = yes)
-  - Should pending email-change tokens expire after the same 24 hours as account-confirmation tokens? (answer = yes)
-  - Should users be allowed to request a change to an email already registered but unverified by another account, or always treat any existing account email as unavailable? (answer = treat as unavailable)
+No outstanding account feature todos.
 
 ## Security
 

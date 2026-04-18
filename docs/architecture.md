@@ -170,6 +170,9 @@ Auth and account routes:
 | `GET` | `/account` | Account page | Verified authenticated |
 | `GET` | `/account/change-password` | Change password form | Verified authenticated |
 | `POST` | `/account/change-password` | Change password | Verified authenticated, rate limited |
+| `GET` | `/account/change-email` | Change email request form | Verified authenticated |
+| `POST` | `/account/change-email` | Request email change verification | Verified authenticated, rate limited |
+| `GET` | `/account/confirm-email-change` | Consume email change token | Public |
 | `GET` | `/account/verify-email` | Unverified-account interstitial | Authenticated |
 | `POST` | `/account/verify-email/resend` | Resend confirmation for signed-in user | Authenticated, rate limited |
 | `GET` | `/account/confirm-email` | Consume email confirmation token | Public |

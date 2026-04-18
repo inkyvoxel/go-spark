@@ -28,6 +28,8 @@ func TestRoutePathConstants(t *testing.T) {
 		{name: "resend-verification", got: paths.ResendVerification, want: "/account/resend-verification"},
 		{name: "verify-email-resend", got: paths.VerifyEmailResend, want: "/account/verify-email/resend"},
 		{name: "change-password", got: paths.ChangePassword, want: "/account/change-password"},
+		{name: "change-email", got: paths.ChangeEmail, want: "/account/change-email"},
+		{name: "confirm-email-change", got: paths.ConfirmEmailChange, want: "/account/confirm-email-change"},
 	}
 
 	for _, tt := range tests {
@@ -60,6 +62,8 @@ func TestTemplateRoutesUseCanonicalPaths(t *testing.T) {
 		{name: "resend-verification", got: paths.TemplateRoutes.ResendVerification, want: paths.ResendVerification},
 		{name: "verify-email-resend", got: paths.TemplateRoutes.VerifyEmailResend, want: paths.VerifyEmailResend},
 		{name: "change-password", got: paths.TemplateRoutes.ChangePassword, want: paths.ChangePassword},
+		{name: "change-email", got: paths.TemplateRoutes.ChangeEmail, want: paths.ChangeEmail},
+		{name: "confirm-email-change", got: paths.TemplateRoutes.ConfirmEmailChange, want: paths.ConfirmEmailChange},
 	}
 
 	for _, tt := range tests {

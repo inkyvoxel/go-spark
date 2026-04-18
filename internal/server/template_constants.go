@@ -4,8 +4,10 @@ const (
 	templateLayout             = "layout.html"
 	templateAccount            = "account.html"
 	templateBreadcrumb         = "breadcrumb.html"
+	templateChangeEmail        = "change_email.html"
 	templateChangePassword     = "change_password.html"
 	templateConfirmEmail       = "confirm_email.html"
+	templateConfirmEmailChange = "confirm_email_change.html"
 	templateForgotPassword     = "forgot_password.html"
 	templateHome               = "home.html"
 	templateLogin              = "login.html"
@@ -15,6 +17,7 @@ const (
 	templateVerifyEmail        = "verify_email.html"
 
 	fragmentChangePasswordForm = "change_password_form_section"
+	fragmentChangeEmailForm    = "change_email_form_section"
 	fragmentForgotPasswordForm = "forgot_password_form_section"
 	fragmentLoginForm          = "login_form_section"
 	fragmentRegisterForm       = "register_form_section"

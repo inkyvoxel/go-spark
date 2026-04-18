@@ -29,9 +29,11 @@ var (
 	ErrInvalidCredentials        = errors.New("invalid credentials")
 	ErrInvalidEmail              = errors.New("invalid email")
 	ErrInvalidPassword           = errors.New("invalid password")
+	ErrEmailUnchanged            = errors.New("email unchanged")
 	ErrPasswordUnchanged         = errors.New("password unchanged")
 	ErrInvalidPasswordResetToken = errors.New("invalid password reset token")
 	ErrInvalidSession            = errors.New("invalid session")
+	ErrInvalidEmailChangeToken   = errors.New("invalid email change token")
 	ErrInvalidVerificationToken  = errors.New("invalid verification token")
 )
 
@@ -60,6 +62,8 @@ type AuthStore interface {
 	GetValidPasswordResetTokenByHash(ctx context.Context, tokenHash string, now time.Time) (db.PasswordResetToken, error)
 	ConsumePasswordResetToken(ctx context.Context, tokenHash string, consumedAt time.Time) (db.PasswordResetToken, error)
 	RequestPasswordReset(ctx context.Context, params RequestPasswordResetParams) error
+	RequestEmailChange(ctx context.Context, params RequestEmailChangeParams) error
+	ConfirmEmailChange(ctx context.Context, params ConfirmEmailChangeParams) (db.User, error)
 	CreateEmailVerificationToken(ctx context.Context, userID int64, tokenHash string, expiresAt time.Time) (db.EmailVerificationToken, error)
 	ResendEmailVerification(ctx context.Context, params ResendEmailVerificationParams) error
 	VerifyEmailByTokenHash(ctx context.Context, tokenHash string, verifiedAt time.Time) (db.User, error)
@@ -104,6 +108,22 @@ type RequestPasswordResetParams struct {
 	TokenExpiresAt     time.Time
 	PasswordResetEmail email.Message
 	EmailAvailableAt   time.Time
+}
+
+type RequestEmailChangeParams struct {
+	UserID                 int64
+	NewEmail               string
+	TokenHash              string
+	TokenExpiresAt         time.Time
+	EmailChangeVerifyEmail email.Message
+	EmailAvailableAt       time.Time
+}
+
+type ConfirmEmailChangeParams struct {
+	TokenHash              string
+	ChangedAt              time.Time
+	OldEmailNoticeOptions  email.EmailChangeNoticeOptions
+	NoticeEmailAvailableAt time.Time
 }
 
 func NewAuthService(store AuthStore, opts AuthOptions) *AuthService {
@@ -279,6 +299,79 @@ func (s *AuthService) ChangePassword(ctx context.Context, user db.User, currentP
 	}
 
 	return nil
+}
+
+func (s *AuthService) RequestEmailChange(ctx context.Context, user db.User, currentPassword, newEmail string) error {
+	currentMatches, err := s.passwordHasher.Verify(user.PasswordHash, currentPassword)
+	if err != nil || !currentMatches {
+		return ErrCurrentPasswordIncorrect
+	}
+
+	newEmail = normalizeEmail(newEmail)
+	if !isValidEmail(newEmail) {
+		return ErrInvalidEmail
+	}
+	if newEmail == normalizeEmail(user.Email) {
+		return ErrEmailUnchanged
+	}
+
+	existingUser, err := s.store.GetUserByEmail(ctx, newEmail)
+	if err == nil && existingUser.ID != user.ID {
+		return ErrEmailAlreadyRegistered
+	}
+	if err == nil {
+		return ErrEmailUnchanged
+	}
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return fmt.Errorf("get user by email: %w", err)
+	}
+
+	token, err := generateToken(s.tokenBytes)
+	if err != nil {
+		return fmt.Errorf("generate email change token: %w", err)
+	}
+
+	message, err := email.NewEmailChangeMessage(email.EmailChangeOptions(s.confirmationEmail), newEmail, token)
+	if err != nil {
+		return fmt.Errorf("build email change verification email: %w", err)
+	}
+
+	now := time.Now().UTC()
+	if err := s.store.RequestEmailChange(ctx, RequestEmailChangeParams{
+		UserID:                 user.ID,
+		NewEmail:               newEmail,
+		TokenHash:              hashToken(token),
+		TokenExpiresAt:         now.Add(s.emailVerificationTokenDuration),
+		EmailChangeVerifyEmail: message,
+		EmailAvailableAt:       now,
+	}); err != nil {
+		return fmt.Errorf("request email change: %w", err)
+	}
+
+	return nil
+}
+
+func (s *AuthService) ConfirmEmailChange(ctx context.Context, token string) (db.User, error) {
+	token = strings.TrimSpace(token)
+	if token == "" {
+		return db.User{}, ErrInvalidEmailChangeToken
+	}
+
+	now := time.Now().UTC()
+	user, err := s.store.ConfirmEmailChange(ctx, ConfirmEmailChangeParams{
+		TokenHash:              hashToken(token),
+		ChangedAt:              now,
+		OldEmailNoticeOptions:  email.EmailChangeNoticeOptions{From: s.confirmationEmail.From},
+		NoticeEmailAvailableAt: now,
+	})
+	if errors.Is(err, sql.ErrNoRows) {
+		return db.User{}, ErrInvalidEmailChangeToken
+	}
+	if err != nil {
+		return db.User{}, fmt.Errorf("confirm email change: %w", err)
+	}
+
+	return user, nil
 }
 
 func (s *AuthService) RequestPasswordReset(ctx context.Context, emailAddress string) error {

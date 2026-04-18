@@ -61,6 +61,21 @@ CREATE TABLE password_reset_tokens (
 CREATE INDEX password_reset_tokens_user_id_idx ON password_reset_tokens(user_id);
 CREATE INDEX password_reset_tokens_token_hash_idx ON password_reset_tokens(token_hash);
 
+CREATE TABLE email_change_tokens (
+    id INTEGER PRIMARY KEY,
+    user_id INTEGER NOT NULL,
+    new_email TEXT NOT NULL,
+    token_hash TEXT NOT NULL UNIQUE,
+    expires_at TIMESTAMP NOT NULL,
+    consumed_at TIMESTAMP,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
+CREATE INDEX email_change_tokens_user_id_idx ON email_change_tokens(user_id);
+CREATE INDEX email_change_tokens_token_hash_idx ON email_change_tokens(token_hash);
+CREATE INDEX email_change_tokens_new_email_idx ON email_change_tokens(new_email);
+
 CREATE TABLE email_outbox (
     id INTEGER PRIMARY KEY,
     sender TEXT NOT NULL,
@@ -558,6 +573,220 @@ func TestAuthStoreResendEmailVerificationRollsBackOnOutboxError(t *testing.T) {
 	})
 	if !errors.Is(err, sql.ErrNoRows) {
 		t.Fatalf("ConsumeEmailVerificationToken() error = %v, want %v", err, sql.ErrNoRows)
+	}
+}
+
+func TestAuthStoreRequestEmailChange(t *testing.T) {
+	store := newTestAuthStore(t)
+	now := time.Now().UTC()
+
+	user, err := store.CreateUser(context.Background(), "user@example.com", "hash")
+	if err != nil {
+		t.Fatalf("CreateUser() error = %v", err)
+	}
+
+	err = store.RequestEmailChange(context.Background(), services.RequestEmailChangeParams{
+		UserID:         user.ID,
+		NewEmail:       "new@example.com",
+		TokenHash:      "email-change-token-hash",
+		TokenExpiresAt: now.Add(time.Hour),
+		EmailChangeVerifyEmail: email.Message{
+			From:     "sender@example.com",
+			To:       "new@example.com",
+			Subject:  "Verify your new email address",
+			TextBody: "Verify using this link.",
+			HTMLBody: "<p>Verify using this link.</p>",
+		},
+		EmailAvailableAt: now,
+	})
+	if err != nil {
+		t.Fatalf("RequestEmailChange() error = %v", err)
+	}
+
+	var tokenCount int
+	if err := store.db.QueryRowContext(context.Background(), "SELECT COUNT(*) FROM email_change_tokens WHERE user_id = ? AND new_email = ? AND token_hash = ?", user.ID, "new@example.com", "email-change-token-hash").Scan(&tokenCount); err != nil {
+		t.Fatalf("count email change tokens: %v", err)
+	}
+	if tokenCount != 1 {
+		t.Fatalf("email change token count = %d, want 1", tokenCount)
+	}
+
+	claimed, err := store.queries.ClaimPendingEmails(context.Background(), db.ClaimPendingEmailsParams{
+		AvailableAt: now.Add(time.Second),
+		Limit:       1,
+	})
+	if err != nil {
+		t.Fatalf("ClaimPendingEmails() error = %v", err)
+	}
+	if len(claimed) != 1 {
+		t.Fatalf("claimed email count = %d, want 1", len(claimed))
+	}
+	if claimed[0].Recipient != "new@example.com" {
+		t.Fatalf("claimed recipient = %q, want new email", claimed[0].Recipient)
+	}
+}
+
+func TestAuthStoreConfirmEmailChange(t *testing.T) {
+	store := newTestAuthStore(t)
+	now := time.Now().UTC()
+
+	user, err := store.CreateUser(context.Background(), "user@example.com", "hash")
+	if err != nil {
+		t.Fatalf("CreateUser() error = %v", err)
+	}
+	session, err := store.CreateSession(context.Background(), user.ID, "session-token", now.Add(time.Hour))
+	if err != nil {
+		t.Fatalf("CreateSession() error = %v", err)
+	}
+	if err := store.RequestEmailChange(context.Background(), services.RequestEmailChangeParams{
+		UserID:         user.ID,
+		NewEmail:       "new@example.com",
+		TokenHash:      "email-change-token-hash",
+		TokenExpiresAt: now.Add(time.Hour),
+		EmailChangeVerifyEmail: email.Message{
+			From:     "sender@example.com",
+			To:       "new@example.com",
+			Subject:  "Verify your new email address",
+			TextBody: "Verify using this link.",
+		},
+		EmailAvailableAt: now,
+	}); err != nil {
+		t.Fatalf("RequestEmailChange() error = %v", err)
+	}
+
+	changed, err := store.ConfirmEmailChange(context.Background(), services.ConfirmEmailChangeParams{
+		TokenHash:              "email-change-token-hash",
+		ChangedAt:              now,
+		OldEmailNoticeOptions:  email.EmailChangeNoticeOptions{From: "sender@example.com"},
+		NoticeEmailAvailableAt: now,
+	})
+	if err != nil {
+		t.Fatalf("ConfirmEmailChange() error = %v", err)
+	}
+	if changed.Email != "new@example.com" {
+		t.Fatalf("changed email = %q, want new email", changed.Email)
+	}
+	if !changed.EmailVerifiedAt.Valid {
+		t.Fatal("EmailVerifiedAt.Valid = false, want true")
+	}
+
+	_, err = store.GetUserByEmail(context.Background(), "user@example.com")
+	if !errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("old email lookup error = %v, want %v", err, sql.ErrNoRows)
+	}
+	if _, err := store.GetUserByEmail(context.Background(), "new@example.com"); err != nil {
+		t.Fatalf("new email lookup error = %v", err)
+	}
+	if _, err := store.GetUserBySessionToken(context.Background(), session.Token); !errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("old session lookup error = %v, want %v", err, sql.ErrNoRows)
+	}
+
+	claimed, err := store.queries.ClaimPendingEmails(context.Background(), db.ClaimPendingEmailsParams{
+		AvailableAt: now.Add(time.Second),
+		Limit:       10,
+	})
+	if err != nil {
+		t.Fatalf("ClaimPendingEmails() error = %v", err)
+	}
+	var noticeFound bool
+	for _, item := range claimed {
+		if item.Recipient == "<user@example.com>" && item.Subject == "Your email address was changed" {
+			noticeFound = true
+		}
+	}
+	if !noticeFound {
+		t.Fatalf("claimed emails = %#v, want old email notice", claimed)
+	}
+
+	_, err = store.ConfirmEmailChange(context.Background(), services.ConfirmEmailChangeParams{
+		TokenHash:              "email-change-token-hash",
+		ChangedAt:              now,
+		OldEmailNoticeOptions:  email.EmailChangeNoticeOptions{From: "sender@example.com"},
+		NoticeEmailAvailableAt: now,
+	})
+	if !errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("ConfirmEmailChange() consumed token error = %v, want %v", err, sql.ErrNoRows)
+	}
+}
+
+func TestAuthStoreConfirmEmailChangeRejectsExpiredToken(t *testing.T) {
+	store := newTestAuthStore(t)
+	now := time.Now().UTC()
+
+	user, err := store.CreateUser(context.Background(), "user@example.com", "hash")
+	if err != nil {
+		t.Fatalf("CreateUser() error = %v", err)
+	}
+	if err := store.RequestEmailChange(context.Background(), services.RequestEmailChangeParams{
+		UserID:         user.ID,
+		NewEmail:       "new@example.com",
+		TokenHash:      "expired-token-hash",
+		TokenExpiresAt: now.Add(-time.Minute),
+		EmailChangeVerifyEmail: email.Message{
+			From:     "sender@example.com",
+			To:       "new@example.com",
+			Subject:  "Verify your new email address",
+			TextBody: "Verify using this link.",
+		},
+		EmailAvailableAt: now,
+	}); err != nil {
+		t.Fatalf("RequestEmailChange() error = %v", err)
+	}
+
+	_, err = store.ConfirmEmailChange(context.Background(), services.ConfirmEmailChangeParams{
+		TokenHash:              "expired-token-hash",
+		ChangedAt:              now,
+		OldEmailNoticeOptions:  email.EmailChangeNoticeOptions{From: "sender@example.com"},
+		NoticeEmailAvailableAt: now,
+	})
+	if !errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("ConfirmEmailChange() error = %v, want %v", err, sql.ErrNoRows)
+	}
+}
+
+func TestAuthStoreConfirmEmailChangeRejectsAlreadyOwnedEmail(t *testing.T) {
+	store := newTestAuthStore(t)
+	now := time.Now().UTC()
+
+	user, err := store.CreateUser(context.Background(), "user@example.com", "hash")
+	if err != nil {
+		t.Fatalf("CreateUser() error = %v", err)
+	}
+	if err := store.RequestEmailChange(context.Background(), services.RequestEmailChangeParams{
+		UserID:         user.ID,
+		NewEmail:       "new@example.com",
+		TokenHash:      "email-change-token-hash",
+		TokenExpiresAt: now.Add(time.Hour),
+		EmailChangeVerifyEmail: email.Message{
+			From:     "sender@example.com",
+			To:       "new@example.com",
+			Subject:  "Verify your new email address",
+			TextBody: "Verify using this link.",
+		},
+		EmailAvailableAt: now,
+	}); err != nil {
+		t.Fatalf("RequestEmailChange() error = %v", err)
+	}
+	if _, err := store.CreateUser(context.Background(), "new@example.com", "hash"); err != nil {
+		t.Fatalf("CreateUser() competing email error = %v", err)
+	}
+
+	_, err = store.ConfirmEmailChange(context.Background(), services.ConfirmEmailChangeParams{
+		TokenHash:              "email-change-token-hash",
+		ChangedAt:              now,
+		OldEmailNoticeOptions:  email.EmailChangeNoticeOptions{From: "sender@example.com"},
+		NoticeEmailAvailableAt: now,
+	})
+	if !errors.Is(err, services.ErrEmailAlreadyRegistered) {
+		t.Fatalf("ConfirmEmailChange() error = %v, want %v", err, services.ErrEmailAlreadyRegistered)
+	}
+
+	found, err := store.GetUserByEmail(context.Background(), "user@example.com")
+	if err != nil {
+		t.Fatalf("GetUserByEmail() original error = %v", err)
+	}
+	if found.ID != user.ID {
+		t.Fatalf("original email user ID = %d, want %d", found.ID, user.ID)
 	}
 }
 

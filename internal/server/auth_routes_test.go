@@ -700,6 +700,99 @@ func TestRoutesConfirmEmailHandlesUnexpectedError(t *testing.T) {
 	}
 }
 
+func TestRoutesConfirmEmailChange(t *testing.T) {
+	auth := &fakeAuthLookup{
+		user: verifiedRouteUser(),
+	}
+	srv := newAuthRouteTestServer(t, auth)
+
+	req := httptest.NewRequest(http.MethodGet, paths.ConfirmEmailChange+"?token=raw-token", nil)
+	req.AddCookie(&http.Cookie{Name: sessionCookieName, Value: "session-token"})
+	rec := httptest.NewRecorder()
+
+	srv.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	if auth.confirmEmailToken != "raw-token" {
+		t.Fatalf("confirm email change token = %q, want raw-token", auth.confirmEmailToken)
+	}
+	if !strings.Contains(rec.Body.String(), "confirm-email-change") {
+		t.Fatalf("body = %q, want email change confirmation page", rec.Body.String())
+	}
+	if strings.Contains(rec.Body.String(), "authenticated=true") {
+		t.Fatalf("body = %q, want signed-out confirmation page after session revocation", rec.Body.String())
+	}
+	session := cookieFromRecorder(t, rec, sessionCookieName)
+	if session.MaxAge != -1 {
+		t.Fatalf("session MaxAge = %d, want %d", session.MaxAge, -1)
+	}
+}
+
+func TestRoutesConfirmEmailChangeRejectsInvalidToken(t *testing.T) {
+	auth := &fakeAuthLookup{
+		confirmEmailErr: services.ErrInvalidEmailChangeToken,
+	}
+	srv := newAuthRouteTestServer(t, auth)
+
+	req := httptest.NewRequest(http.MethodGet, paths.ConfirmEmailChange+"?token=bad-token", nil)
+	rec := httptest.NewRecorder()
+
+	srv.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+	}
+	if auth.confirmEmailToken != "bad-token" {
+		t.Fatalf("confirm email change token = %q, want bad-token", auth.confirmEmailToken)
+	}
+	if !strings.Contains(rec.Body.String(), "invalid or has expired") {
+		t.Fatalf("body = %q, want invalid token message", rec.Body.String())
+	}
+}
+
+func TestRoutesConfirmEmailChangeRejectsAlreadyOwnedEmail(t *testing.T) {
+	auth := &fakeAuthLookup{
+		confirmEmailErr: services.ErrEmailAlreadyRegistered,
+	}
+	srv := newAuthRouteTestServer(t, auth)
+
+	req := httptest.NewRequest(http.MethodGet, paths.ConfirmEmailChange+"?token=raw-token", nil)
+	rec := httptest.NewRecorder()
+
+	srv.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusConflict)
+	}
+	if auth.confirmEmailToken != "raw-token" {
+		t.Fatalf("confirm email change token = %q, want raw-token", auth.confirmEmailToken)
+	}
+	if !strings.Contains(rec.Body.String(), "already used by another account") {
+		t.Fatalf("body = %q, want already-owned-email conflict", rec.Body.String())
+	}
+}
+
+func TestRoutesConfirmEmailChangeDoesNotFallThroughToHome(t *testing.T) {
+	auth := &fakeAuthLookup{
+		confirmEmailErr: services.ErrInvalidEmailChangeToken,
+	}
+	srv := newAuthRouteTestServer(t, auth)
+
+	req := httptest.NewRequest(http.MethodGet, paths.ConfirmEmailChange+"?token=bad-token", nil)
+	rec := httptest.NewRecorder()
+
+	srv.Routes().ServeHTTP(rec, req)
+
+	if auth.confirmEmailToken != "bad-token" {
+		t.Fatal("ConfirmEmailChange() was not called; route may have fallen through to home")
+	}
+	if strings.Contains(rec.Body.String(), "home") {
+		t.Fatalf("body = %q, did not want home page", rec.Body.String())
+	}
+}
+
 func TestRoutesLogout(t *testing.T) {
 	auth := &fakeAuthLookup{}
 	srv := newAuthRouteTestServer(t, auth)
@@ -900,6 +993,9 @@ func TestRoutesAccountHidesResendForVerifiedUser(t *testing.T) {
 	if strings.Contains(body, "change-password-visible") {
 		t.Fatalf("body = %q, want no embedded change password form", body)
 	}
+	if !strings.Contains(body, paths.ChangeEmail) {
+		t.Fatalf("body = %q, want change email link", body)
+	}
 }
 
 func TestRoutesChangePasswordForm(t *testing.T) {
@@ -928,6 +1024,195 @@ func TestRoutesChangePasswordForm(t *testing.T) {
 		if !strings.Contains(body, want) {
 			t.Fatalf("body = %q, want %q", body, want)
 		}
+	}
+}
+
+func TestRoutesChangeEmailForm(t *testing.T) {
+	auth := &fakeAuthLookup{
+		user: verifiedRouteUser(),
+	}
+	srv := newAuthRouteTestServer(t, auth)
+
+	req := httptest.NewRequest(http.MethodGet, paths.ChangeEmail, nil)
+	req.AddCookie(&http.Cookie{Name: sessionCookieName, Value: "session-token"})
+	rec := httptest.NewRecorder()
+
+	srv.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	body := rec.Body.String()
+	for _, want := range []string{"change-email-visible", "breadcrumb=Account:/account:false", "breadcrumb=Change email::true"} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("body = %q, want %q", body, want)
+		}
+	}
+}
+
+func TestRoutesChangeEmail(t *testing.T) {
+	auth := &fakeAuthLookup{
+		user: verifiedRouteUser(),
+	}
+	srv := newAuthRouteTestServer(t, auth)
+
+	form := url.Values{
+		"email":            []string{"new@example.com"},
+		"current_password": []string{"password"},
+		csrfFieldName:      []string{"csrf"},
+	}
+	req := httptest.NewRequest(http.MethodPost, paths.ChangeEmail, strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(&http.Cookie{Name: sessionCookieName, Value: "session-token"})
+	req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: "csrf"})
+	rec := httptest.NewRecorder()
+
+	srv.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusSeeOther)
+	}
+	if location := rec.Header().Get("Location"); location != withQueryParam(paths.ChangeEmail, queryKeyStatus, statusSent) {
+		t.Fatalf("Location = %q, want sent redirect", location)
+	}
+	if !auth.changeEmailCalled {
+		t.Fatal("RequestEmailChange() was not called")
+	}
+	if auth.changeEmailUser.ID != auth.user.ID || auth.changeEmailPassword != "password" || auth.changeEmailNewEmail != "new@example.com" {
+		t.Fatalf("change email values = user:%d password:%q email:%q", auth.changeEmailUser.ID, auth.changeEmailPassword, auth.changeEmailNewEmail)
+	}
+}
+
+func TestRoutesChangeEmailValidatesFields(t *testing.T) {
+	auth := &fakeAuthLookup{
+		user: verifiedRouteUser(),
+	}
+	srv := newAuthRouteTestServer(t, auth)
+
+	form := url.Values{csrfFieldName: []string{"csrf"}}
+	req := httptest.NewRequest(http.MethodPost, paths.ChangeEmail, strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(&http.Cookie{Name: sessionCookieName, Value: "session-token"})
+	req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: "csrf"})
+	rec := httptest.NewRecorder()
+
+	srv.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusUnprocessableEntity)
+	}
+	if auth.changeEmailCalled {
+		t.Fatal("RequestEmailChange() was called")
+	}
+	for _, want := range []string{"Enter your new email address.", "Enter your current password."} {
+		if !strings.Contains(rec.Body.String(), want) {
+			t.Fatalf("body = %q, want %q", rec.Body.String(), want)
+		}
+	}
+}
+
+func TestRoutesChangeEmailHTMXReturnsStatusFragment(t *testing.T) {
+	auth := &fakeAuthLookup{
+		user: verifiedRouteUser(),
+	}
+	srv := newAuthRouteTestServer(t, auth)
+
+	form := url.Values{
+		"email":            []string{"new@example.com"},
+		"current_password": []string{"password"},
+		csrfFieldName:      []string{"csrf"},
+	}
+	req := httptest.NewRequest(http.MethodPost, paths.ChangeEmail, strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("HX-Request", "true")
+	req.AddCookie(&http.Cookie{Name: sessionCookieName, Value: "session-token"})
+	req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: "csrf"})
+	rec := httptest.NewRecorder()
+
+	srv.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	if !strings.Contains(rec.Body.String(), "change-email-status=sent") {
+		t.Fatalf("body = %q, want sent status", rec.Body.String())
+	}
+}
+
+func TestRoutesChangeEmailRejectsServiceValidation(t *testing.T) {
+	auth := &fakeAuthLookup{
+		user:           verifiedRouteUser(),
+		changeEmailErr: services.ErrEmailAlreadyRegistered,
+	}
+	srv := newAuthRouteTestServer(t, auth)
+
+	form := url.Values{
+		"email":            []string{"taken@example.com"},
+		"current_password": []string{"password"},
+		csrfFieldName:      []string{"csrf"},
+	}
+	req := httptest.NewRequest(http.MethodPost, paths.ChangeEmail, strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(&http.Cookie{Name: sessionCookieName, Value: "session-token"})
+	req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: "csrf"})
+	rec := httptest.NewRecorder()
+
+	srv.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusUnprocessableEntity)
+	}
+	if !strings.Contains(rec.Body.String(), "An account with this email already exists.") {
+		t.Fatalf("body = %q, want duplicate email error", rec.Body.String())
+	}
+}
+
+func TestRoutesChangeEmailRequiresCSRF(t *testing.T) {
+	auth := &fakeAuthLookup{
+		user: verifiedRouteUser(),
+	}
+	srv := newAuthRouteTestServer(t, auth)
+
+	form := url.Values{
+		"email":            []string{"new@example.com"},
+		"current_password": []string{"password"},
+	}
+	req := httptest.NewRequest(http.MethodPost, paths.ChangeEmail, strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(&http.Cookie{Name: sessionCookieName, Value: "session-token"})
+	rec := httptest.NewRecorder()
+
+	srv.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusForbidden)
+	}
+}
+
+func TestRoutesChangeEmailRequiresVerifiedEmail(t *testing.T) {
+	auth := &fakeAuthLookup{
+		user: db.User{ID: 1, Email: "user@example.com"},
+	}
+	srv := newAuthRouteTestServer(t, auth)
+
+	form := url.Values{
+		"email":            []string{"new@example.com"},
+		"current_password": []string{"password"},
+		csrfFieldName:      []string{"csrf"},
+	}
+	req := httptest.NewRequest(http.MethodPost, paths.ChangeEmail, strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(&http.Cookie{Name: sessionCookieName, Value: "session-token"})
+	req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: "csrf"})
+	rec := httptest.NewRecorder()
+
+	srv.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusForbidden)
+	}
+	if auth.changeEmailCalled {
+		t.Fatal("RequestEmailChange() was called")
 	}
 }
 
@@ -2011,9 +2296,11 @@ func newAuthRouteTestServer(t *testing.T, auth authService) *Server {
 			templateHome:               `home {{ if .Authenticated }}Account Sign out {{ .User.Email }}{{ else }}Sign in Create account{{ end }}`,
 			templateRegister:           `{{ define "content" }}{{ template "register_form_section" . }}{{ end }}{{ define "register_form_section" }}register {{ .Error }} {{ with index .FieldErrors "email" }}{{ . }}{{ end }} {{ with index .FieldErrors "password" }}{{ . }}{{ end }} {{ with index .FieldErrors "confirm_password" }}{{ . }}{{ end }} {{ .Email }} {{ .PasswordMinLength }} {{ .CSRFToken }}{{ end }}`,
 			templateLogin:              `{{ define "content" }}{{ template "login_form_section" . }} ` + paths.ForgotPassword + ` ` + paths.ResendVerification + `{{ end }}{{ define "login_form_section" }}login {{ .Error }} {{ with index .FieldErrors "email" }}{{ . }}{{ end }} {{ with index .FieldErrors "password" }}{{ . }}{{ end }} {{ .CSRFToken }} {{ .Next }} login-status={{ .LoginStatus }}{{ end }}`,
-			templateAccount:            `{{ define "content" }}account {{ .User.Email }} {{ .Routes.ChangePassword }} {{ .CSRFToken }}{{ end }}`,
+			templateAccount:            `{{ define "content" }}account {{ .User.Email }} {{ .Routes.ChangePassword }} {{ .Routes.ChangeEmail }} {{ .CSRFToken }}{{ end }}`,
+			templateChangeEmail:        `{{ define "content" }}change-email-page {{ .Routes.Account }} {{ range .Breadcrumbs }}breadcrumb={{ .Label }}:{{ .URL }}:{{ .Current }} {{ end }}{{ template "change_email_form_section" . }}{{ end }}{{ define "change_email_form_section" }}change-email-visible change-email-status={{ .ChangeEmailStatus }} {{ .Error }} {{ .Email }} {{ with index .FieldErrors "email" }}{{ . }}{{ end }} {{ with index .FieldErrors "current_password" }}{{ . }}{{ end }}{{ end }}`,
 			templateChangePassword:     `{{ define "content" }}change-password-page {{ .Routes.Account }} {{ range .Breadcrumbs }}breadcrumb={{ .Label }}:{{ .URL }}:{{ .Current }} {{ end }}{{ template "change_password_form_section" . }}{{ end }}{{ define "change_password_form_section" }}change-password-visible {{ .Error }} {{ with index .FieldErrors "current_password" }}{{ . }}{{ end }} {{ with index .FieldErrors "new_password" }}{{ . }}{{ end }} {{ with index .FieldErrors "confirm_password" }}{{ . }}{{ end }}{{ end }}`,
 			templateConfirmEmail:       `confirm {{ if .Error }}{{ .Error }} {{ if .Authenticated }}Go to your account{{ else }}Sign in{{ end }}{{ else }}Email confirmed{{ end }}`,
+			templateConfirmEmailChange: `confirm-email-change {{ .Error }} authenticated={{ .Authenticated }} {{ .Routes.Login }}`,
 			templateForgotPassword:     `{{ define "content" }}{{ template "forgot_password_form_section" . }}{{ end }}{{ define "forgot_password_form_section" }}forgot-form {{ .Error }} {{ with index .FieldErrors "email" }}{{ . }}{{ end }} {{ .Email }} forgot-status={{ .ForgotPasswordStatus }} {{ .CSRFToken }}{{ end }}`,
 			templateResetPassword:      `{{ define "content" }}{{ if .ResetTokenInvalid }}{{ .Error }}{{ else }}{{ template "reset_password_form_section" . }}{{ end }}{{ end }}{{ define "reset_password_form_section" }}reset-form {{ .Error }} {{ with index .FieldErrors "new_password" }}{{ . }}{{ end }} {{ with index .FieldErrors "confirm_password" }}{{ . }}{{ end }} token={{ .ResetToken }} {{ if .ResetTokenInvalid }}invalid or has expired{{ end }} {{ .CSRFToken }}{{ end }}`,
 			templateResendVerification: `{{ define "content" }}{{ template "resend_verification_form_section" . }}{{ end }}{{ define "resend_verification_form_section" }}resend-form {{ .Error }} {{ with index .FieldErrors "email" }}{{ . }}{{ end }} {{ .Email }} resend-status={{ .ResendStatus }} {{ .CSRFToken }}{{ end }}`,

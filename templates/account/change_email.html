@@ -1,0 +1,37 @@
+{{ define "content" }}
+<article>
+  {{ template "breadcrumb" . }}
+  <h1>Change email address</h1>
+  {{ template "change_email_form_section" . }}
+  <p><a href="{{ .Routes.Account }}">Back to account</a></p>
+</article>
+{{ end }}
+
+{{ define "change_email_form_section" }}
+<section id="account-change-email-section">
+  {{ if eq .ChangeEmailStatus "sent" }}
+  <p role="status">Check your new email address for a verification link.</p>
+  {{ else }}
+  {{ if .Error }}<p role="alert">{{ .Error }}</p>{{ end }}
+  <form method="post" action="{{ .Routes.ChangeEmail }}" hx-post="{{ .Routes.ChangeEmail }}"
+    hx-target="#account-change-email-section" hx-swap="outerHTML" hx-disabled-elt="button[type='submit']"
+    hx-on::before-request="this.querySelector('button[type=submit]').setAttribute('aria-busy','true')"
+    hx-on::after-request="this.querySelector('button[type=submit]').removeAttribute('aria-busy')">
+    <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
+    <label>
+      New email address
+      <input type="email" name="email" value="{{ .Email }}" autocomplete="email" pattern="{{ .EmailPattern }}" {{ if
+        index .FieldErrors "email" }}aria-invalid="true" {{ end }} required>
+      {{ with index .FieldErrors "email" }}<small role="alert">{{ . }}</small>{{ end }}
+    </label>
+    <label>
+      Current password
+      <input type="password" name="current_password" autocomplete="current-password" {{ if index
+        .FieldErrors "current_password" }}aria-invalid="true" {{ end }} required>
+      {{ with index .FieldErrors "current_password" }}<small role="alert">{{ . }}</small>{{ end }}
+    </label>
+    <button type="submit">Send verification email</button>
+  </form>
+  {{ end }}
+</section>
+{{ end }}

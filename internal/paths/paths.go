@@ -18,6 +18,8 @@ const (
 	ResendVerification = Account + "/resend-verification"
 	VerifyEmailResend  = VerifyEmail + "/resend"
 	ChangePassword     = Account + "/change-password"
+	ChangeEmail        = Account + "/change-email"
+	ConfirmEmailChange = Account + "/confirm-email-change"
 )
 
 type TemplateRouteSet struct {
@@ -35,6 +37,8 @@ type TemplateRouteSet struct {
 	ResendVerification string
 	VerifyEmailResend  string
 	ChangePassword     string
+	ChangeEmail        string
+	ConfirmEmailChange string
 }
 
 var TemplateRoutes = TemplateRouteSet{
@@ -52,4 +56,6 @@ var TemplateRoutes = TemplateRouteSet{
 	ResendVerification: ResendVerification,
 	VerifyEmailResend:  VerifyEmailResend,
 	ChangePassword:     ChangePassword,
+	ChangeEmail:        ChangeEmail,
+	ConfirmEmailChange: ConfirmEmailChange,
 }

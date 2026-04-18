@@ -114,6 +114,7 @@ func TestRouteRateLimitProtectedPostRoutesReturn429AfterThreshold(t *testing.T) 
 		PublicResendVerification:  RateLimitPolicy{MaxRequests: 1, Window: time.Hour},
 		AccountResendVerification: RateLimitPolicy{MaxRequests: 1, Window: time.Hour},
 		ChangePassword:            RateLimitPolicy{MaxRequests: 1, Window: time.Hour},
+		ChangeEmail:               RateLimitPolicy{MaxRequests: 1, Window: time.Hour},
 	}
 	routes := srv.Routes()
 
@@ -156,6 +157,15 @@ func TestRouteRateLimitProtectedPostRoutesReturn429AfterThreshold(t *testing.T) 
 				"current_password": []string{"old-password"},
 				"new_password":     []string{"new-password"},
 				"confirm_password": []string{"new-password"},
+			},
+			sessionToken: "session-token",
+		},
+		{
+			name: "change-email",
+			path: paths.ChangeEmail,
+			form: url.Values{
+				"email":            []string{"new@example.com"},
+				"current_password": []string{"password"},
 			},
 			sessionToken: "session-token",
 		},
@@ -209,6 +219,7 @@ func TestRouteRateLimitKeyingByIPAndUser(t *testing.T) {
 	srv.rateLimitPolicies = RateLimitPolicies{
 		AccountResendVerification: RateLimitPolicy{MaxRequests: 1, Window: time.Hour},
 		ChangePassword:            RateLimitPolicy{MaxRequests: 1, Window: time.Hour},
+		ChangeEmail:               RateLimitPolicy{MaxRequests: 1, Window: time.Hour},
 	}
 	routes := srv.Routes()
 

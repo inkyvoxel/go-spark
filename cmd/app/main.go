@@ -250,5 +250,9 @@ func toServerRateLimitPolicies(cfg config.RateLimitPoliciesConfig) server.RateLi
 			MaxRequests: cfg.ChangePassword.MaxRequests,
 			Window:      cfg.ChangePassword.Window,
 		},
+		ChangeEmail: server.RateLimitPolicy{
+			MaxRequests: cfg.ChangeEmail.MaxRequests,
+			Window:      cfg.ChangeEmail.Window,
+		},
 	}
 }

@@ -178,6 +178,57 @@ func TestNewPasswordResetMessageValidatesInputs(t *testing.T) {
 	}
 }
 
+func TestNewEmailChangeMessage(t *testing.T) {
+	message, err := NewEmailChangeMessage(EmailChangeOptions{
+		AppBaseURL: "https://app.example.com",
+		From:       "Go Spark <hello@example.com>",
+	}, "USER@example.com", "token value")
+	if err != nil {
+		t.Fatalf("NewEmailChangeMessage() error = %v", err)
+	}
+
+	if message.From != `"Go Spark" <hello@example.com>` {
+		t.Fatalf("From = %q, want formatted sender", message.From)
+	}
+	if message.To != "<USER@example.com>" {
+		t.Fatalf("To = %q, want formatted recipient", message.To)
+	}
+	if message.Subject != "Verify your new email address" {
+		t.Fatalf("Subject = %q, want email change subject", message.Subject)
+	}
+	if !strings.Contains(message.TextBody, "https://app.example.com"+paths.ConfirmEmailChange+"?token=token+value") {
+		t.Fatalf("TextBody = %q, want email change URL", message.TextBody)
+	}
+	if !strings.Contains(message.HTMLBody, `href="https://app.example.com`+paths.ConfirmEmailChange+`?token=token&#43;value"`) {
+		t.Fatalf("HTMLBody = %q, want escaped email change URL", message.HTMLBody)
+	}
+}
+
+func TestNewEmailChangeNoticeMessage(t *testing.T) {
+	message, err := NewEmailChangeNoticeMessage(EmailChangeNoticeOptions{
+		From: "Go Spark <hello@example.com>",
+	}, "OLD@example.com")
+	if err != nil {
+		t.Fatalf("NewEmailChangeNoticeMessage() error = %v", err)
+	}
+
+	if message.From != `"Go Spark" <hello@example.com>` {
+		t.Fatalf("From = %q, want formatted sender", message.From)
+	}
+	if message.To != "<OLD@example.com>" {
+		t.Fatalf("To = %q, want formatted old email recipient", message.To)
+	}
+	if message.Subject != "Your email address was changed" {
+		t.Fatalf("Subject = %q, want old email notice subject", message.Subject)
+	}
+	if !strings.Contains(message.TextBody, "was changed") {
+		t.Fatalf("TextBody = %q, want change notice", message.TextBody)
+	}
+	if strings.Contains(message.TextBody, "token=") || strings.Contains(message.HTMLBody, "token=") {
+		t.Fatalf("message should not include token: %#v", message)
+	}
+}
+
 func TestLogSenderDoesNotLogMessageBodies(t *testing.T) {
 	var output bytes.Buffer
 	logger := slog.New(slog.NewTextHandler(&output, nil))

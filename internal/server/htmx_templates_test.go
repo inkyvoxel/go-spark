@@ -15,6 +15,7 @@ func TestHTMXFormTemplatesIncludeLoadingAffordances(t *testing.T) {
 		"account/forgot_password.html",
 		"account/resend_verification.html",
 		"account/reset_password.html",
+		"account/change_email.html",
 		"account/change_password.html",
 		"account/verify_email.html",
 	}

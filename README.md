@@ -84,6 +84,7 @@ Sensitive auth POST endpoints are protected by an in-memory fixed-window limiter
 * `POST /account/resend-verification` keyed by `IP + normalized email`
 * `POST /account/verify-email/resend` keyed by `IP + userID`
 * `POST /account/change-password` keyed by `IP + userID`
+* `POST /account/change-email` keyed by `IP + userID`
 
 Default policies:
 
@@ -93,6 +94,7 @@ Default policies:
 * Public resend verification: `3/15min`
 * Account resend verification: `5/15min`
 * Change password: `5/15min`
+* Change email: `5/15min`
 
 Behavior:
 
@@ -115,6 +117,7 @@ Policy names:
 * `PUBLIC_RESEND_VERIFICATION`
 * `ACCOUNT_RESEND_VERIFICATION`
 * `CHANGE_PASSWORD`
+* `CHANGE_EMAIL`
 
 Example:
 
