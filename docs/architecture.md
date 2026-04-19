@@ -179,7 +179,7 @@ Auth and account routes:
 | `GET` | `/account/forgot-password` | Password reset request form | Anonymous only |
 | `POST` | `/account/forgot-password` | Request password reset email | Anonymous only, rate limited |
 | `GET` | `/account/reset-password` | Reset password form | Anonymous only |
-| `POST` | `/account/reset-password` | Reset password | Anonymous only |
+| `POST` | `/account/reset-password` | Reset password | Anonymous only, rate limited |
 | `GET` | `/account/resend-verification` | Public resend confirmation form | Anonymous only (redirects to `/login` or `/account` when verification is optional) |
 | `POST` | `/account/resend-verification` | Public resend confirmation request | Anonymous only, rate limited (redirects to `/login` or `/account` when verification is optional) |
 

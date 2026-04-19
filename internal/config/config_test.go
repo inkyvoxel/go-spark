@@ -149,6 +149,8 @@ func TestFromEnvUsesEnvironment(t *testing.T) {
 	t.Setenv("EMAIL_LOG_BODY", "true")
 	t.Setenv("RATE_LIMIT_LOGIN_MAX_REQUESTS", "7")
 	t.Setenv("RATE_LIMIT_LOGIN_WINDOW", "2m")
+	t.Setenv("RATE_LIMIT_RESET_PASSWORD_MAX_REQUESTS", "8")
+	t.Setenv("RATE_LIMIT_RESET_PASSWORD_WINDOW", "30m")
 	t.Setenv("RATE_LIMIT_CHANGE_PASSWORD_MAX_REQUESTS", "4")
 	t.Setenv("RATE_LIMIT_CHANGE_PASSWORD_WINDOW", "20m")
 	t.Setenv("RATE_LIMIT_CHANGE_EMAIL_MAX_REQUESTS", "6")
@@ -203,6 +205,12 @@ func TestFromEnvUsesEnvironment(t *testing.T) {
 	}
 	if cfg.RateLimitPolicies.Login.Window != 2*time.Minute {
 		t.Fatalf("RateLimitPolicies.Login.Window = %v, want %v", cfg.RateLimitPolicies.Login.Window, 2*time.Minute)
+	}
+	if cfg.RateLimitPolicies.ResetPassword.MaxRequests != 8 {
+		t.Fatalf("RateLimitPolicies.ResetPassword.MaxRequests = %d, want %d", cfg.RateLimitPolicies.ResetPassword.MaxRequests, 8)
+	}
+	if cfg.RateLimitPolicies.ResetPassword.Window != 30*time.Minute {
+		t.Fatalf("RateLimitPolicies.ResetPassword.Window = %v, want %v", cfg.RateLimitPolicies.ResetPassword.Window, 30*time.Minute)
 	}
 	if cfg.RateLimitPolicies.ChangePassword.MaxRequests != 4 {
 		t.Fatalf("RateLimitPolicies.ChangePassword.MaxRequests = %d, want %d", cfg.RateLimitPolicies.ChangePassword.MaxRequests, 4)

@@ -142,7 +142,12 @@ func (s *Server) Routes() http.Handler {
 		),
 	)
 	dynamic.Handle(route(http.MethodGet, paths.ResetPassword), s.requireAnonymous(http.HandlerFunc(s.resetPasswordForm)))
-	dynamic.Handle(route(http.MethodPost, paths.ResetPassword), s.requireAnonymous(http.HandlerFunc(s.resetPassword)))
+	dynamic.Handle(
+		route(http.MethodPost, paths.ResetPassword),
+		s.requireAnonymous(
+			s.withRateLimit("reset-password", s.rateLimitPolicies.ResetPassword, rateLimitKeyByIPAndResetToken("token"), http.HandlerFunc(s.resetPassword)),
+		),
+	)
 	dynamic.Handle(route(http.MethodGet, paths.ResendVerification), s.requireAnonymous(http.HandlerFunc(s.resendVerificationForm)))
 	dynamic.Handle(
 		route(http.MethodPost, paths.ResendVerification),

@@ -25,6 +25,7 @@ type RateLimitPolicies struct {
 	Login                     RateLimitPolicy
 	Register                  RateLimitPolicy
 	ForgotPassword            RateLimitPolicy
+	ResetPassword             RateLimitPolicy
 	PublicResendVerification  RateLimitPolicy
 	AccountResendVerification RateLimitPolicy
 	ChangePassword            RateLimitPolicy
@@ -35,6 +36,7 @@ var defaultRateLimitPolicies = RateLimitPolicies{
 	Login:                     RateLimitPolicy{MaxRequests: 5, Window: time.Minute},
 	Register:                  RateLimitPolicy{MaxRequests: 3, Window: 10 * time.Minute},
 	ForgotPassword:            RateLimitPolicy{MaxRequests: 3, Window: 15 * time.Minute},
+	ResetPassword:             RateLimitPolicy{MaxRequests: 5, Window: 15 * time.Minute},
 	PublicResendVerification:  RateLimitPolicy{MaxRequests: 3, Window: 15 * time.Minute},
 	AccountResendVerification: RateLimitPolicy{MaxRequests: 5, Window: 15 * time.Minute},
 	ChangePassword:            RateLimitPolicy{MaxRequests: 5, Window: 15 * time.Minute},
@@ -112,6 +114,7 @@ func rateLimitPoliciesWithDefaults(policies RateLimitPolicies) RateLimitPolicies
 		Login:                     mergeRateLimitPolicy(defaultRateLimitPolicies.Login, policies.Login),
 		Register:                  mergeRateLimitPolicy(defaultRateLimitPolicies.Register, policies.Register),
 		ForgotPassword:            mergeRateLimitPolicy(defaultRateLimitPolicies.ForgotPassword, policies.ForgotPassword),
+		ResetPassword:             mergeRateLimitPolicy(defaultRateLimitPolicies.ResetPassword, policies.ResetPassword),
 		PublicResendVerification:  mergeRateLimitPolicy(defaultRateLimitPolicies.PublicResendVerification, policies.PublicResendVerification),
 		AccountResendVerification: mergeRateLimitPolicy(defaultRateLimitPolicies.AccountResendVerification, policies.AccountResendVerification),
 		ChangePassword:            mergeRateLimitPolicy(defaultRateLimitPolicies.ChangePassword, policies.ChangePassword),
@@ -173,6 +176,18 @@ func rateLimitKeyByIPAndEmail(formField string) rateLimitKeyFunc {
 			return "ip:" + ip, "ip"
 		}
 		return fmt.Sprintf("ip:%s|email:%s", ip, email), "ip_email"
+	}
+}
+
+func rateLimitKeyByIPAndResetToken(formField string) rateLimitKeyFunc {
+	return func(r *http.Request) (string, string) {
+		ip := requestIP(r)
+		_ = r.ParseForm()
+		token := strings.TrimSpace(r.FormValue(formField))
+		if token == "" {
+			return "ip:" + ip, "ip"
+		}
+		return fmt.Sprintf("ip:%s|reset_token_hash:%s", ip, hashRateLimitKey(token)), "ip_reset_token"
 	}
 }
 

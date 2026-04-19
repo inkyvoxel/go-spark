@@ -28,6 +28,7 @@ type RateLimitPoliciesConfig struct {
 	Login                     RateLimitPolicyConfig
 	Register                  RateLimitPolicyConfig
 	ForgotPassword            RateLimitPolicyConfig
+	ResetPassword             RateLimitPolicyConfig
 	PublicResendVerification  RateLimitPolicyConfig
 	AccountResendVerification RateLimitPolicyConfig
 	ChangePassword            RateLimitPolicyConfig
@@ -362,6 +363,10 @@ func rateLimitPoliciesFromEnv() (RateLimitPoliciesConfig, error) {
 	if err != nil {
 		return RateLimitPoliciesConfig{}, err
 	}
+	resetPassword, err := rateLimitPolicyFromEnv("RATE_LIMIT_RESET_PASSWORD")
+	if err != nil {
+		return RateLimitPoliciesConfig{}, err
+	}
 	publicResendVerification, err := rateLimitPolicyFromEnv("RATE_LIMIT_PUBLIC_RESEND_VERIFICATION")
 	if err != nil {
 		return RateLimitPoliciesConfig{}, err
@@ -383,6 +388,7 @@ func rateLimitPoliciesFromEnv() (RateLimitPoliciesConfig, error) {
 		Login:                     login,
 		Register:                  register,
 		ForgotPassword:            forgotPassword,
+		ResetPassword:             resetPassword,
 		PublicResendVerification:  publicResendVerification,
 		AccountResendVerification: accountResendVerification,
 		ChangePassword:            changePassword,

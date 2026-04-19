@@ -245,6 +245,10 @@ func toServerRateLimitPolicies(cfg config.RateLimitPoliciesConfig) server.RateLi
 			MaxRequests: cfg.ForgotPassword.MaxRequests,
 			Window:      cfg.ForgotPassword.Window,
 		},
+		ResetPassword: server.RateLimitPolicy{
+			MaxRequests: cfg.ResetPassword.MaxRequests,
+			Window:      cfg.ResetPassword.Window,
+		},
 		PublicResendVerification: server.RateLimitPolicy{
 			MaxRequests: cfg.PublicResendVerification.MaxRequests,
 			Window:      cfg.PublicResendVerification.Window,

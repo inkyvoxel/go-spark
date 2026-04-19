@@ -111,6 +111,7 @@ func TestRouteRateLimitProtectedPostRoutesReturn429AfterThreshold(t *testing.T) 
 		Login:                     RateLimitPolicy{MaxRequests: 1, Window: time.Hour},
 		Register:                  RateLimitPolicy{MaxRequests: 1, Window: time.Hour},
 		ForgotPassword:            RateLimitPolicy{MaxRequests: 1, Window: time.Hour},
+		ResetPassword:             RateLimitPolicy{MaxRequests: 1, Window: time.Hour},
 		PublicResendVerification:  RateLimitPolicy{MaxRequests: 1, Window: time.Hour},
 		AccountResendVerification: RateLimitPolicy{MaxRequests: 1, Window: time.Hour},
 		ChangePassword:            RateLimitPolicy{MaxRequests: 1, Window: time.Hour},
@@ -138,6 +139,15 @@ func TestRouteRateLimitProtectedPostRoutesReturn429AfterThreshold(t *testing.T) 
 			name: "forgot-password",
 			path: paths.ForgotPassword,
 			form: url.Values{"email": []string{"user@example.com"}},
+		},
+		{
+			name: "reset-password",
+			path: paths.ResetPassword,
+			form: url.Values{
+				"token":            []string{"reset-token"},
+				"new_password":     []string{"new-password"},
+				"confirm_password": []string{"new-password"},
+			},
 		},
 		{
 			name: "resend-verification-public",
@@ -210,6 +220,42 @@ func TestRouteRateLimitKeyingByIPAndEmail(t *testing.T) {
 	third := postFormWithCSRF(routes, paths.ForgotPassword, url.Values{"email": []string{"b@example.com"}}, "")
 	if third.Code == http.StatusTooManyRequests {
 		t.Fatalf("third status = %d, want non-429 for different email", third.Code)
+	}
+}
+
+func TestRouteRateLimitKeyingByIPAndResetToken(t *testing.T) {
+	auth := &fakeAuthLookup{}
+	srv := newAuthRouteTestServer(t, auth)
+	srv.rateLimitPolicies = RateLimitPolicies{
+		ResetPassword: RateLimitPolicy{MaxRequests: 1, Window: time.Hour},
+	}
+	routes := srv.Routes()
+
+	first := postFormWithCSRF(routes, paths.ResetPassword, url.Values{
+		"token":            []string{"token-a"},
+		"new_password":     []string{"new-password"},
+		"confirm_password": []string{"new-password"},
+	}, "")
+	if first.Code == http.StatusTooManyRequests {
+		t.Fatalf("first status = %d, want non-429", first.Code)
+	}
+
+	second := postFormWithCSRF(routes, paths.ResetPassword, url.Values{
+		"token":            []string{"token-a"},
+		"new_password":     []string{"new-password"},
+		"confirm_password": []string{"new-password"},
+	}, "")
+	if second.Code != http.StatusTooManyRequests {
+		t.Fatalf("second status = %d, want %d", second.Code, http.StatusTooManyRequests)
+	}
+
+	third := postFormWithCSRF(routes, paths.ResetPassword, url.Values{
+		"token":            []string{"token-b"},
+		"new_password":     []string{"new-password"},
+		"confirm_password": []string{"new-password"},
+	}, "")
+	if third.Code == http.StatusTooManyRequests {
+		t.Fatalf("third status = %d, want non-429 for different reset token", third.Code)
 	}
 }
 

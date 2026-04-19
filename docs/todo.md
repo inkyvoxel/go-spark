@@ -61,11 +61,11 @@
   - Recommendation: on GET, exchange a valid URL token for a short-lived HttpOnly reset cookie and redirect to `/account/reset-password` without the query string. On POST, consume the reset cookie plus CSRF token.
   - Decision: keep this on the list. The exact pattern is not universal in small apps, but reducing bearer-token exposure in URLs and HTML is a strong security practice for a starter template.
 
-- [ ] Add rate limiting to `POST /account/reset-password` and `POST /account/change-password`.
-  - Evidence: login, register, forgot password, and resend verification are rate-limited; reset password and change password are not.
+- [x] Add rate limiting to `POST /account/reset-password` and `POST /account/change-password`.
+  - Evidence: login, register, forgot password, resend verification, reset password, and change password are rate-limited.
   - Risk: reset token guessing is impractical with 32 random bytes, but rate limiting still reduces abuse, CPU burn from Argon2, and online attempts against current passwords in change-password.
   - Recommendation: add policies keyed by IP plus reset-token hash prefix for reset, and IP plus user ID for change-password.
-  - Progress: `POST /account/change-password` is now rate-limited by IP plus user ID; `POST /account/reset-password` is still pending.
+  - Progress: `POST /account/change-password` is rate-limited by IP plus user ID, and `POST /account/reset-password` is now rate-limited by IP plus reset-token hash prefix.
 
 - [ ] Add a production-grade rate limiter option for multi-instance deployments.
   - Evidence: the limiter is in-memory and keyed from `RemoteAddr`; README correctly documents that it is per instance and does not trust forwarded headers.
