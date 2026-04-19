@@ -62,6 +62,9 @@ You can also pass the process mode as the first CLI argument. The CLI argument w
 
 `AUTH_PASSWORD_PEPPER` is optional. When set, the app uses it as an application-level secret in password hashing by applying an HMAC-SHA256 pre-hash before Argon2id. When blank, no pepper is applied.
 
+`AUTH_EMAIL_VERIFICATION_REQUIRED` controls whether account email verification is enforced. It defaults to `true`.
+`AUTH_EMAIL_CHANGE_NOTICE_ENABLED` controls whether the app sends an old-email notification when an account email address changes. It defaults to `true`.
+
 ## Emails
 
 Built-in email functionality includes:
@@ -71,6 +74,12 @@ Built-in email functionality includes:
 * Resend confirmation from the account page for signed-in, unverified users.
 * Password reset emails with reset links at `/account/reset-password`.
 * Durable email delivery intent via a database outbox worker.
+
+When `AUTH_EMAIL_VERIFICATION_REQUIRED=false`:
+
+* New users are marked verified at registration time.
+* Verification emails are not enqueued.
+* Verification routes remain mounted for compatibility but redirect to normal login/account flows.
 
 Email delivery defaults to `EMAIL_PROVIDER=log` for safe local development. Set `EMAIL_PROVIDER=smtp` with `SMTP_*` values to send real mail.
 

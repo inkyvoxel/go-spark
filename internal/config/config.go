@@ -35,24 +35,26 @@ type RateLimitPoliciesConfig struct {
 }
 
 type Config struct {
-	Addr              string
-	Process           string
-	Env               string
-	DatabasePath      string
-	CookieSecure      bool
-	PasswordMinLength int
-	PasswordPepper    string
-	AppBaseURL        string
-	EmailFrom         string
-	EmailProvider     string
-	EmailLogBody      bool
-	SMTPHost          string
-	SMTPPort          int
-	SMTPUsername      string
-	SMTPPassword      string
-	SMTPFrom          string
-	SMTPTLS           bool
-	RateLimitPolicies RateLimitPoliciesConfig
+	Addr                      string
+	Process                   string
+	Env                       string
+	DatabasePath              string
+	CookieSecure              bool
+	EmailVerificationRequired bool
+	EmailChangeNoticeEnabled  bool
+	PasswordMinLength         int
+	PasswordPepper            string
+	AppBaseURL                string
+	EmailFrom                 string
+	EmailProvider             string
+	EmailLogBody              bool
+	SMTPHost                  string
+	SMTPPort                  int
+	SMTPUsername              string
+	SMTPPassword              string
+	SMTPFrom                  string
+	SMTPTLS                   bool
+	RateLimitPolicies         RateLimitPoliciesConfig
 }
 
 func LoadDotEnv(path string) error {
@@ -90,6 +92,15 @@ func FromEnvWithProcess(defaultPasswordMinLength int, processOverride string) (C
 		return Config{}, err
 	}
 
+	emailVerificationRequired, err := envBoolOrDefault("AUTH_EMAIL_VERIFICATION_REQUIRED", true)
+	if err != nil {
+		return Config{}, err
+	}
+	emailChangeNoticeEnabled, err := envBoolOrDefault("AUTH_EMAIL_CHANGE_NOTICE_ENABLED", true)
+	if err != nil {
+		return Config{}, err
+	}
+
 	appBaseURL, err := envURL("APP_BASE_URL", "http://localhost:8080")
 	if err != nil {
 		return Config{}, err
@@ -111,17 +122,19 @@ func FromEnvWithProcess(defaultPasswordMinLength int, processOverride string) (C
 	}
 
 	cfg := Config{
-		Addr:              envOrDefault("APP_ADDR", ":8080"),
-		Process:           process,
-		Env:               envOrDefault("APP_ENV", "development"),
-		DatabasePath:      envOrDefault("DATABASE_PATH", "./data/app.db"),
-		CookieSecure:      cookieSecure,
-		PasswordMinLength: passwordMinLength,
-		PasswordPepper:    os.Getenv("AUTH_PASSWORD_PEPPER"),
-		AppBaseURL:        appBaseURL,
-		EmailFrom:         emailFrom,
-		EmailProvider:     emailProvider,
-		EmailLogBody:      emailLogBody,
+		Addr:                      envOrDefault("APP_ADDR", ":8080"),
+		Process:                   process,
+		Env:                       envOrDefault("APP_ENV", "development"),
+		DatabasePath:              envOrDefault("DATABASE_PATH", "./data/app.db"),
+		CookieSecure:              cookieSecure,
+		EmailVerificationRequired: emailVerificationRequired,
+		EmailChangeNoticeEnabled:  emailChangeNoticeEnabled,
+		PasswordMinLength:         passwordMinLength,
+		PasswordPepper:            os.Getenv("AUTH_PASSWORD_PEPPER"),
+		AppBaseURL:                appBaseURL,
+		EmailFrom:                 emailFrom,
+		EmailProvider:             emailProvider,
+		EmailLogBody:              emailLogBody,
 	}
 
 	rateLimitPolicies, err := rateLimitPoliciesFromEnv()

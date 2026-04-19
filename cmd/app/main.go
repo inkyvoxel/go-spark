@@ -53,8 +53,10 @@ func run(args []string, logger *slog.Logger) error {
 	defer db.Close()
 
 	auth := services.NewAuthService(database.NewAuthStore(db), services.AuthOptions{
-		PasswordMinLen: cfg.PasswordMinLength,
-		PasswordPepper: cfg.PasswordPepper,
+		PasswordMinLen:           cfg.PasswordMinLength,
+		PasswordPepper:           cfg.PasswordPepper,
+		EmailVerificationPolicy:  services.NewEmailVerificationPolicy(cfg.EmailVerificationRequired),
+		EmailChangeNoticeEnabled: boolPtr(cfg.EmailChangeNoticeEnabled),
 		ConfirmationEmail: email.AccountConfirmationOptions{
 			AppBaseURL: cfg.AppBaseURL,
 			From:       authSenderFrom(cfg),
@@ -75,12 +77,13 @@ func run(args []string, logger *slog.Logger) error {
 	})
 
 	app := server.New(server.Options{
-		Logger:            logger,
-		DB:                db,
-		Auth:              auth,
-		CookieSecure:      cfg.CookieSecure,
-		PasswordMinLength: cfg.PasswordMinLength,
-		RateLimitPolicies: toServerRateLimitPolicies(cfg.RateLimitPolicies),
+		Logger:                  logger,
+		DB:                      db,
+		Auth:                    auth,
+		CookieSecure:            cfg.CookieSecure,
+		PasswordMinLength:       cfg.PasswordMinLength,
+		EmailVerificationPolicy: services.NewEmailVerificationPolicy(cfg.EmailVerificationRequired),
+		RateLimitPolicies:       toServerRateLimitPolicies(cfg.RateLimitPolicies),
 	})
 
 	httpServer := &http.Server{
@@ -105,6 +108,10 @@ func run(args []string, logger *slog.Logger) error {
 	default:
 		return fmt.Errorf("APP_PROCESS must be %q, %q, or %q", config.ProcessAll, config.ProcessWeb, config.ProcessWorker)
 	}
+}
+
+func boolPtr(v bool) *bool {
+	return &v
 }
 
 func processArg(args []string) (string, error) {

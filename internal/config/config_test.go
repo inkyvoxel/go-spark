@@ -81,6 +81,8 @@ func TestFromEnvUsesDefaults(t *testing.T) {
 	t.Setenv("AUTH_PASSWORD_MIN_LENGTH", "")
 	t.Setenv("AUTH_PASSWORD_PEPPER", "")
 	t.Setenv("APP_BASE_URL", "")
+	t.Setenv("AUTH_EMAIL_VERIFICATION_REQUIRED", "")
+	t.Setenv("AUTH_EMAIL_CHANGE_NOTICE_ENABLED", "")
 	t.Setenv("EMAIL_FROM", "")
 	t.Setenv("EMAIL_PROVIDER", "")
 	t.Setenv("EMAIL_LOG_BODY", "")
@@ -104,6 +106,12 @@ func TestFromEnvUsesDefaults(t *testing.T) {
 	}
 	if cfg.CookieSecure {
 		t.Fatal("CookieSecure = true, want false")
+	}
+	if !cfg.EmailVerificationRequired {
+		t.Fatal("EmailVerificationRequired = false, want true")
+	}
+	if !cfg.EmailChangeNoticeEnabled {
+		t.Fatal("EmailChangeNoticeEnabled = false, want true")
 	}
 	if cfg.PasswordMinLength != services.DefaultPasswordMinLength {
 		t.Fatalf("PasswordMinLength = %d, want %d", cfg.PasswordMinLength, services.DefaultPasswordMinLength)
@@ -133,6 +141,8 @@ func TestFromEnvUsesEnvironment(t *testing.T) {
 	t.Setenv("APP_COOKIE_SECURE", "true")
 	t.Setenv("AUTH_PASSWORD_MIN_LENGTH", "16")
 	t.Setenv("APP_BASE_URL", "https://app.example.com/")
+	t.Setenv("AUTH_EMAIL_VERIFICATION_REQUIRED", "false")
+	t.Setenv("AUTH_EMAIL_CHANGE_NOTICE_ENABLED", "false")
 	t.Setenv("AUTH_PASSWORD_PEPPER", "super-secret-pepper")
 	t.Setenv("EMAIL_FROM", "Example <mail@example.com>")
 	t.Setenv("EMAIL_PROVIDER", "LOG")
@@ -163,6 +173,12 @@ func TestFromEnvUsesEnvironment(t *testing.T) {
 	}
 	if !cfg.CookieSecure {
 		t.Fatal("CookieSecure = false, want true")
+	}
+	if cfg.EmailVerificationRequired {
+		t.Fatal("EmailVerificationRequired = true, want false")
+	}
+	if cfg.EmailChangeNoticeEnabled {
+		t.Fatal("EmailChangeNoticeEnabled = true, want false")
 	}
 	if cfg.PasswordMinLength != 16 {
 		t.Fatalf("PasswordMinLength = %d, want %d", cfg.PasswordMinLength, 16)
@@ -260,6 +276,30 @@ func TestFromEnvRejectsInvalidCookieSecureBool(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "APP_COOKIE_SECURE") {
 		t.Fatalf("FromEnv() error = %v, want APP_COOKIE_SECURE", err)
+	}
+}
+
+func TestFromEnvRejectsInvalidEmailVerificationRequiredBool(t *testing.T) {
+	t.Setenv("AUTH_EMAIL_VERIFICATION_REQUIRED", "sometimes")
+
+	_, err := FromEnv(services.DefaultPasswordMinLength)
+	if err == nil {
+		t.Fatal("FromEnv() error = nil, want error")
+	}
+	if !strings.Contains(err.Error(), "AUTH_EMAIL_VERIFICATION_REQUIRED") {
+		t.Fatalf("FromEnv() error = %v, want AUTH_EMAIL_VERIFICATION_REQUIRED", err)
+	}
+}
+
+func TestFromEnvRejectsInvalidEmailChangeNoticeEnabledBool(t *testing.T) {
+	t.Setenv("AUTH_EMAIL_CHANGE_NOTICE_ENABLED", "sometimes")
+
+	_, err := FromEnv(services.DefaultPasswordMinLength)
+	if err == nil {
+		t.Fatal("FromEnv() error = nil, want error")
+	}
+	if !strings.Contains(err.Error(), "AUTH_EMAIL_CHANGE_NOTICE_ENABLED") {
+		t.Fatalf("FromEnv() error = %v, want AUTH_EMAIL_CHANGE_NOTICE_ENABLED", err)
 	}
 }
 

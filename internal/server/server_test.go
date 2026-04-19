@@ -14,6 +14,7 @@ import (
 	"testing"
 
 	"github.com/inkyvoxel/go-spark/internal/paths"
+	"github.com/inkyvoxel/go-spark/internal/services"
 
 	_ "modernc.org/sqlite"
 )
@@ -186,8 +187,9 @@ func testServer(t *testing.T) *Server {
 	t.Helper()
 
 	return &Server{
-		db:     testDB(t),
-		logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
+		db:                      testDB(t),
+		emailVerificationPolicy: services.DefaultEmailVerificationPolicy(),
+		logger:                  slog.New(slog.NewTextHandler(io.Discard, nil)),
 		templates: testTemplates(t, map[string]string{
 			templateHome: `<h1>{{ .Title }}</h1>`,
 		}),

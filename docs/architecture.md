@@ -173,15 +173,15 @@ Auth and account routes:
 | `GET` | `/account/change-email` | Change email request form | Verified authenticated |
 | `POST` | `/account/change-email` | Request email change verification | Verified authenticated, rate limited |
 | `GET` | `/account/confirm-email-change` | Consume email change token | Public |
-| `GET` | `/account/verify-email` | Unverified-account interstitial | Authenticated |
-| `POST` | `/account/verify-email/resend` | Resend confirmation for signed-in user | Authenticated, rate limited |
-| `GET` | `/account/confirm-email` | Consume email confirmation token | Public |
+| `GET` | `/account/verify-email` | Unverified-account interstitial | Authenticated (redirects to `/account` when verification is optional) |
+| `POST` | `/account/verify-email/resend` | Resend confirmation for signed-in user | Authenticated, rate limited (redirects to `/account` when verification is optional) |
+| `GET` | `/account/confirm-email` | Consume email confirmation token | Public (redirects to `/login` or `/account` when verification is optional) |
 | `GET` | `/account/forgot-password` | Password reset request form | Anonymous only |
 | `POST` | `/account/forgot-password` | Request password reset email | Anonymous only, rate limited |
 | `GET` | `/account/reset-password` | Reset password form | Anonymous only |
 | `POST` | `/account/reset-password` | Reset password | Anonymous only |
-| `GET` | `/account/resend-verification` | Public resend confirmation form | Anonymous only |
-| `POST` | `/account/resend-verification` | Public resend confirmation request | Anonymous only, rate limited |
+| `GET` | `/account/resend-verification` | Public resend confirmation form | Anonymous only (redirects to `/login` or `/account` when verification is optional) |
+| `POST` | `/account/resend-verification` | Public resend confirmation request | Anonymous only, rate limited (redirects to `/login` or `/account` when verification is optional) |
 
 ### Thin Templates
 

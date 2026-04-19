@@ -39,6 +39,8 @@ var (
 
 type AuthService struct {
 	store                          AuthStore
+	emailVerificationPolicy        EmailVerificationPolicy
+	emailChangeNoticeEnabled       bool
 	sessionDuration                time.Duration
 	emailVerificationTokenDuration time.Duration
 	passwordResetTokenDuration     time.Duration
@@ -51,6 +53,7 @@ type AuthService struct {
 
 type AuthStore interface {
 	CreateUser(ctx context.Context, email, passwordHash string) (db.User, error)
+	CreateVerifiedUser(ctx context.Context, email, passwordHash string, verifiedAt time.Time) (db.User, error)
 	CreateUserWithEmailVerification(ctx context.Context, params CreateUserWithEmailVerificationParams) (db.User, error)
 	GetUserByEmail(ctx context.Context, email string) (db.User, error)
 	CreateSession(ctx context.Context, userID int64, token string, expiresAt time.Time) (db.Session, error)
@@ -63,6 +66,7 @@ type AuthStore interface {
 	ConsumePasswordResetToken(ctx context.Context, tokenHash string, consumedAt time.Time) (db.PasswordResetToken, error)
 	RequestPasswordReset(ctx context.Context, params RequestPasswordResetParams) error
 	RequestEmailChange(ctx context.Context, params RequestEmailChangeParams) error
+	ChangeEmailImmediately(ctx context.Context, params ChangeEmailImmediatelyParams) (db.User, error)
 	ConfirmEmailChange(ctx context.Context, params ConfirmEmailChangeParams) (db.User, error)
 	CreateEmailVerificationToken(ctx context.Context, userID int64, tokenHash string, expiresAt time.Time) (db.EmailVerificationToken, error)
 	ResendEmailVerification(ctx context.Context, params ResendEmailVerificationParams) error
@@ -92,6 +96,8 @@ type AuthOptions struct {
 	PasswordResetTokenDuration     time.Duration
 	ConfirmationEmail              email.AccountConfirmationOptions
 	PasswordResetEmail             email.PasswordResetOptions
+	EmailVerificationPolicy        EmailVerificationPolicy
+	EmailChangeNoticeEnabled       *bool
 }
 
 type ResendEmailVerificationParams struct {
@@ -124,6 +130,16 @@ type ConfirmEmailChangeParams struct {
 	ChangedAt              time.Time
 	OldEmailNoticeOptions  email.EmailChangeNoticeOptions
 	NoticeEmailAvailableAt time.Time
+	SendOldEmailNotice     bool
+}
+
+type ChangeEmailImmediatelyParams struct {
+	UserID                 int64
+	NewEmail               string
+	ChangedAt              time.Time
+	OldEmailNoticeOptions  email.EmailChangeNoticeOptions
+	NoticeEmailAvailableAt time.Time
+	SendOldEmailNotice     bool
 }
 
 func NewAuthService(store AuthStore, opts AuthOptions) *AuthService {
@@ -162,6 +178,8 @@ func NewAuthService(store AuthStore, opts AuthOptions) *AuthService {
 
 	return &AuthService{
 		store:                          store,
+		emailVerificationPolicy:        emailVerificationPolicy(opts.EmailVerificationPolicy),
+		emailChangeNoticeEnabled:       emailChangeNoticeEnabled(opts.EmailChangeNoticeEnabled),
 		sessionDuration:                sessionDuration,
 		emailVerificationTokenDuration: emailVerificationTokenDuration,
 		passwordResetTokenDuration:     passwordResetTokenDuration,
@@ -181,34 +199,44 @@ func (s *AuthService) Register(ctx context.Context, emailAddress, password strin
 	if utf8.RuneCountInString(password) < s.passwordMinLen {
 		return db.User{}, ErrInvalidPassword
 	}
+	if _, err := s.store.GetUserByEmail(ctx, emailAddress); err == nil {
+		return db.User{}, ErrEmailAlreadyRegistered
+	} else if !errors.Is(err, sql.ErrNoRows) {
+		return db.User{}, fmt.Errorf("get user by email: %w", err)
+	}
 
 	hash, err := s.passwordHasher.Hash(password)
 	if err != nil {
 		return db.User{}, fmt.Errorf("hash password: %w", err)
 	}
 
-	token, err := generateToken(s.tokenBytes)
-	if err != nil {
-		return db.User{}, fmt.Errorf("generate email verification token: %w", err)
-	}
-
-	message, err := email.NewAccountConfirmationMessage(s.confirmationEmail, emailAddress, token)
-	if err != nil {
-		return db.User{}, fmt.Errorf("build account confirmation email: %w", err)
-	}
-
 	now := time.Now().UTC()
-	user, err := s.store.CreateUserWithEmailVerification(
-		ctx,
-		CreateUserWithEmailVerificationParams{
-			Email:             emailAddress,
-			PasswordHash:      hash,
-			TokenHash:         hashToken(token),
-			TokenExpiresAt:    now.Add(s.emailVerificationTokenDuration),
-			ConfirmationEmail: message,
-			EmailAvailableAt:  now,
-		},
-	)
+	var user db.User
+	if s.emailVerificationPolicy.Required() {
+		token, err := generateToken(s.tokenBytes)
+		if err != nil {
+			return db.User{}, fmt.Errorf("generate email verification token: %w", err)
+		}
+
+		message, err := email.NewAccountConfirmationMessage(s.confirmationEmail, emailAddress, token)
+		if err != nil {
+			return db.User{}, fmt.Errorf("build account confirmation email: %w", err)
+		}
+
+		user, err = s.store.CreateUserWithEmailVerification(
+			ctx,
+			CreateUserWithEmailVerificationParams{
+				Email:             emailAddress,
+				PasswordHash:      hash,
+				TokenHash:         hashToken(token),
+				TokenExpiresAt:    now.Add(s.emailVerificationTokenDuration),
+				ConfirmationEmail: message,
+				EmailAvailableAt:  now,
+			},
+		)
+	} else {
+		user, err = s.store.CreateVerifiedUser(ctx, emailAddress, hash, now)
+	}
 	if err != nil {
 		if errors.Is(err, ErrEmailAlreadyRegistered) {
 			return db.User{}, ErrEmailAlreadyRegistered
@@ -326,26 +354,43 @@ func (s *AuthService) RequestEmailChange(ctx context.Context, user db.User, curr
 		return fmt.Errorf("get user by email: %w", err)
 	}
 
-	token, err := generateToken(s.tokenBytes)
-	if err != nil {
-		return fmt.Errorf("generate email change token: %w", err)
-	}
-
-	message, err := email.NewEmailChangeMessage(email.EmailChangeOptions(s.confirmationEmail), newEmail, token)
-	if err != nil {
-		return fmt.Errorf("build email change verification email: %w", err)
-	}
-
 	now := time.Now().UTC()
-	if err := s.store.RequestEmailChange(ctx, RequestEmailChangeParams{
+	if s.emailVerificationPolicy.RequiresEmailChangeVerification() {
+		token, err := generateToken(s.tokenBytes)
+		if err != nil {
+			return fmt.Errorf("generate email change token: %w", err)
+		}
+
+		message, err := email.NewEmailChangeMessage(email.EmailChangeOptions(s.confirmationEmail), newEmail, token)
+		if err != nil {
+			return fmt.Errorf("build email change verification email: %w", err)
+		}
+
+		if err := s.store.RequestEmailChange(ctx, RequestEmailChangeParams{
+			UserID:                 user.ID,
+			NewEmail:               newEmail,
+			TokenHash:              hashToken(token),
+			TokenExpiresAt:         now.Add(s.emailVerificationTokenDuration),
+			EmailChangeVerifyEmail: message,
+			EmailAvailableAt:       now,
+		}); err != nil {
+			return fmt.Errorf("request email change: %w", err)
+		}
+		return nil
+	}
+
+	if _, err := s.store.ChangeEmailImmediately(ctx, ChangeEmailImmediatelyParams{
 		UserID:                 user.ID,
 		NewEmail:               newEmail,
-		TokenHash:              hashToken(token),
-		TokenExpiresAt:         now.Add(s.emailVerificationTokenDuration),
-		EmailChangeVerifyEmail: message,
-		EmailAvailableAt:       now,
+		ChangedAt:              now,
+		OldEmailNoticeOptions:  email.EmailChangeNoticeOptions{From: s.confirmationEmail.From},
+		NoticeEmailAvailableAt: now,
+		SendOldEmailNotice:     s.emailChangeNoticeEnabled,
 	}); err != nil {
-		return fmt.Errorf("request email change: %w", err)
+		if errors.Is(err, ErrEmailAlreadyRegistered) {
+			return ErrEmailAlreadyRegistered
+		}
+		return fmt.Errorf("change email immediately: %w", err)
 	}
 
 	return nil
@@ -363,6 +408,7 @@ func (s *AuthService) ConfirmEmailChange(ctx context.Context, token string) (db.
 		ChangedAt:              now,
 		OldEmailNoticeOptions:  email.EmailChangeNoticeOptions{From: s.confirmationEmail.From},
 		NoticeEmailAvailableAt: now,
+		SendOldEmailNotice:     s.emailChangeNoticeEnabled,
 	})
 	if errors.Is(err, sql.ErrNoRows) {
 		return db.User{}, ErrInvalidEmailChangeToken
@@ -515,7 +561,7 @@ func (s *AuthService) VerifyEmail(ctx context.Context, token string) (db.User, e
 }
 
 func (s *AuthService) ResendVerificationEmail(ctx context.Context, user db.User) error {
-	if user.EmailVerifiedAt.Valid {
+	if !s.emailVerificationPolicy.Required() || s.emailVerificationPolicy.UserIsVerified(user) {
 		return nil
 	}
 
@@ -544,6 +590,10 @@ func (s *AuthService) ResendVerificationEmail(ctx context.Context, user db.User)
 }
 
 func (s *AuthService) ResendVerificationEmailByAddress(ctx context.Context, emailAddress string) error {
+	if !s.emailVerificationPolicy.Required() {
+		return nil
+	}
+
 	emailAddress = normalizeEmail(emailAddress)
 	if !isValidEmail(emailAddress) {
 		return ErrInvalidEmail
@@ -557,7 +607,7 @@ func (s *AuthService) ResendVerificationEmailByAddress(ctx context.Context, emai
 		return fmt.Errorf("get user by email: %w", err)
 	}
 
-	if user.EmailVerifiedAt.Valid {
+	if s.emailVerificationPolicy.UserIsVerified(user) {
 		return nil
 	}
 
@@ -626,6 +676,20 @@ func generateToken(bytes int) (string, error) {
 	}
 
 	return hex.EncodeToString(buffer), nil
+}
+
+func emailVerificationPolicy(policy EmailVerificationPolicy) EmailVerificationPolicy {
+	if policy == nil {
+		return DefaultEmailVerificationPolicy()
+	}
+	return policy
+}
+
+func emailChangeNoticeEnabled(enabled *bool) bool {
+	if enabled == nil {
+		return true
+	}
+	return *enabled
 }
 
 func hashToken(token string) string {

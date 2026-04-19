@@ -4,7 +4,9 @@
   {{ template "login_form_section" . }}
   <p><a href="{{ .Routes.Register }}">Create an account</a></p>
   <p><a href="{{ .Routes.ForgotPassword }}">Forgot your password?</a></p>
+  {{ if .EmailVerificationRequired }}
   <p><a href="{{ .Routes.ResendVerification }}">Resend verification email</a></p>
+  {{ end }}
 </article>
 {{ end }}
 
@@ -12,9 +14,10 @@
 <section id="login-form-section">
   {{ if eq .LoginStatus "password-changed" }}<p role="status">Your password has changed. Sign in with your new password.
   </p>{{ end }}
+  {{ if eq .LoginStatus "email-changed" }}<p role="status">Your email address has changed. Sign in again.</p>{{ end }}
   {{ if .Error }}<p role="alert">{{ .Error }}</p>{{ end }}
-  <form method="post" action="{{ .Routes.Login }}" hx-post="{{ .Routes.Login }}" hx-target="#login-form-section" hx-swap="outerHTML"
-    hx-disabled-elt="button[type='submit']"
+  <form method="post" action="{{ .Routes.Login }}" hx-post="{{ .Routes.Login }}" hx-target="#login-form-section"
+    hx-swap="outerHTML" hx-disabled-elt="button[type='submit']"
     hx-on::before-request="this.querySelector('button[type=submit]').setAttribute('aria-busy','true')"
     hx-on::after-request="this.querySelector('button[type=submit]').removeAttribute('aria-busy')">
     <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">

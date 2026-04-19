@@ -44,6 +44,40 @@ func (s *AuthStore) CreateUser(ctx context.Context, email, passwordHash string) 
 	return user, nil
 }
 
+func (s *AuthStore) CreateVerifiedUser(ctx context.Context, email, passwordHash string, verifiedAt time.Time) (db.User, error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return db.User{}, fmt.Errorf("begin create verified user transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	queries := s.queries.WithTx(tx)
+	user, err := queries.CreateUser(ctx, db.CreateUserParams{
+		Email:        email,
+		PasswordHash: passwordHash,
+	})
+	if err != nil {
+		if isSQLiteUniqueConstraint(err) {
+			return db.User{}, services.ErrEmailAlreadyRegistered
+		}
+		return db.User{}, fmt.Errorf("create user: %w", err)
+	}
+
+	user, err = queries.MarkUserEmailVerified(ctx, db.MarkUserEmailVerifiedParams{
+		EmailVerifiedAt: sql.NullTime{Time: verifiedAt, Valid: true},
+		ID:              user.ID,
+	})
+	if err != nil {
+		return db.User{}, fmt.Errorf("mark user email verified: %w", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return db.User{}, fmt.Errorf("commit create verified user transaction: %w", err)
+	}
+
+	return user, nil
+}
+
 func (s *AuthStore) CreateUserWithEmailVerification(ctx context.Context, params services.CreateUserWithEmailVerificationParams) (db.User, error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -254,6 +288,33 @@ func (s *AuthStore) RequestEmailChange(ctx context.Context, params services.Requ
 	return nil
 }
 
+func (s *AuthStore) ChangeEmailImmediately(ctx context.Context, params services.ChangeEmailImmediatelyParams) (db.User, error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return db.User{}, fmt.Errorf("begin change email transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	queries := s.queries.WithTx(tx)
+	user, err := applyEmailChange(ctx, queries, applyEmailChangeParams{
+		UserID:                 params.UserID,
+		NewEmail:               params.NewEmail,
+		ChangedAt:              params.ChangedAt,
+		OldEmailNoticeOptions:  params.OldEmailNoticeOptions,
+		NoticeEmailAvailableAt: params.NoticeEmailAvailableAt,
+		SendOldEmailNotice:     params.SendOldEmailNotice,
+	})
+	if err != nil {
+		return db.User{}, err
+	}
+
+	if err := tx.Commit(); err != nil {
+		return db.User{}, fmt.Errorf("commit change email transaction: %w", err)
+	}
+
+	return user, nil
+}
+
 func (s *AuthStore) CreateEmailVerificationToken(ctx context.Context, userID int64, tokenHash string, expiresAt time.Time) (db.EmailVerificationToken, error) {
 	token, err := s.queries.CreateEmailVerificationToken(ctx, db.CreateEmailVerificationTokenParams{
 		UserID:    userID,
@@ -350,15 +411,44 @@ func (s *AuthStore) ConfirmEmailChange(ctx context.Context, params services.Conf
 		return db.User{}, fmt.Errorf("consume email change token: %w", err)
 	}
 
-	oldUser, err := queries.GetUserByID(ctx, token.UserID)
+	user, err := applyEmailChange(ctx, queries, applyEmailChangeParams{
+		UserID:                 token.UserID,
+		NewEmail:               token.NewEmail,
+		ChangedAt:              params.ChangedAt,
+		OldEmailNoticeOptions:  params.OldEmailNoticeOptions,
+		NoticeEmailAvailableAt: params.NoticeEmailAvailableAt,
+		SendOldEmailNotice:     params.SendOldEmailNotice,
+	})
+	if err != nil {
+		return db.User{}, err
+	}
+
+	if err := tx.Commit(); err != nil {
+		return db.User{}, fmt.Errorf("commit confirm email change transaction: %w", err)
+	}
+
+	return user, nil
+}
+
+type applyEmailChangeParams struct {
+	UserID                 int64
+	NewEmail               string
+	ChangedAt              time.Time
+	OldEmailNoticeOptions  email.EmailChangeNoticeOptions
+	NoticeEmailAvailableAt time.Time
+	SendOldEmailNotice     bool
+}
+
+func applyEmailChange(ctx context.Context, queries *db.Queries, params applyEmailChangeParams) (db.User, error) {
+	oldUser, err := queries.GetUserByID(ctx, params.UserID)
 	if err != nil {
 		return db.User{}, fmt.Errorf("get user by ID: %w", err)
 	}
 
 	user, err := queries.UpdateUserEmail(ctx, db.UpdateUserEmailParams{
-		Email:           token.NewEmail,
+		Email:           params.NewEmail,
 		EmailVerifiedAt: sql.NullTime{Time: params.ChangedAt, Valid: true},
-		ID:              token.UserID,
+		ID:              params.UserID,
 	})
 	if err != nil {
 		if isSQLiteUniqueConstraint(err) {
@@ -367,27 +457,25 @@ func (s *AuthStore) ConfirmEmailChange(ctx context.Context, params services.Conf
 		return db.User{}, fmt.Errorf("update user email: %w", err)
 	}
 
-	if err := queries.DeleteSessionsByUserID(ctx, token.UserID); err != nil {
+	if err := queries.DeleteSessionsByUserID(ctx, params.UserID); err != nil {
 		return db.User{}, fmt.Errorf("delete sessions by user ID: %w", err)
 	}
 
-	notice, err := email.NewEmailChangeNoticeMessage(params.OldEmailNoticeOptions, oldUser.Email)
-	if err != nil {
-		return db.User{}, fmt.Errorf("build old email change notice: %w", err)
-	}
-	if _, err := queries.EnqueueEmail(ctx, db.EnqueueEmailParams{
-		Sender:      notice.From,
-		Recipient:   notice.To,
-		Subject:     notice.Subject,
-		TextBody:    notice.TextBody,
-		HtmlBody:    notice.HTMLBody,
-		AvailableAt: params.NoticeEmailAvailableAt,
-	}); err != nil {
-		return db.User{}, fmt.Errorf("enqueue old email change notice: %w", err)
-	}
-
-	if err := tx.Commit(); err != nil {
-		return db.User{}, fmt.Errorf("commit confirm email change transaction: %w", err)
+	if params.SendOldEmailNotice {
+		notice, err := email.NewEmailChangeNoticeMessage(params.OldEmailNoticeOptions, oldUser.Email)
+		if err != nil {
+			return db.User{}, fmt.Errorf("build old email change notice: %w", err)
+		}
+		if _, err := queries.EnqueueEmail(ctx, db.EnqueueEmailParams{
+			Sender:      notice.From,
+			Recipient:   notice.To,
+			Subject:     notice.Subject,
+			TextBody:    notice.TextBody,
+			HtmlBody:    notice.HTMLBody,
+			AvailableAt: params.NoticeEmailAvailableAt,
+		}); err != nil {
+			return db.User{}, fmt.Errorf("enqueue old email change notice: %w", err)
+		}
 	}
 
 	return user, nil

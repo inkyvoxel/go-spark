@@ -626,6 +626,99 @@ func TestAuthStoreRequestEmailChange(t *testing.T) {
 	}
 }
 
+func TestAuthStoreChangeEmailImmediately(t *testing.T) {
+	store := newTestAuthStore(t)
+	now := time.Now().UTC()
+
+	user, err := store.CreateUser(context.Background(), "user@example.com", "hash")
+	if err != nil {
+		t.Fatalf("CreateUser() error = %v", err)
+	}
+	session, err := store.CreateSession(context.Background(), user.ID, "session-token", now.Add(time.Hour))
+	if err != nil {
+		t.Fatalf("CreateSession() error = %v", err)
+	}
+
+	changed, err := store.ChangeEmailImmediately(context.Background(), services.ChangeEmailImmediatelyParams{
+		UserID:                 user.ID,
+		NewEmail:               "new@example.com",
+		ChangedAt:              now,
+		OldEmailNoticeOptions:  email.EmailChangeNoticeOptions{From: "sender@example.com"},
+		NoticeEmailAvailableAt: now,
+		SendOldEmailNotice:     true,
+	})
+	if err != nil {
+		t.Fatalf("ChangeEmailImmediately() error = %v", err)
+	}
+	if changed.Email != "new@example.com" {
+		t.Fatalf("changed email = %q, want %q", changed.Email, "new@example.com")
+	}
+	if !changed.EmailVerifiedAt.Valid {
+		t.Fatal("EmailVerifiedAt.Valid = false, want true")
+	}
+
+	_, err = store.GetUserByEmail(context.Background(), "user@example.com")
+	if !errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("old email lookup error = %v, want %v", err, sql.ErrNoRows)
+	}
+	if _, err := store.GetUserByEmail(context.Background(), "new@example.com"); err != nil {
+		t.Fatalf("new email lookup error = %v", err)
+	}
+	if _, err := store.GetUserBySessionToken(context.Background(), session.Token); !errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("old session lookup error = %v, want %v", err, sql.ErrNoRows)
+	}
+
+	claimed, err := store.queries.ClaimPendingEmails(context.Background(), db.ClaimPendingEmailsParams{
+		AvailableAt: now.Add(time.Second),
+		Limit:       10,
+	})
+	if err != nil {
+		t.Fatalf("ClaimPendingEmails() error = %v", err)
+	}
+	var noticeFound bool
+	for _, item := range claimed {
+		if item.Recipient == "<user@example.com>" && item.Subject == "Your email address was changed" {
+			noticeFound = true
+		}
+	}
+	if !noticeFound {
+		t.Fatalf("claimed emails = %#v, want old email notice", claimed)
+	}
+}
+
+func TestAuthStoreChangeEmailImmediatelySkipsOldEmailNoticeWhenDisabled(t *testing.T) {
+	store := newTestAuthStore(t)
+	now := time.Now().UTC()
+
+	user, err := store.CreateUser(context.Background(), "user@example.com", "hash")
+	if err != nil {
+		t.Fatalf("CreateUser() error = %v", err)
+	}
+
+	_, err = store.ChangeEmailImmediately(context.Background(), services.ChangeEmailImmediatelyParams{
+		UserID:                 user.ID,
+		NewEmail:               "new@example.com",
+		ChangedAt:              now,
+		OldEmailNoticeOptions:  email.EmailChangeNoticeOptions{From: "sender@example.com"},
+		NoticeEmailAvailableAt: now,
+		SendOldEmailNotice:     false,
+	})
+	if err != nil {
+		t.Fatalf("ChangeEmailImmediately() error = %v", err)
+	}
+
+	claimed, err := store.queries.ClaimPendingEmails(context.Background(), db.ClaimPendingEmailsParams{
+		AvailableAt: now.Add(time.Second),
+		Limit:       10,
+	})
+	if err != nil {
+		t.Fatalf("ClaimPendingEmails() error = %v", err)
+	}
+	if len(claimed) != 0 {
+		t.Fatalf("claimed emails = %#v, want none", claimed)
+	}
+}
+
 func TestAuthStoreConfirmEmailChange(t *testing.T) {
 	store := newTestAuthStore(t)
 	now := time.Now().UTC()
@@ -659,6 +752,7 @@ func TestAuthStoreConfirmEmailChange(t *testing.T) {
 		ChangedAt:              now,
 		OldEmailNoticeOptions:  email.EmailChangeNoticeOptions{From: "sender@example.com"},
 		NoticeEmailAvailableAt: now,
+		SendOldEmailNotice:     true,
 	})
 	if err != nil {
 		t.Fatalf("ConfirmEmailChange() error = %v", err)
@@ -703,6 +797,7 @@ func TestAuthStoreConfirmEmailChange(t *testing.T) {
 		ChangedAt:              now,
 		OldEmailNoticeOptions:  email.EmailChangeNoticeOptions{From: "sender@example.com"},
 		NoticeEmailAvailableAt: now,
+		SendOldEmailNotice:     true,
 	})
 	if !errors.Is(err, sql.ErrNoRows) {
 		t.Fatalf("ConfirmEmailChange() consumed token error = %v, want %v", err, sql.ErrNoRows)
@@ -738,6 +833,7 @@ func TestAuthStoreConfirmEmailChangeRejectsExpiredToken(t *testing.T) {
 		ChangedAt:              now,
 		OldEmailNoticeOptions:  email.EmailChangeNoticeOptions{From: "sender@example.com"},
 		NoticeEmailAvailableAt: now,
+		SendOldEmailNotice:     true,
 	})
 	if !errors.Is(err, sql.ErrNoRows) {
 		t.Fatalf("ConfirmEmailChange() error = %v, want %v", err, sql.ErrNoRows)
@@ -776,6 +872,7 @@ func TestAuthStoreConfirmEmailChangeRejectsAlreadyOwnedEmail(t *testing.T) {
 		ChangedAt:              now,
 		OldEmailNoticeOptions:  email.EmailChangeNoticeOptions{From: "sender@example.com"},
 		NoticeEmailAvailableAt: now,
+		SendOldEmailNotice:     true,
 	})
 	if !errors.Is(err, services.ErrEmailAlreadyRegistered) {
 		t.Fatalf("ConfirmEmailChange() error = %v, want %v", err, services.ErrEmailAlreadyRegistered)

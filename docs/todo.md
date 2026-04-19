@@ -1,12 +1,6 @@
 ## Email features
 
-What is still not implemented:
 - Admin/ops visibility for failed outbox rows.
-- HTML email styling beyond the simple message body.
-
-## Account features
-
-- Make email verification optional. Configure in `.env`
 
 ## Security
 

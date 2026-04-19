@@ -155,7 +155,10 @@ Confirmation should:
 4. Set `users.email_verified_at`.
 5. Render a clear success or invalid-token page.
 
-Unverified users may sign in, but verified-only account features are protected by `requireVerifiedAuth`. Unverified users are redirected to `/account/verify-email`, where they can resend confirmation email or log out.
+Verification behavior is controlled by `AUTH_EMAIL_VERIFICATION_REQUIRED`:
+
+* `true` (default): unverified users may sign in, but verified-only account features are protected by `requireVerifiedAuth`. Unverified users are redirected to `/account/verify-email`, where they can resend confirmation email or log out.
+* `false`: new users are marked verified at registration, verification emails are not enqueued, and verification routes short-circuit back to login/account paths for compatibility.
 
 ## Password Reset Flow
 

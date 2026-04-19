@@ -382,6 +382,90 @@ func TestAuthServiceRequestEmailChangeWrapsStoreErrors(t *testing.T) {
 	}
 }
 
+func TestAuthServiceRequestEmailChangeOptionalModeAppliesImmediately(t *testing.T) {
+	service := newTestAuthServiceWithEmailVerificationRequired(t, false)
+	store := service.store.(*fakeAuthStore)
+
+	user, err := service.Register(context.Background(), "user@example.com", "password")
+	if err != nil {
+		t.Fatalf("Register() error = %v", err)
+	}
+	_, session, err := service.Login(context.Background(), "user@example.com", "password")
+	if err != nil {
+		t.Fatalf("Login() error = %v", err)
+	}
+	initialOutbox := len(store.outbox)
+
+	if err := service.RequestEmailChange(context.Background(), user, "password", "new@example.com"); err != nil {
+		t.Fatalf("RequestEmailChange() error = %v", err)
+	}
+
+	if len(store.emailChangeTokens) != 0 {
+		t.Fatalf("email change token count = %d, want 0", len(store.emailChangeTokens))
+	}
+	changed, err := store.GetUserByEmail(context.Background(), "new@example.com")
+	if err != nil {
+		t.Fatalf("GetUserByEmail(new) error = %v", err)
+	}
+	if changed.Email != "new@example.com" {
+		t.Fatalf("changed email = %q, want %q", changed.Email, "new@example.com")
+	}
+	if !changed.EmailVerifiedAt.Valid {
+		t.Fatal("changed EmailVerifiedAt.Valid = false, want true")
+	}
+	if _, err := store.GetUserByEmail(context.Background(), "user@example.com"); !errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("GetUserByEmail(old) error = %v, want %v", err, sql.ErrNoRows)
+	}
+	if _, err := service.UserBySessionToken(context.Background(), session.Token); !errors.Is(err, ErrInvalidSession) {
+		t.Fatalf("old session error = %v, want %v", err, ErrInvalidSession)
+	}
+	if len(store.outbox) != initialOutbox+1 {
+		t.Fatalf("outbox count = %d, want %d", len(store.outbox), initialOutbox+1)
+	}
+	notice := store.outbox[len(store.outbox)-1]
+	if notice.To != "<user@example.com>" {
+		t.Fatalf("old email notice To = %q, want old email", notice.To)
+	}
+}
+
+func TestAuthServiceRequestEmailChangeOptionalModeWrapsStoreErrors(t *testing.T) {
+	service := newTestAuthServiceWithEmailVerificationRequired(t, false)
+	store := service.store.(*fakeAuthStore)
+
+	user, err := service.Register(context.Background(), "user@example.com", "password")
+	if err != nil {
+		t.Fatalf("Register() error = %v", err)
+	}
+
+	store.changeEmailImmediatelyErr = errors.New("database unavailable")
+	err = service.RequestEmailChange(context.Background(), user, "password", "new@example.com")
+	if err == nil {
+		t.Fatal("RequestEmailChange() error = nil, want error")
+	}
+	if !strings.Contains(err.Error(), "change email immediately") {
+		t.Fatalf("RequestEmailChange() error = %v, want operation context", err)
+	}
+}
+
+func TestAuthServiceRequestEmailChangeOptionalModeSkipsOldEmailNoticeWhenDisabled(t *testing.T) {
+	service := newTestAuthServiceWithEmailVerificationAndNotice(t, false, false)
+	store := service.store.(*fakeAuthStore)
+
+	user, err := service.Register(context.Background(), "user@example.com", "password")
+	if err != nil {
+		t.Fatalf("Register() error = %v", err)
+	}
+	initialOutbox := len(store.outbox)
+
+	if err := service.RequestEmailChange(context.Background(), user, "password", "new@example.com"); err != nil {
+		t.Fatalf("RequestEmailChange() error = %v", err)
+	}
+
+	if len(store.outbox) != initialOutbox {
+		t.Fatalf("outbox count = %d, want %d", len(store.outbox), initialOutbox)
+	}
+}
+
 func TestAuthServiceConfirmEmailChange(t *testing.T) {
 	service := newTestAuthService(t)
 	store := service.store.(*fakeAuthStore)
@@ -487,6 +571,32 @@ func TestAuthServiceConfirmEmailChangeRejectsAlreadyOwnedEmail(t *testing.T) {
 	_, err = service.ConfirmEmailChange(context.Background(), "raw-token")
 	if !errors.Is(err, ErrEmailAlreadyRegistered) {
 		t.Fatalf("ConfirmEmailChange() error = %v, want %v", err, ErrEmailAlreadyRegistered)
+	}
+}
+
+func TestAuthServiceConfirmEmailChangeSkipsOldEmailNoticeWhenDisabled(t *testing.T) {
+	service := newTestAuthServiceWithEmailVerificationAndNotice(t, true, false)
+	store := service.store.(*fakeAuthStore)
+
+	user, err := service.Register(context.Background(), "user@example.com", "password")
+	if err != nil {
+		t.Fatalf("Register() error = %v", err)
+	}
+	initialOutbox := len(store.outbox)
+	store.emailChangeTokens[hashToken("raw-token")] = db.EmailChangeToken{
+		ID:        1,
+		UserID:    user.ID,
+		NewEmail:  "new@example.com",
+		TokenHash: hashToken("raw-token"),
+		ExpiresAt: time.Now().UTC().Add(time.Hour),
+		CreatedAt: time.Now().UTC(),
+	}
+
+	if _, err := service.ConfirmEmailChange(context.Background(), "raw-token"); err != nil {
+		t.Fatalf("ConfirmEmailChange() error = %v", err)
+	}
+	if len(store.outbox) != initialOutbox {
+		t.Fatalf("outbox count = %d, want %d", len(store.outbox), initialOutbox)
 	}
 }
 
@@ -698,6 +808,42 @@ func TestAuthServiceResendVerificationEmailByAddressWrapsLookupError(t *testing.
 	}
 }
 
+func TestAuthServiceRegisterOptionalVerificationCreatesVerifiedUserWithoutOutbox(t *testing.T) {
+	service := newTestAuthServiceWithEmailVerificationRequired(t, false)
+	store := service.store.(*fakeAuthStore)
+
+	user, err := service.Register(context.Background(), "user@example.com", "password")
+	if err != nil {
+		t.Fatalf("Register() error = %v", err)
+	}
+	if !user.EmailVerifiedAt.Valid {
+		t.Fatal("EmailVerifiedAt.Valid = false, want true")
+	}
+	if len(store.verificationTokens) != 0 {
+		t.Fatalf("verification token count = %d, want 0", len(store.verificationTokens))
+	}
+	if len(store.outbox) != 0 {
+		t.Fatalf("outbox count = %d, want 0", len(store.outbox))
+	}
+}
+
+func TestAuthServiceResendVerificationEmailOptionalModeNoOp(t *testing.T) {
+	service := newTestAuthServiceWithEmailVerificationRequired(t, false)
+	store := service.store.(*fakeAuthStore)
+	user, err := store.CreateUser(context.Background(), "user@example.com", "hash")
+	if err != nil {
+		t.Fatalf("CreateUser() error = %v", err)
+	}
+
+	initialOutbox := len(store.outbox)
+	if err := service.ResendVerificationEmail(context.Background(), user); err != nil {
+		t.Fatalf("ResendVerificationEmail() error = %v", err)
+	}
+	if len(store.outbox) != initialOutbox {
+		t.Fatalf("outbox count = %d, want %d", len(store.outbox), initialOutbox)
+	}
+}
+
 func TestAuthServiceRequestPasswordReset(t *testing.T) {
 	service := newTestAuthService(t)
 	store := service.store.(*fakeAuthStore)
@@ -834,6 +980,34 @@ func newTestAuthService(t *testing.T) *AuthService {
 	})
 }
 
+func newTestAuthServiceWithEmailVerificationRequired(t *testing.T, required bool) *AuthService {
+	return newTestAuthServiceWithEmailVerificationAndNotice(t, required, true)
+}
+
+func newTestAuthServiceWithEmailVerificationAndNotice(t *testing.T, required bool, noticeEnabled bool) *AuthService {
+	t.Helper()
+
+	return NewAuthService(newFakeAuthStore(), AuthOptions{
+		SessionDuration:     time.Hour,
+		PasswordMinLen:      8,
+		Argon2idMemoryKiB:   64,
+		Argon2idIterations:  1,
+		Argon2idParallelism: 1,
+		Argon2idSaltLength:  16,
+		Argon2idKeyLength:   32,
+		ConfirmationEmail: email.AccountConfirmationOptions{
+			AppBaseURL: "http://localhost:8080",
+			From:       "Go Spark <hello@example.com>",
+		},
+		EmailVerificationPolicy:  NewEmailVerificationPolicy(required),
+		EmailChangeNoticeEnabled: boolPtr(noticeEnabled),
+	})
+}
+
+func boolPtr(v bool) *bool {
+	return &v
+}
+
 type fakeAuthStore struct {
 	nextUserID                int64
 	nextSessionID             int64
@@ -853,6 +1027,7 @@ type fakeAuthStore struct {
 	deleteSessionsByUserIDErr error
 	passwordResetRequestErr   error
 	emailChangeRequestErr     error
+	changeEmailImmediatelyErr error
 	confirmEmailChangeErr     error
 }
 
@@ -902,6 +1077,17 @@ func (s *fakeAuthStore) CreateUserWithEmailVerification(ctx context.Context, par
 	}
 	s.outbox = append(s.outbox, params.ConfirmationEmail)
 
+	return user, nil
+}
+
+func (s *fakeAuthStore) CreateVerifiedUser(ctx context.Context, email, passwordHash string, verifiedAt time.Time) (db.User, error) {
+	user, err := s.CreateUser(ctx, email, passwordHash)
+	if err != nil {
+		return db.User{}, err
+	}
+	user.EmailVerifiedAt = sql.NullTime{Time: verifiedAt, Valid: true}
+	s.usersByID[user.ID] = user
+	s.usersByEmail[user.Email] = user
 	return user, nil
 }
 
@@ -1058,6 +1244,40 @@ func (s *fakeAuthStore) RequestEmailChange(ctx context.Context, params RequestEm
 	return nil
 }
 
+func (s *fakeAuthStore) ChangeEmailImmediately(ctx context.Context, params ChangeEmailImmediatelyParams) (db.User, error) {
+	if s.changeEmailImmediatelyErr != nil {
+		return db.User{}, s.changeEmailImmediatelyErr
+	}
+	existing, ok := s.usersByEmail[params.NewEmail]
+	if ok && existing.ID != params.UserID {
+		return db.User{}, ErrEmailAlreadyRegistered
+	}
+
+	user, ok := s.usersByID[params.UserID]
+	if !ok {
+		return db.User{}, sql.ErrNoRows
+	}
+
+	delete(s.usersByEmail, user.Email)
+	oldEmail := user.Email
+	user.Email = params.NewEmail
+	user.EmailVerifiedAt = sql.NullTime{Time: params.ChangedAt, Valid: true}
+	s.usersByID[user.ID] = user
+	s.usersByEmail[user.Email] = user
+
+	if err := s.DeleteSessionsByUserID(ctx, user.ID); err != nil {
+		return db.User{}, err
+	}
+	if params.SendOldEmailNotice {
+		notice, err := email.NewEmailChangeNoticeMessage(params.OldEmailNoticeOptions, oldEmail)
+		if err != nil {
+			return db.User{}, err
+		}
+		s.outbox = append(s.outbox, notice)
+	}
+	return user, nil
+}
+
 func (s *fakeAuthStore) ConfirmEmailChange(ctx context.Context, params ConfirmEmailChangeParams) (db.User, error) {
 	if s.confirmEmailChangeErr != nil {
 		return db.User{}, s.confirmEmailChangeErr
@@ -1088,11 +1308,13 @@ func (s *fakeAuthStore) ConfirmEmailChange(ctx context.Context, params ConfirmEm
 	if err := s.DeleteSessionsByUserID(ctx, user.ID); err != nil {
 		return db.User{}, err
 	}
-	notice, err := email.NewEmailChangeNoticeMessage(params.OldEmailNoticeOptions, oldEmail)
-	if err != nil {
-		return db.User{}, err
+	if params.SendOldEmailNotice {
+		notice, err := email.NewEmailChangeNoticeMessage(params.OldEmailNoticeOptions, oldEmail)
+		if err != nil {
+			return db.User{}, err
+		}
+		s.outbox = append(s.outbox, notice)
 	}
-	s.outbox = append(s.outbox, notice)
 
 	return user, nil
 }

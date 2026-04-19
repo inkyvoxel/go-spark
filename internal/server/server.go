@@ -17,23 +17,25 @@ const (
 )
 
 type Server struct {
-	db                *sql.DB
-	auth              authService
-	logger            *slog.Logger
-	templates         map[string]*template.Template
-	cookieSecure      bool
-	passwordMinLength int
-	rateLimiter       rateLimitStore
-	rateLimitPolicies RateLimitPolicies
+	db                      *sql.DB
+	auth                    authService
+	emailVerificationPolicy services.EmailVerificationPolicy
+	logger                  *slog.Logger
+	templates               map[string]*template.Template
+	cookieSecure            bool
+	passwordMinLength       int
+	rateLimiter             rateLimitStore
+	rateLimitPolicies       RateLimitPolicies
 }
 
 type Options struct {
-	DB                *sql.DB
-	Auth              authService
-	Logger            *slog.Logger
-	CookieSecure      bool
-	PasswordMinLength int
-	RateLimitPolicies RateLimitPolicies
+	DB                      *sql.DB
+	Auth                    authService
+	EmailVerificationPolicy services.EmailVerificationPolicy
+	Logger                  *slog.Logger
+	CookieSecure            bool
+	PasswordMinLength       int
+	RateLimitPolicies       RateLimitPolicies
 }
 
 func New(opts Options) *Server {
@@ -51,14 +53,15 @@ func New(opts Options) *Server {
 	}
 
 	return &Server{
-		db:                opts.DB,
-		auth:              opts.Auth,
-		logger:            logger,
-		templates:         mustParseTemplates(),
-		cookieSecure:      opts.CookieSecure,
-		passwordMinLength: passwordMinLength,
-		rateLimiter:       newInMemoryRateLimiter(),
-		rateLimitPolicies: rateLimitPoliciesWithDefaults(opts.RateLimitPolicies),
+		db:                      opts.DB,
+		auth:                    opts.Auth,
+		emailVerificationPolicy: emailVerificationPolicy(opts.EmailVerificationPolicy),
+		logger:                  logger,
+		templates:               mustParseTemplates(),
+		cookieSecure:            opts.CookieSecure,
+		passwordMinLength:       passwordMinLength,
+		rateLimiter:             newInMemoryRateLimiter(),
+		rateLimitPolicies:       rateLimitPoliciesWithDefaults(opts.RateLimitPolicies),
 	}
 }
 

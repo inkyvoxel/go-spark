@@ -117,7 +117,7 @@ func (s *Server) requireAuth(next http.Handler) http.Handler {
 func (s *Server) requireAnonymous(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if user, ok := currentUser(r.Context()); ok {
-			if user.EmailVerifiedAt.Valid {
+			if s.emailVerificationPolicy.UserIsVerified(user) {
 				http.Redirect(w, r, paths.Account, http.StatusSeeOther)
 				return
 			}
@@ -140,7 +140,7 @@ func (s *Server) requireVerifiedAuth(next http.Handler) http.Handler {
 			http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
 			return
 		}
-		if !user.EmailVerifiedAt.Valid {
+		if !s.emailVerificationPolicy.UserIsVerified(user) {
 			if r.Method == http.MethodGet {
 				http.Redirect(w, r, paths.VerifyEmail, http.StatusSeeOther)
 				return
@@ -151,6 +151,13 @@ func (s *Server) requireVerifiedAuth(next http.Handler) http.Handler {
 
 		next.ServeHTTP(w, r)
 	})
+}
+
+func emailVerificationPolicy(policy services.EmailVerificationPolicy) services.EmailVerificationPolicy {
+	if policy == nil {
+		return services.DefaultEmailVerificationPolicy()
+	}
+	return policy
 }
 
 func redirectToLogin(w http.ResponseWriter, r *http.Request) {
