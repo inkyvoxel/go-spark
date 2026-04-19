@@ -2,6 +2,7 @@ package server
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -205,15 +206,21 @@ func (s *Server) resendVerificationForm(w http.ResponseWriter, r *http.Request) 
 func (s *Server) confirmEmail(w http.ResponseWriter, r *http.Request) {
 	data := s.newTemplateData(r, "Confirm Email")
 
-	if _, err := s.auth.VerifyEmail(r.Context(), r.URL.Query().Get("token")); err != nil {
-		if errors.Is(err, services.ErrInvalidVerificationToken) {
-			data.Error = "This confirmation link is invalid or has expired."
-			s.renderStatus(w, http.StatusBadRequest, templateConfirmEmail, data)
-			return
-		}
-
-		s.logger.Error("confirm email", "err", err)
-		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+	if !s.confirmEmailToken(
+		w,
+		r,
+		&data,
+		templateConfirmEmail,
+		"confirm email",
+		s.auth.VerifyEmail,
+		func(err error, data *templateData) (int, bool) {
+			if errors.Is(err, services.ErrInvalidVerificationToken) {
+				data.Error = "This confirmation link is invalid or has expired."
+				return http.StatusBadRequest, true
+			}
+			return 0, false
+		},
+	) {
 		return
 	}
 
@@ -223,21 +230,27 @@ func (s *Server) confirmEmail(w http.ResponseWriter, r *http.Request) {
 func (s *Server) confirmEmailChange(w http.ResponseWriter, r *http.Request) {
 	data := s.newTemplateData(r, "Confirm Email Change")
 
-	if _, err := s.auth.ConfirmEmailChange(r.Context(), r.URL.Query().Get("token")); err != nil {
-		switch {
-		case errors.Is(err, services.ErrInvalidEmailChangeToken):
-			data.Error = "This email change link is invalid or has expired."
-			s.renderStatus(w, http.StatusBadRequest, templateConfirmEmailChange, data)
-			return
-		case errors.Is(err, services.ErrEmailAlreadyRegistered):
-			data.Error = "This email address is already used by another account."
-			s.renderStatus(w, http.StatusConflict, templateConfirmEmailChange, data)
-			return
-		default:
-			s.logger.Error("confirm email change", "err", err)
-			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-			return
-		}
+	if !s.confirmEmailToken(
+		w,
+		r,
+		&data,
+		templateConfirmEmailChange,
+		"confirm email change",
+		s.auth.ConfirmEmailChange,
+		func(err error, data *templateData) (int, bool) {
+			switch {
+			case errors.Is(err, services.ErrInvalidEmailChangeToken):
+				data.Error = "This email change link is invalid or has expired."
+				return http.StatusBadRequest, true
+			case errors.Is(err, services.ErrEmailAlreadyRegistered):
+				data.Error = "This email address is already used by another account."
+				return http.StatusConflict, true
+			default:
+				return 0, false
+			}
+		},
+	) {
+		return
 	}
 
 	s.clearSessionCookie(w, r)
@@ -245,6 +258,31 @@ func (s *Server) confirmEmailChange(w http.ResponseWriter, r *http.Request) {
 	data.Verified = false
 	data.User = db.User{}
 	s.render(w, templateConfirmEmailChange, data)
+}
+
+type confirmEmailErrorHandler func(err error, data *templateData) (status int, handled bool)
+
+func (s *Server) confirmEmailToken(
+	w http.ResponseWriter,
+	r *http.Request,
+	data *templateData,
+	templateName string,
+	logMessage string,
+	confirm func(context.Context, string) (db.User, error),
+	handleErr confirmEmailErrorHandler,
+) bool {
+	if _, err := confirm(r.Context(), r.URL.Query().Get("token")); err != nil {
+		if status, handled := handleErr(err, data); handled {
+			s.renderStatus(w, status, templateName, *data)
+			return false
+		}
+
+		s.logger.Error(logMessage, "err", err)
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		return false
+	}
+
+	return true
 }
 
 func (s *Server) login(w http.ResponseWriter, r *http.Request) {

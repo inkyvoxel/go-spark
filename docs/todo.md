@@ -6,7 +6,7 @@ What is still not implemented:
 
 ## Account features
 
-No outstanding account feature todos.
+- Make email verification optional. Configure in `.env`
 
 ## Security
 
