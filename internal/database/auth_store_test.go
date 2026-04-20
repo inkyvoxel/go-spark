@@ -25,14 +25,14 @@ CREATE TABLE users (
 CREATE TABLE sessions (
     id INTEGER PRIMARY KEY,
     user_id INTEGER NOT NULL,
-    token TEXT NOT NULL UNIQUE,
+    token_hash TEXT NOT NULL UNIQUE,
     expires_at TIMESTAMP NOT NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id)
 );
 
 CREATE INDEX sessions_user_id_idx ON sessions(user_id);
-CREATE INDEX sessions_token_idx ON sessions(token);
+CREATE INDEX sessions_token_hash_idx ON sessions(token_hash);
 CREATE INDEX sessions_expires_at_idx ON sessions(expires_at);
 
 CREATE TABLE email_verification_tokens (
@@ -130,22 +130,32 @@ func TestAuthStoreUserAndSessionFlow(t *testing.T) {
 	if session.UserID != user.ID {
 		t.Fatalf("CreateSession() UserID = %d, want %d", session.UserID, user.ID)
 	}
+	if session.TokenHash != "token" {
+		t.Fatalf("CreateSession() TokenHash = %q, want %q", session.TokenHash, "token")
+	}
+	var storedTokenHash string
+	if err := store.db.QueryRowContext(context.Background(), "SELECT token_hash FROM sessions WHERE id = ?", session.ID).Scan(&storedTokenHash); err != nil {
+		t.Fatalf("select session token_hash: %v", err)
+	}
+	if storedTokenHash != "token" {
+		t.Fatalf("stored token_hash = %q, want %q", storedTokenHash, "token")
+	}
 
-	bySession, err := store.GetUserBySessionToken(context.Background(), "token")
+	bySession, err := store.GetUserBySessionTokenHash(context.Background(), "token")
 	if err != nil {
-		t.Fatalf("GetUserBySessionToken() error = %v", err)
+		t.Fatalf("GetUserBySessionTokenHash() error = %v", err)
 	}
 	if bySession.ID != user.ID {
-		t.Fatalf("GetUserBySessionToken() ID = %d, want %d", bySession.ID, user.ID)
+		t.Fatalf("GetUserBySessionTokenHash() ID = %d, want %d", bySession.ID, user.ID)
 	}
 
-	if err := store.DeleteSessionByToken(context.Background(), "token"); err != nil {
-		t.Fatalf("DeleteSessionByToken() error = %v", err)
+	if err := store.DeleteSessionByTokenHash(context.Background(), "token"); err != nil {
+		t.Fatalf("DeleteSessionByTokenHash() error = %v", err)
 	}
 
-	_, err = store.GetUserBySessionToken(context.Background(), "token")
+	_, err = store.GetUserBySessionTokenHash(context.Background(), "token")
 	if !errors.Is(err, sql.ErrNoRows) {
-		t.Fatalf("GetUserBySessionToken() error = %v, want %v", err, sql.ErrNoRows)
+		t.Fatalf("GetUserBySessionTokenHash() error = %v, want %v", err, sql.ErrNoRows)
 	}
 }
 
@@ -199,18 +209,18 @@ func TestAuthStoreDeleteSessionsByUserID(t *testing.T) {
 		t.Fatalf("DeleteSessionsByUserID() error = %v", err)
 	}
 
-	_, err = store.GetUserBySessionToken(context.Background(), userOneSessionA.Token)
+	_, err = store.GetUserBySessionTokenHash(context.Background(), userOneSessionA.TokenHash)
 	if !errors.Is(err, sql.ErrNoRows) {
-		t.Fatalf("GetUserBySessionToken() token-1a error = %v, want %v", err, sql.ErrNoRows)
+		t.Fatalf("GetUserBySessionTokenHash() token-1a error = %v, want %v", err, sql.ErrNoRows)
 	}
-	_, err = store.GetUserBySessionToken(context.Background(), userOneSessionB.Token)
+	_, err = store.GetUserBySessionTokenHash(context.Background(), userOneSessionB.TokenHash)
 	if !errors.Is(err, sql.ErrNoRows) {
-		t.Fatalf("GetUserBySessionToken() token-1b error = %v, want %v", err, sql.ErrNoRows)
+		t.Fatalf("GetUserBySessionTokenHash() token-1b error = %v, want %v", err, sql.ErrNoRows)
 	}
 
-	remaining, err := store.GetUserBySessionToken(context.Background(), userTwoSession.Token)
+	remaining, err := store.GetUserBySessionTokenHash(context.Background(), userTwoSession.TokenHash)
 	if err != nil {
-		t.Fatalf("GetUserBySessionToken() token-2 error = %v", err)
+		t.Fatalf("GetUserBySessionTokenHash() token-2 error = %v", err)
 	}
 	if remaining.ID != userTwo.ID {
 		t.Fatalf("remaining session user ID = %d, want %d", remaining.ID, userTwo.ID)
@@ -664,7 +674,7 @@ func TestAuthStoreChangeEmailImmediately(t *testing.T) {
 	if _, err := store.GetUserByEmail(context.Background(), "new@example.com"); err != nil {
 		t.Fatalf("new email lookup error = %v", err)
 	}
-	if _, err := store.GetUserBySessionToken(context.Background(), session.Token); !errors.Is(err, sql.ErrNoRows) {
+	if _, err := store.GetUserBySessionTokenHash(context.Background(), session.TokenHash); !errors.Is(err, sql.ErrNoRows) {
 		t.Fatalf("old session lookup error = %v, want %v", err, sql.ErrNoRows)
 	}
 
@@ -771,7 +781,7 @@ func TestAuthStoreConfirmEmailChange(t *testing.T) {
 	if _, err := store.GetUserByEmail(context.Background(), "new@example.com"); err != nil {
 		t.Fatalf("new email lookup error = %v", err)
 	}
-	if _, err := store.GetUserBySessionToken(context.Background(), session.Token); !errors.Is(err, sql.ErrNoRows) {
+	if _, err := store.GetUserBySessionTokenHash(context.Background(), session.TokenHash); !errors.Is(err, sql.ErrNoRows) {
 		t.Fatalf("old session lookup error = %v, want %v", err, sql.ErrNoRows)
 	}
 

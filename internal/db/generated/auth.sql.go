@@ -210,29 +210,29 @@ func (q *Queries) CreatePasswordResetToken(ctx context.Context, arg CreatePasswo
 const createSession = `-- name: CreateSession :one
 INSERT INTO sessions (
     user_id,
-    token,
+    token_hash,
     expires_at
 ) VALUES (
     ?,
     ?,
     ?
 )
-RETURNING id, user_id, token, expires_at, created_at
+RETURNING id, user_id, token_hash, expires_at, created_at
 `
 
 type CreateSessionParams struct {
 	UserID    int64
-	Token     string
+	TokenHash string
 	ExpiresAt time.Time
 }
 
 func (q *Queries) CreateSession(ctx context.Context, arg CreateSessionParams) (Session, error) {
-	row := q.db.QueryRowContext(ctx, createSession, arg.UserID, arg.Token, arg.ExpiresAt)
+	row := q.db.QueryRowContext(ctx, createSession, arg.UserID, arg.TokenHash, arg.ExpiresAt)
 	var i Session
 	err := row.Scan(
 		&i.ID,
 		&i.UserID,
-		&i.Token,
+		&i.TokenHash,
 		&i.ExpiresAt,
 		&i.CreatedAt,
 	)
@@ -268,13 +268,13 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 	return i, err
 }
 
-const deleteSessionByToken = `-- name: DeleteSessionByToken :exec
+const deleteSessionByTokenHash = `-- name: DeleteSessionByTokenHash :exec
 DELETE FROM sessions
-WHERE token = ?
+WHERE token_hash = ?
 `
 
-func (q *Queries) DeleteSessionByToken(ctx context.Context, token string) error {
-	_, err := q.db.ExecContext(ctx, deleteSessionByToken, token)
+func (q *Queries) DeleteSessionByTokenHash(ctx context.Context, tokenHash string) error {
+	_, err := q.db.ExecContext(ctx, deleteSessionByTokenHash, tokenHash)
 	return err
 }
 
@@ -328,17 +328,17 @@ func (q *Queries) GetUserByID(ctx context.Context, id int64) (User, error) {
 	return i, err
 }
 
-const getUserBySessionToken = `-- name: GetUserBySessionToken :one
+const getUserBySessionTokenHash = `-- name: GetUserBySessionTokenHash :one
 SELECT users.id, users.email, users.password_hash, users.created_at, users.email_verified_at
 FROM users
 JOIN sessions ON sessions.user_id = users.id
-WHERE sessions.token = ?
+WHERE sessions.token_hash = ?
   AND sessions.expires_at > CURRENT_TIMESTAMP
 LIMIT 1
 `
 
-func (q *Queries) GetUserBySessionToken(ctx context.Context, token string) (User, error) {
-	row := q.db.QueryRowContext(ctx, getUserBySessionToken, token)
+func (q *Queries) GetUserBySessionTokenHash(ctx context.Context, tokenHash string) (User, error) {
+	row := q.db.QueryRowContext(ctx, getUserBySessionTokenHash, tokenHash)
 	var i User
 	err := row.Scan(
 		&i.ID,

@@ -51,14 +51,19 @@ type AuthService struct {
 	passwordMinLen                 int
 }
 
+type AuthSession struct {
+	Token     string
+	ExpiresAt time.Time
+}
+
 type AuthStore interface {
 	CreateUser(ctx context.Context, email, passwordHash string) (db.User, error)
 	CreateVerifiedUser(ctx context.Context, email, passwordHash string, verifiedAt time.Time) (db.User, error)
 	CreateUserWithEmailVerification(ctx context.Context, params CreateUserWithEmailVerificationParams) (db.User, error)
 	GetUserByEmail(ctx context.Context, email string) (db.User, error)
-	CreateSession(ctx context.Context, userID int64, token string, expiresAt time.Time) (db.Session, error)
-	GetUserBySessionToken(ctx context.Context, token string) (db.User, error)
-	DeleteSessionByToken(ctx context.Context, token string) error
+	CreateSession(ctx context.Context, userID int64, tokenHash string, expiresAt time.Time) (db.Session, error)
+	GetUserBySessionTokenHash(ctx context.Context, tokenHash string) (db.User, error)
+	DeleteSessionByTokenHash(ctx context.Context, tokenHash string) error
 	DeleteSessionsByUserID(ctx context.Context, userID int64) error
 	UpdateUserPasswordHash(ctx context.Context, userID int64, passwordHash string) error
 	CreatePasswordResetToken(ctx context.Context, userID int64, tokenHash string, expiresAt time.Time) (db.PasswordResetToken, error)
@@ -247,34 +252,38 @@ func (s *AuthService) Register(ctx context.Context, emailAddress, password strin
 	return user, nil
 }
 
-func (s *AuthService) Login(ctx context.Context, email, password string) (db.User, db.Session, error) {
+func (s *AuthService) Login(ctx context.Context, email, password string) (db.User, AuthSession, error) {
 	user, err := s.store.GetUserByEmail(ctx, normalizeEmail(email))
 	if errors.Is(err, sql.ErrNoRows) {
-		return db.User{}, db.Session{}, ErrInvalidCredentials
+		return db.User{}, AuthSession{}, ErrInvalidCredentials
 	}
 	if err != nil {
-		return db.User{}, db.Session{}, fmt.Errorf("get user by email: %w", err)
+		return db.User{}, AuthSession{}, fmt.Errorf("get user by email: %w", err)
 	}
 
 	matches, err := s.passwordHasher.Verify(user.PasswordHash, password)
 	if err != nil {
-		return db.User{}, db.Session{}, ErrInvalidCredentials
+		return db.User{}, AuthSession{}, ErrInvalidCredentials
 	}
 	if !matches {
-		return db.User{}, db.Session{}, ErrInvalidCredentials
+		return db.User{}, AuthSession{}, ErrInvalidCredentials
 	}
 
 	token, err := generateToken(s.tokenBytes)
 	if err != nil {
-		return db.User{}, db.Session{}, fmt.Errorf("generate session token: %w", err)
+		return db.User{}, AuthSession{}, fmt.Errorf("generate session token: %w", err)
 	}
 
-	session, err := s.store.CreateSession(ctx, user.ID, token, time.Now().UTC().Add(s.sessionDuration))
+	expiresAt := time.Now().UTC().Add(s.sessionDuration)
+	_, err = s.store.CreateSession(ctx, user.ID, hashToken(token), expiresAt)
 	if err != nil {
-		return db.User{}, db.Session{}, fmt.Errorf("create session: %w", err)
+		return db.User{}, AuthSession{}, fmt.Errorf("create session: %w", err)
 	}
 
-	return user, session, nil
+	return user, AuthSession{
+		Token:     token,
+		ExpiresAt: expiresAt,
+	}, nil
 }
 
 func (s *AuthService) UserBySessionToken(ctx context.Context, token string) (db.User, error) {
@@ -283,7 +292,7 @@ func (s *AuthService) UserBySessionToken(ctx context.Context, token string) (db.
 		return db.User{}, ErrInvalidSession
 	}
 
-	user, err := s.store.GetUserBySessionToken(ctx, token)
+	user, err := s.store.GetUserBySessionTokenHash(ctx, hashToken(token))
 	if errors.Is(err, sql.ErrNoRows) {
 		return db.User{}, ErrInvalidSession
 	}
@@ -300,7 +309,7 @@ func (s *AuthService) Logout(ctx context.Context, token string) error {
 		return ErrInvalidSession
 	}
 
-	if err := s.store.DeleteSessionByToken(ctx, token); err != nil {
+	if err := s.store.DeleteSessionByTokenHash(ctx, hashToken(token)); err != nil {
 		return fmt.Errorf("delete session: %w", err)
 	}
 

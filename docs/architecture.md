@@ -283,12 +283,14 @@ CREATE TABLE users (
 CREATE TABLE sessions (
     id INTEGER PRIMARY KEY,
     user_id INTEGER NOT NULL,
-    token TEXT NOT NULL UNIQUE,
+    token_hash TEXT NOT NULL UNIQUE,
     expires_at TIMESTAMP NOT NULL,
     created_at TIMESTAMP NOT NULL,
     FOREIGN KEY (user_id) REFERENCES users(id)
 );
 ```
+
+Only session token hashes are stored in the database. The raw session token is issued to the browser cookie and treated as a bearer secret.
 
 ### Email Verification Tokens Table
 
@@ -348,7 +350,7 @@ The outbox stores email delivery intent durably. A worker can claim pending rows
 1. User submits email and password.
 2. Application looks up the user by email.
 3. Application compares the password using Argon2id.
-4. If valid, the application generates a secure random session token, stores it in the `sessions` table, and sets a cookie with the session token.
+4. If valid, the application generates a secure random session token, stores only its hash in the `sessions` table, and sets a cookie with the raw session token.
 
 ### Session Handling
 
@@ -357,7 +359,7 @@ The cookie contains only the session token.
 On each request:
 
 1. Middleware reads the session cookie.
-2. Middleware looks up the session in the database.
+2. Middleware hashes the cookie token and looks up the session hash in the database.
 3. Middleware loads the associated user.
 4. Middleware attaches the user to the request context.
 

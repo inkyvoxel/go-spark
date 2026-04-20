@@ -378,7 +378,7 @@ type fakeAuthLookup struct {
 	registerErr          error
 	loginEmail           string
 	loginPass            string
-	loginSession         db.Session
+	loginSession         services.AuthSession
 	loginErr             error
 	logoutToken          string
 	logoutErr            error
@@ -416,11 +416,11 @@ func (f *fakeAuthLookup) UserBySessionToken(ctx context.Context, token string) (
 	return f.user, f.err
 }
 
-func (f *fakeAuthLookup) Login(ctx context.Context, email string, password string) (db.User, db.Session, error) {
+func (f *fakeAuthLookup) Login(ctx context.Context, email string, password string) (db.User, services.AuthSession, error) {
 	f.loginEmail = email
 	f.loginPass = password
 	if f.loginErr != nil {
-		return db.User{}, db.Session{}, f.loginErr
+		return db.User{}, services.AuthSession{}, f.loginErr
 	}
 	return f.user, f.loginSession, nil
 }

@@ -132,10 +132,10 @@ func (s *AuthStore) GetUserByEmail(ctx context.Context, email string) (db.User, 
 	return user, nil
 }
 
-func (s *AuthStore) CreateSession(ctx context.Context, userID int64, token string, expiresAt time.Time) (db.Session, error) {
+func (s *AuthStore) CreateSession(ctx context.Context, userID int64, tokenHash string, expiresAt time.Time) (db.Session, error) {
 	session, err := s.queries.CreateSession(ctx, db.CreateSessionParams{
 		UserID:    userID,
-		Token:     token,
+		TokenHash: tokenHash,
 		ExpiresAt: expiresAt,
 	})
 	if err != nil {
@@ -145,18 +145,18 @@ func (s *AuthStore) CreateSession(ctx context.Context, userID int64, token strin
 	return session, nil
 }
 
-func (s *AuthStore) GetUserBySessionToken(ctx context.Context, token string) (db.User, error) {
-	user, err := s.queries.GetUserBySessionToken(ctx, token)
+func (s *AuthStore) GetUserBySessionTokenHash(ctx context.Context, tokenHash string) (db.User, error) {
+	user, err := s.queries.GetUserBySessionTokenHash(ctx, tokenHash)
 	if err != nil {
-		return db.User{}, fmt.Errorf("get user by session token: %w", err)
+		return db.User{}, fmt.Errorf("get user by session token hash: %w", err)
 	}
 
 	return user, nil
 }
 
-func (s *AuthStore) DeleteSessionByToken(ctx context.Context, token string) error {
-	if err := s.queries.DeleteSessionByToken(ctx, token); err != nil {
-		return fmt.Errorf("delete session by token: %w", err)
+func (s *AuthStore) DeleteSessionByTokenHash(ctx context.Context, tokenHash string) error {
+	if err := s.queries.DeleteSessionByTokenHash(ctx, tokenHash); err != nil {
+		return fmt.Errorf("delete session by token hash: %w", err)
 	}
 
 	return nil

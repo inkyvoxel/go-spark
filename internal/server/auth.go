@@ -19,7 +19,7 @@ type authService interface {
 	RequestEmailChange(context.Context, db.User, string, string) error
 	ConfirmEmailChange(context.Context, string) (db.User, error)
 	ChangePassword(context.Context, db.User, string, string) error
-	Login(context.Context, string, string) (db.User, db.Session, error)
+	Login(context.Context, string, string) (db.User, services.AuthSession, error)
 	Logout(context.Context, string) error
 	RequestPasswordReset(context.Context, string) error
 	Register(context.Context, string, string) (db.User, error)
@@ -42,7 +42,7 @@ func contextWithUser(ctx context.Context, user db.User) context.Context {
 	return context.WithValue(ctx, authContextKey{}, user)
 }
 
-func (s *Server) setSessionCookie(w http.ResponseWriter, r *http.Request, session db.Session) {
+func (s *Server) setSessionCookie(w http.ResponseWriter, r *http.Request, session services.AuthSession) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     sessionCookieName,
 		Value:    session.Token,

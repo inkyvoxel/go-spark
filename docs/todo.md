@@ -35,11 +35,11 @@
   - Risk: attackers can send large form bodies to consume memory/CPU before validation and rate limits complete.
   - Recommendation: wrap form parsing with `http.MaxBytesReader`, for example 32-64 KiB for auth forms, and return `413 Request Entity Too Large` for oversized bodies.
 
-- [ ] Hash session tokens at rest, like reset and verification tokens.
-  - Evidence: sessions store and query raw `sessions.token`, while password reset and email verification store `token_hash`.
+- [x] Hash session tokens at rest, like reset and verification tokens.
+  - Evidence: sessions now store and query `sessions.token_hash`, while the raw session token remains only in the browser cookie.
   - Risk: a database leak immediately grants active sessions until expiry. Reset/verification tokens are better protected than session tokens.
-  - Recommendation: store `session_token_hash`, compare/query by hash, and keep only the raw token in the browser cookie. Plan a migration path that invalidates existing sessions or supports both columns briefly.
-  - Decision: keep this on the list. This is a common best-practice hardening pattern for database-backed opaque session tokens because it reduces the blast radius of a database-only leak.
+  - Recommendation: store `session_token_hash`, compare/query by hash, and keep only the raw token in the browser cookie.
+  - Progress: implemented without a legacy migration path by updating the template's initial schema and auth/session flow for new deployments.
 
 - [x] Block login/account access until email is verified, then implement consistently.
   - Evidence: `register` immediately logs the new user in after sending a verification email, and `Login` does not check `email_verified_at`. This is also listed under Email features.

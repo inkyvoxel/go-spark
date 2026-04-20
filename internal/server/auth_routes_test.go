@@ -22,7 +22,7 @@ import (
 func TestRoutesLogin(t *testing.T) {
 	auth := &fakeAuthLookup{
 		user: verifiedRouteUser(),
-		loginSession: db.Session{
+		loginSession: services.AuthSession{
 			Token:     "session-token",
 			ExpiresAt: time.Now().Add(time.Hour),
 		},
@@ -62,7 +62,7 @@ func TestRoutesLogin(t *testing.T) {
 func TestRoutesLoginHTMXReturnsRedirectHeaderAndSession(t *testing.T) {
 	auth := &fakeAuthLookup{
 		user: verifiedRouteUser(),
-		loginSession: db.Session{
+		loginSession: services.AuthSession{
 			Token:     "session-token",
 			ExpiresAt: time.Now().Add(time.Hour),
 		},
@@ -133,7 +133,7 @@ func TestRoutesLoginHTMXRejectsInvalidCredentials(t *testing.T) {
 func TestRoutesLoginSetsSecureSessionCookieWhenConfigured(t *testing.T) {
 	auth := &fakeAuthLookup{
 		user: db.User{ID: 1, Email: "user@example.com"},
-		loginSession: db.Session{
+		loginSession: services.AuthSession{
 			Token:     "session-token",
 			ExpiresAt: time.Now().Add(time.Hour),
 		},
@@ -162,7 +162,7 @@ func TestRoutesLoginSetsSecureSessionCookieWhenConfigured(t *testing.T) {
 func TestRoutesLoginRedirectsToSafeNextPath(t *testing.T) {
 	auth := &fakeAuthLookup{
 		user: verifiedRouteUser(),
-		loginSession: db.Session{
+		loginSession: services.AuthSession{
 			Token:     "session-token",
 			ExpiresAt: time.Now().Add(time.Hour),
 		},
@@ -193,7 +193,7 @@ func TestRoutesLoginRedirectsToSafeNextPath(t *testing.T) {
 func TestRoutesLoginRejectsUnsafeNextPath(t *testing.T) {
 	auth := &fakeAuthLookup{
 		user: verifiedRouteUser(),
-		loginSession: db.Session{
+		loginSession: services.AuthSession{
 			Token:     "session-token",
 			ExpiresAt: time.Now().Add(time.Hour),
 		},
@@ -376,7 +376,7 @@ func TestRoutesLoginRedirectsAuthenticatedUnverifiedUserToVerifyEmail(t *testing
 func TestRoutesLoginRedirectsUnverifiedUserToVerifyEmail(t *testing.T) {
 	auth := &fakeAuthLookup{
 		user: db.User{ID: 1, Email: "user@example.com"},
-		loginSession: db.Session{
+		loginSession: services.AuthSession{
 			Token:     "session-token",
 			ExpiresAt: time.Now().Add(time.Hour),
 		},
@@ -407,7 +407,7 @@ func TestRoutesLoginRedirectsUnverifiedUserToVerifyEmail(t *testing.T) {
 func TestRoutesLoginOptionalVerificationRedirectsUnverifiedUserToNextPath(t *testing.T) {
 	auth := &fakeAuthLookup{
 		user: db.User{ID: 1, Email: "user@example.com"},
-		loginSession: db.Session{
+		loginSession: services.AuthSession{
 			Token:     "session-token",
 			ExpiresAt: time.Now().Add(time.Hour),
 		},
@@ -438,7 +438,7 @@ func TestRoutesLoginOptionalVerificationRedirectsUnverifiedUserToNextPath(t *tes
 func TestRoutesRegister(t *testing.T) {
 	auth := &fakeAuthLookup{
 		user: db.User{ID: 1, Email: "new@example.com"},
-		loginSession: db.Session{
+		loginSession: services.AuthSession{
 			Token:     "new-session-token",
 			ExpiresAt: time.Now().Add(time.Hour),
 		},
@@ -479,7 +479,7 @@ func TestRoutesRegister(t *testing.T) {
 func TestRoutesRegisterOptionalVerificationRedirectsToAccount(t *testing.T) {
 	auth := &fakeAuthLookup{
 		user: db.User{ID: 1, Email: "new@example.com"},
-		loginSession: db.Session{
+		loginSession: services.AuthSession{
 			Token:     "new-session-token",
 			ExpiresAt: time.Now().Add(time.Hour),
 		},
@@ -510,7 +510,7 @@ func TestRoutesRegisterOptionalVerificationRedirectsToAccount(t *testing.T) {
 func TestRoutesRegisterHTMXReturnsRedirectHeaderAndSession(t *testing.T) {
 	auth := &fakeAuthLookup{
 		user: db.User{ID: 1, Email: "new@example.com"},
-		loginSession: db.Session{
+		loginSession: services.AuthSession{
 			Token:     "new-session-token",
 			ExpiresAt: time.Now().Add(time.Hour),
 		},

@@ -94,14 +94,18 @@ func TestAuthServiceLoginCreatesSession(t *testing.T) {
 	if user.ID != registered.ID {
 		t.Fatalf("logged in user ID = %d, want %d", user.ID, registered.ID)
 	}
-	if session.UserID != registered.ID {
-		t.Fatalf("session user ID = %d, want %d", session.UserID, registered.ID)
-	}
 	if len(session.Token) != 64 {
 		t.Fatalf("session token length = %d, want %d", len(session.Token), 64)
 	}
 	if time.Until(session.ExpiresAt) <= 0 {
 		t.Fatalf("session ExpiresAt = %s, want future time", session.ExpiresAt)
+	}
+	store := service.store.(*fakeAuthStore)
+	if _, ok := store.sessions[session.Token]; ok {
+		t.Fatal("raw session token stored in fake auth store, want hashed-only storage")
+	}
+	if _, ok := store.sessions[hashToken(session.Token)]; !ok {
+		t.Fatal("session hash not found in fake auth store")
 	}
 }
 
@@ -1103,22 +1107,22 @@ func (s *fakeAuthStore) GetUserByEmail(ctx context.Context, email string) (db.Us
 	return user, nil
 }
 
-func (s *fakeAuthStore) CreateSession(ctx context.Context, userID int64, token string, expiresAt time.Time) (db.Session, error) {
+func (s *fakeAuthStore) CreateSession(ctx context.Context, userID int64, tokenHash string, expiresAt time.Time) (db.Session, error) {
 	session := db.Session{
 		ID:        s.nextSessionID,
 		UserID:    userID,
-		Token:     token,
+		TokenHash: tokenHash,
 		ExpiresAt: expiresAt,
 		CreatedAt: time.Now().UTC(),
 	}
 	s.nextSessionID++
-	s.sessions[token] = session
+	s.sessions[tokenHash] = session
 
 	return session, nil
 }
 
-func (s *fakeAuthStore) GetUserBySessionToken(ctx context.Context, token string) (db.User, error) {
-	session, ok := s.sessions[token]
+func (s *fakeAuthStore) GetUserBySessionTokenHash(ctx context.Context, tokenHash string) (db.User, error) {
+	session, ok := s.sessions[tokenHash]
 	if !ok || !session.ExpiresAt.After(time.Now().UTC()) {
 		return db.User{}, sql.ErrNoRows
 	}
@@ -1131,8 +1135,8 @@ func (s *fakeAuthStore) GetUserBySessionToken(ctx context.Context, token string)
 	return user, nil
 }
 
-func (s *fakeAuthStore) DeleteSessionByToken(ctx context.Context, token string) error {
-	delete(s.sessions, token)
+func (s *fakeAuthStore) DeleteSessionByTokenHash(ctx context.Context, tokenHash string) error {
+	delete(s.sessions, tokenHash)
 	return nil
 }
 
