@@ -122,7 +122,7 @@ func (s *Server) Routes() http.Handler {
 	mux := http.NewServeMux()
 	dynamic := http.NewServeMux()
 
-	mux.Handle(route(http.MethodGet, paths.StaticPrefix), http.StripPrefix(paths.StaticPrefix, http.FileServer(http.Dir("static"))))
+	mux.Handle(route(http.MethodGet, paths.StaticPrefix), staticFileHandler())
 	mux.HandleFunc(route(http.MethodGet, paths.Healthz), s.health)
 
 	// Register new protected pages with requireAuth and anonymous-only pages with requireAnonymous.
@@ -207,6 +207,18 @@ func (s *Server) Routes() http.Handler {
 
 func route(method, path string) string {
 	return method + " " + path
+}
+
+func staticFileHandler() http.Handler {
+	fileServer := http.StripPrefix(paths.StaticPrefix, http.FileServer(http.Dir("static")))
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Prevent directory listing from exposing static tree contents.
+		if strings.HasSuffix(r.URL.Path, "/") {
+			http.NotFound(w, r)
+			return
+		}
+		fileServer.ServeHTTP(w, r)
+	})
 }
 
 func (s *Server) home(w http.ResponseWriter, r *http.Request) {

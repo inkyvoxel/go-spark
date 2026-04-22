@@ -112,11 +112,6 @@
   - Risk: Lax is a reasonable default and permits normal cross-site top-level GET navigation, but Strict further reduces ambient-cookie exposure.
   - Recommendation: keep Lax if email-link and external navigation UX matters, or make SameSite configurable with Strict recommended for high-risk apps.
 
-- [ ] Make static file serving more restrictive.
-  - Evidence: `/static/` serves the whole `static` directory using `http.FileServer`.
-  - Risk: future accidental files under `static` become public.
-  - Recommendation: document that `static` is public, consider an embedded filesystem for releases, and add tests/checks to prevent secrets or source maps if undesired.
-
 - [ ] Review health endpoint exposure.
   - Evidence: `/healthz` pings the database and returns `ok` or `database unavailable`.
   - Risk: public health endpoints reveal service/database availability.
