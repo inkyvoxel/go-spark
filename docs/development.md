@@ -14,7 +14,7 @@ For auth email flows, see [email.md](email.md).
 
 ```sh
 cp .env.example .env
-make migrate-up
+make setup
 make run
 ```
 
@@ -29,6 +29,7 @@ The app loads `.env` when present. Existing shell environment variables still wi
 make run
 make run-web
 make run-worker
+make setup
 make migrate-up
 make migrate-down
 make test
@@ -38,6 +39,7 @@ make sqlc
 
 Notes:
 
+* `make setup` creates the local SQLite path and applies the baseline schema.
 * `make run` starts the HTTP server and background jobs worker together.
 * `make run-web` starts only the HTTP server.
 * `make run-worker` starts only the background jobs worker.
@@ -79,6 +81,7 @@ If you add a new route, update `internal/paths` first and use those constants fr
 The template is SQLite-first today.
 
 * Migrations live in `migrations`.
+* The template currently ships with one baseline schema migration for fresh projects.
 * SQL queries live in `internal/db/queries`.
 * Generated code lives in `internal/db/generated`.
 

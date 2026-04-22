@@ -25,7 +25,7 @@ refactor rather than a built-in template feature.
 
 ```sh
 cp .env.example .env
-make migrate-up
+make setup
 make run
 ```
 
@@ -67,6 +67,7 @@ Email delivery defaults to `EMAIL_PROVIDER=log` for safe local development.
 make run
 make run-web
 make run-worker
+make setup
 make migrate-up
 make test
 make check
@@ -114,7 +115,7 @@ If you use this as a template for a new project:
 
 * rename the module in `go.mod`
 * copy `.env.example` to `.env`
-* initialize the local SQLite database with `make migrate-up`
+* initialize the local SQLite database with `make setup`
 * replace example routes, templates, and branding
 * keep new public paths in `internal/paths`
 * assume SQLite is the intended foundation unless you are deliberately

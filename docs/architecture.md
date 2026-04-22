@@ -83,7 +83,7 @@ It intentionally does not use JWTs or a large auth framework for the default ser
 
 The project is SQL-first:
 
-* schema changes go in `migrations`
+* the starter's baseline SQLite schema lives in `migrations`
 * queries go in `internal/db/queries`
 * `sqlc` generates typed query code in `internal/db/generated`
 
