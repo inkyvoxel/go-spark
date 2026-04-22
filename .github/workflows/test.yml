@@ -40,5 +40,8 @@ jobs:
       - name: Check migrations
         run: go tool goose -dir ./migrations sqlite3 /tmp/go-starter-ci.db up
 
+      - name: Run vulnerability scan
+        run: make vulncheck
+
       - name: Run tests
         run: go test ./...

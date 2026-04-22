@@ -165,4 +165,6 @@ make sqlc
 
 ## CI
 
-GitHub Actions runs on pushes to `main` and on pull requests. The workflow checks formatting, verifies `go mod tidy` leaves `go.mod` and `go.sum` clean, checks generated SQLC code, runs migrations against a temporary SQLite database, and runs the Go test suite.
+GitHub Actions runs on pushes to `main` and on pull requests. The main workflow checks formatting, verifies `go mod tidy` leaves `go.mod` and `go.sum` clean, checks generated SQLC code, runs migrations against a temporary SQLite database, runs `make vulncheck`, and runs the Go test suite.
+
+A separate scheduled workflow (`Dependency Checks`) runs weekly and on manual trigger to print `go list -m -u all` so dependency updates are visible even when code changes are not being pushed.
