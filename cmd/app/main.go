@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
 	"strings"
@@ -18,6 +19,8 @@ import (
 	"github.com/inkyvoxel/go-spark/internal/server"
 	"github.com/inkyvoxel/go-spark/internal/services"
 )
+
+const defaultStarterEmailFrom = `"Go Spark" <hello@example.com>`
 
 func main() {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
@@ -45,6 +48,7 @@ func run(args []string, logger *slog.Logger) error {
 	if err := validateSecurityConfig(cfg); err != nil {
 		return fmt.Errorf("invalid security configuration: %w", err)
 	}
+	logSecurityConfigWarnings(cfg, logger)
 
 	db, err := database.Open(cfg.DatabasePath)
 	if err != nil {
@@ -225,10 +229,54 @@ func validateSecurityConfig(cfg config.Config) error {
 	if cfg.Env != "production" {
 		return nil
 	}
+	if !cfg.CookieSecure {
+		return fmt.Errorf("APP_COOKIE_SECURE must be true when APP_ENV=production")
+	}
+	if !isHTTPSURL(cfg.AppBaseURL) {
+		return fmt.Errorf("APP_BASE_URL must use https when APP_ENV=production")
+	}
 	if strings.TrimSpace(cfg.PasswordPepper) == "" {
 		return fmt.Errorf("AUTH_PASSWORD_PEPPER must be set when APP_ENV=production")
 	}
 	return nil
+}
+
+func logSecurityConfigWarnings(cfg config.Config, logger *slog.Logger) {
+	for _, warning := range securityConfigWarnings(cfg) {
+		logger.Warn("production security configuration warning", "warning", warning)
+	}
+}
+
+func securityConfigWarnings(cfg config.Config) []string {
+	if cfg.Env != "production" {
+		return nil
+	}
+
+	warnings := make([]string, 0, 4)
+
+	if !cfg.EmailVerificationRequired {
+		warnings = append(warnings, "AUTH_EMAIL_VERIFICATION_REQUIRED=false allows unverified users to access account features in production")
+	}
+	if cfg.EmailProvider != email.ProviderSMTP {
+		warnings = append(warnings, fmt.Sprintf("EMAIL_PROVIDER=%q in production does not deliver real email by default", cfg.EmailProvider))
+	}
+	if cfg.EmailLogBody {
+		warnings = append(warnings, "EMAIL_LOG_BODY=true may expose email contents and token links in production logs")
+	}
+	if isDefaultStarterEmailFrom(cfg.EmailFrom) {
+		warnings = append(warnings, "EMAIL_FROM is still the default starter sender in production")
+	}
+
+	return warnings
+}
+
+func isHTTPSURL(raw string) bool {
+	parsed, err := url.Parse(raw)
+	return err == nil && strings.EqualFold(parsed.Scheme, "https")
+}
+
+func isDefaultStarterEmailFrom(value string) bool {
+	return strings.TrimSpace(value) == defaultStarterEmailFrom
 }
 
 func toServerRateLimitPolicies(cfg config.RateLimitPoliciesConfig) server.RateLimitPolicies {

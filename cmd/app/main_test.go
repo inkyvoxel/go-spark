@@ -73,20 +73,43 @@ func TestAuthSenderFromUsesEmailFromByDefault(t *testing.T) {
 }
 
 func TestValidateSecurityConfigRequiresPepperInProduction(t *testing.T) {
-	err := validateSecurityConfig(config.Config{
-		Env:            "production",
-		PasswordPepper: "",
-	})
+	cfg := productionSecurityConfig()
+	cfg.PasswordPepper = ""
+
+	err := validateSecurityConfig(cfg)
 	if err == nil {
 		t.Fatal("validateSecurityConfig() error = nil, want error")
 	}
 }
 
-func TestValidateSecurityConfigAllowsProductionWithPepper(t *testing.T) {
-	err := validateSecurityConfig(config.Config{
-		Env:            "production",
-		PasswordPepper: "pepper",
-	})
+func TestValidateSecurityConfigRequiresCookieSecureInProduction(t *testing.T) {
+	cfg := productionSecurityConfig()
+	cfg.CookieSecure = false
+
+	err := validateSecurityConfig(cfg)
+	if err == nil {
+		t.Fatal("validateSecurityConfig() error = nil, want error")
+	}
+	if !strings.Contains(err.Error(), "APP_COOKIE_SECURE") {
+		t.Fatalf("validateSecurityConfig() error = %v, want APP_COOKIE_SECURE context", err)
+	}
+}
+
+func TestValidateSecurityConfigRequiresHTTPSAppBaseURLInProduction(t *testing.T) {
+	cfg := productionSecurityConfig()
+	cfg.AppBaseURL = "http://app.example.com"
+
+	err := validateSecurityConfig(cfg)
+	if err == nil {
+		t.Fatal("validateSecurityConfig() error = nil, want error")
+	}
+	if !strings.Contains(err.Error(), "APP_BASE_URL") {
+		t.Fatalf("validateSecurityConfig() error = %v, want APP_BASE_URL context", err)
+	}
+}
+
+func TestValidateSecurityConfigAllowsProductionWithSecureBaseline(t *testing.T) {
+	err := validateSecurityConfig(productionSecurityConfig())
 	if err != nil {
 		t.Fatalf("validateSecurityConfig() error = %v, want nil", err)
 	}
@@ -99,6 +122,52 @@ func TestValidateSecurityConfigAllowsNonProductionWithoutPepper(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatalf("validateSecurityConfig() error = %v, want nil", err)
+	}
+}
+
+func TestSecurityConfigWarningsProductionIncludesOptionalSettingWarnings(t *testing.T) {
+	warnings := securityConfigWarnings(config.Config{
+		Env:                       "production",
+		EmailVerificationRequired: false,
+		EmailProvider:             email.ProviderLog,
+		EmailLogBody:              true,
+		EmailFrom:                 defaultStarterEmailFrom,
+	})
+
+	if len(warnings) != 4 {
+		t.Fatalf("warning count = %d, want 4", len(warnings))
+	}
+	assertWarningsContain(t, warnings, "AUTH_EMAIL_VERIFICATION_REQUIRED")
+	assertWarningsContain(t, warnings, "EMAIL_PROVIDER")
+	assertWarningsContain(t, warnings, "EMAIL_LOG_BODY")
+	assertWarningsContain(t, warnings, "EMAIL_FROM")
+}
+
+func TestSecurityConfigWarningsProductionSkipsConfiguredOptions(t *testing.T) {
+	warnings := securityConfigWarnings(config.Config{
+		Env:                       "production",
+		EmailVerificationRequired: true,
+		EmailProvider:             email.ProviderSMTP,
+		EmailLogBody:              false,
+		EmailFrom:                 `"App" <security@example.com>`,
+	})
+
+	if len(warnings) != 0 {
+		t.Fatalf("warning count = %d, want 0", len(warnings))
+	}
+}
+
+func TestSecurityConfigWarningsNonProductionReturnsNone(t *testing.T) {
+	warnings := securityConfigWarnings(config.Config{
+		Env:                       "development",
+		EmailVerificationRequired: false,
+		EmailProvider:             email.ProviderLog,
+		EmailLogBody:              true,
+		EmailFrom:                 defaultStarterEmailFrom,
+	})
+
+	if len(warnings) != 0 {
+		t.Fatalf("warning count = %d, want 0", len(warnings))
 	}
 }
 
@@ -140,4 +209,25 @@ func TestProcessArgRejectsMultipleArgs(t *testing.T) {
 	if !strings.Contains(err.Error(), "at most one") {
 		t.Fatalf("processArg() error = %v, want argument count context", err)
 	}
+}
+
+func productionSecurityConfig() config.Config {
+	return config.Config{
+		Env:            "production",
+		CookieSecure:   true,
+		AppBaseURL:     "https://app.example.com",
+		PasswordPepper: "pepper",
+	}
+}
+
+func assertWarningsContain(t *testing.T, warnings []string, fragment string) {
+	t.Helper()
+
+	for _, warning := range warnings {
+		if strings.Contains(warning, fragment) {
+			return
+		}
+	}
+
+	t.Fatalf("warnings %q did not contain %q", warnings, fragment)
 }

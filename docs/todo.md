@@ -16,12 +16,12 @@
 
 ### High priority
 
-- [ ] Add production config fail-fast checks instead of warnings for unsafe deployment settings.
+- [x] Add production config fail-fast checks instead of warnings for unsafe deployment settings.
   - Evidence: `cmd/app/main.go` only warns when `APP_ENV=production` and `AUTH_PASSWORD_PEPPER` is blank. `internal/config/config.go` defaults `APP_COOKIE_SECURE=false`, `APP_BASE_URL=http://localhost:8080`, and `EMAIL_PROVIDER=log`.
   - Risk: a project can accidentally deploy with insecure cookies behind a TLS-terminating proxy, localhost links in security emails, log-only email delivery, no pepper, or HTTP base URLs.
   - Recommendation: when `APP_ENV=production`, fail startup unless `APP_COOKIE_SECURE=true`, `APP_BASE_URL` uses `https`, `AUTH_PASSWORD_PEPPER` is non-empty, `EMAIL_PROVIDER=smtp` or an explicit production provider is configured, and `EMAIL_LOG_BODY=false`. Consider also rejecting default `EMAIL_FROM`.
-  - Decision: fail startup when `AUTH_PASSWORD_PEPPER` is missing in production.
-  - Progress: `AUTH_PASSWORD_PEPPER` now fails fast in production; remaining production safety checks are still pending.
+  - Decision: fail startup for baseline production safety (`APP_COOKIE_SECURE=true`, `APP_BASE_URL=https`, and non-empty `AUTH_PASSWORD_PEPPER`) while keeping optional email posture configurable.
+  - Progress: production startup now fails fast for baseline security checks and logs warnings for optional-but-risky settings (`AUTH_EMAIL_VERIFICATION_REQUIRED=false`, `EMAIL_PROVIDER` not set to SMTP, `EMAIL_LOG_BODY=true`, and default `EMAIL_FROM`).
 
 - [x] Add security response headers middleware.
   - Evidence: `templates/layout.html` loads vendored CSS and HTMX locally, so the app is well-positioned for a strict policy.
