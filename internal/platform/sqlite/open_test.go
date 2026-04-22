@@ -46,8 +46,8 @@ func TestOpenSetsSQLiteBusyTimeout(t *testing.T) {
 	if err := db.QueryRow("PRAGMA busy_timeout").Scan(&timeout); err != nil {
 		t.Fatalf("query busy_timeout pragma: %v", err)
 	}
-	if timeout != defaultBusyTimeoutMillis {
-		t.Fatalf("busy_timeout = %d, want %d", timeout, defaultBusyTimeoutMillis)
+	if timeout != DefaultBusyTimeoutMillis {
+		t.Fatalf("busy_timeout = %d, want %d", timeout, DefaultBusyTimeoutMillis)
 	}
 }
 
@@ -71,5 +71,17 @@ func TestOpenWithOptionsOverridesDefaults(t *testing.T) {
 
 	if maxOpen := db.Stats().MaxOpenConnections; maxOpen != 2 {
 		t.Fatalf("MaxOpenConnections = %d, want 2", maxOpen)
+	}
+}
+
+func TestDefaultOpenOptions(t *testing.T) {
+	opts := DefaultOpenOptions()
+
+	if opts.BusyTimeoutMillis != DefaultBusyTimeoutMillis {
+		t.Fatalf("BusyTimeoutMillis = %d, want %d", opts.BusyTimeoutMillis, DefaultBusyTimeoutMillis)
+	}
+
+	if opts.MaxOpenConns != DefaultMaxOpenConns {
+		t.Fatalf("MaxOpenConns = %d, want %d", opts.MaxOpenConns, DefaultMaxOpenConns)
 	}
 }

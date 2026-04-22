@@ -104,6 +104,18 @@ direction is:
 * keep domain stores separate from engine setup
 * keep service/store seams because they support domain boundaries, not because
   they imply broad engine portability
+* keep tuning defaults small and documented instead of introducing a large
+  connection abstraction
+
+Current SQLite tuning defaults in `internal/platform/sqlite` are:
+
+* `PRAGMA foreign_keys = ON` to keep relational constraints enforced
+* `PRAGMA busy_timeout = 5000` to tolerate short write contention
+* `MaxOpenConns = 1` to match the starter's single-writer SQLite model
+
+WAL mode is intentionally not enabled by default yet. If the starter adopts it
+later, that should come with clear documentation about local development,
+backups, and multi-process tradeoffs.
 
 ## Background Work
 

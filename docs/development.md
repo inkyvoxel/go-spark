@@ -86,6 +86,8 @@ The template is SQLite-first today.
 * Generated code lives in `internal/db/generated`.
 * SQLite connection setup now lives under `internal/platform/sqlite`.
 * SQLite-backed domain stores live in `internal/database`.
+* The default SQLite tuning is:
+  `foreign_keys = ON`, `busy_timeout = 5000`, and `MaxOpenConns = 1`.
 
 If you change schema or queries, regenerate with:
 

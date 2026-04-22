@@ -10,17 +10,39 @@ import (
 )
 
 const (
-	defaultBusyTimeoutMillis = 5000
-	defaultMaxOpenConns      = 1
+	// DefaultBusyTimeoutMillis gives SQLite time to wait on a locked database
+	// before returning SQLITE_BUSY. The starter keeps this small and explicit.
+	DefaultBusyTimeoutMillis = 5000
+	// DefaultMaxOpenConns keeps the starter on a single writable SQLite
+	// connection by default, which matches its single-node operating model.
+	DefaultMaxOpenConns = 1
 )
 
+// OpenOptions controls SQLite connection tuning for the starter.
+//
+// The defaults intentionally stay small and conservative:
+// - foreign keys are always enabled
+// - busy timeout defaults to 5 seconds
+// - max open connections defaults to 1
+// - WAL is not enabled by default
 type OpenOptions struct {
+	// BusyTimeoutMillis controls the PRAGMA busy_timeout value.
+	// Zero uses DefaultBusyTimeoutMillis.
 	BusyTimeoutMillis int
-	MaxOpenConns      int
+	// MaxOpenConns controls the database/sql max open connections setting.
+	// Zero uses DefaultMaxOpenConns.
+	MaxOpenConns int
+}
+
+func DefaultOpenOptions() OpenOptions {
+	return OpenOptions{
+		BusyTimeoutMillis: DefaultBusyTimeoutMillis,
+		MaxOpenConns:      DefaultMaxOpenConns,
+	}
 }
 
 func Open(path string) (*sql.DB, error) {
-	return OpenWithOptions(path, OpenOptions{})
+	return OpenWithOptions(path, DefaultOpenOptions())
 }
 
 func OpenWithOptions(path string, opts OpenOptions) (*sql.DB, error) {
@@ -50,7 +72,7 @@ func OpenWithOptions(path string, opts OpenOptions) (*sql.DB, error) {
 func configureConnectionPool(db *sql.DB, opts OpenOptions) {
 	maxOpenConns := opts.MaxOpenConns
 	if maxOpenConns == 0 {
-		maxOpenConns = defaultMaxOpenConns
+		maxOpenConns = DefaultMaxOpenConns
 	}
 	db.SetMaxOpenConns(maxOpenConns)
 }
@@ -62,7 +84,7 @@ func applyPragmas(db *sql.DB, opts OpenOptions) error {
 
 	busyTimeoutMillis := opts.BusyTimeoutMillis
 	if busyTimeoutMillis == 0 {
-		busyTimeoutMillis = defaultBusyTimeoutMillis
+		busyTimeoutMillis = DefaultBusyTimeoutMillis
 	}
 
 	if _, err := db.Exec(fmt.Sprintf("PRAGMA busy_timeout = %d", busyTimeoutMillis)); err != nil {
