@@ -45,82 +45,64 @@ func (s *AuthStore) CreateUser(ctx context.Context, email, passwordHash string) 
 }
 
 func (s *AuthStore) CreateVerifiedUser(ctx context.Context, email, passwordHash string, verifiedAt time.Time) (db.User, error) {
-	tx, err := s.db.BeginTx(ctx, nil)
-	if err != nil {
-		return db.User{}, fmt.Errorf("begin create verified user transaction: %w", err)
-	}
-	defer tx.Rollback()
-
-	queries := s.queries.WithTx(tx)
-	createdUser, err := queries.CreateUser(ctx, db.CreateUserParams{
-		Email:        email,
-		PasswordHash: passwordHash,
-	})
-	if err != nil {
-		if isSQLiteUniqueConstraint(err) {
-			return db.User{}, services.ErrEmailAlreadyRegistered
+	return withTxResult(ctx, s.db, s.queries, "create verified user", func(queries *db.Queries) (db.User, error) {
+		createdUser, err := queries.CreateUser(ctx, db.CreateUserParams{
+			Email:        email,
+			PasswordHash: passwordHash,
+		})
+		if err != nil {
+			if isSQLiteUniqueConstraint(err) {
+				return db.User{}, services.ErrEmailAlreadyRegistered
+			}
+			return db.User{}, fmt.Errorf("create user: %w", err)
 		}
-		return db.User{}, fmt.Errorf("create user: %w", err)
-	}
 
-	user, err := queries.MarkUserEmailVerified(ctx, db.MarkUserEmailVerifiedParams{
-		EmailVerifiedAt: sql.NullTime{Time: verifiedAt, Valid: true},
-		ID:              createdUser.ID,
+		user, err := queries.MarkUserEmailVerified(ctx, db.MarkUserEmailVerifiedParams{
+			EmailVerifiedAt: sql.NullTime{Time: verifiedAt, Valid: true},
+			ID:              createdUser.ID,
+		})
+		if err != nil {
+			return db.User{}, fmt.Errorf("mark user email verified: %w", err)
+		}
+
+		return userFromMarkUserEmailVerifiedRow(user), nil
 	})
-	if err != nil {
-		return db.User{}, fmt.Errorf("mark user email verified: %w", err)
-	}
-
-	if err := tx.Commit(); err != nil {
-		return db.User{}, fmt.Errorf("commit create verified user transaction: %w", err)
-	}
-
-	return userFromMarkUserEmailVerifiedRow(user), nil
 }
 
 func (s *AuthStore) CreateUserWithEmailVerification(ctx context.Context, params services.CreateUserWithEmailVerificationParams) (db.User, error) {
-	tx, err := s.db.BeginTx(ctx, nil)
-	if err != nil {
-		return db.User{}, fmt.Errorf("begin register user transaction: %w", err)
-	}
-	defer tx.Rollback()
-
-	queries := s.queries.WithTx(tx)
-	user, err := queries.CreateUser(ctx, db.CreateUserParams{
-		Email:        params.Email,
-		PasswordHash: params.PasswordHash,
-	})
-	if err != nil {
-		if isSQLiteUniqueConstraint(err) {
-			return db.User{}, services.ErrEmailAlreadyRegistered
+	return withTxResult(ctx, s.db, s.queries, "register user", func(queries *db.Queries) (db.User, error) {
+		user, err := queries.CreateUser(ctx, db.CreateUserParams{
+			Email:        params.Email,
+			PasswordHash: params.PasswordHash,
+		})
+		if err != nil {
+			if isSQLiteUniqueConstraint(err) {
+				return db.User{}, services.ErrEmailAlreadyRegistered
+			}
+			return db.User{}, fmt.Errorf("create user: %w", err)
 		}
-		return db.User{}, fmt.Errorf("create user: %w", err)
-	}
 
-	if _, err := queries.CreateEmailVerificationToken(ctx, db.CreateEmailVerificationTokenParams{
-		UserID:    user.ID,
-		TokenHash: params.TokenHash,
-		ExpiresAt: params.TokenExpiresAt,
-	}); err != nil {
-		return db.User{}, fmt.Errorf("create email verification token: %w", err)
-	}
+		if _, err := queries.CreateEmailVerificationToken(ctx, db.CreateEmailVerificationTokenParams{
+			UserID:    user.ID,
+			TokenHash: params.TokenHash,
+			ExpiresAt: params.TokenExpiresAt,
+		}); err != nil {
+			return db.User{}, fmt.Errorf("create email verification token: %w", err)
+		}
 
-	if _, err := queries.EnqueueEmail(ctx, db.EnqueueEmailParams{
-		Sender:      params.ConfirmationEmail.From,
-		Recipient:   params.ConfirmationEmail.To,
-		Subject:     params.ConfirmationEmail.Subject,
-		TextBody:    params.ConfirmationEmail.TextBody,
-		HtmlBody:    params.ConfirmationEmail.HTMLBody,
-		AvailableAt: params.EmailAvailableAt,
-	}); err != nil {
-		return db.User{}, fmt.Errorf("enqueue confirmation email: %w", err)
-	}
+		if _, err := queries.EnqueueEmail(ctx, db.EnqueueEmailParams{
+			Sender:      params.ConfirmationEmail.From,
+			Recipient:   params.ConfirmationEmail.To,
+			Subject:     params.ConfirmationEmail.Subject,
+			TextBody:    params.ConfirmationEmail.TextBody,
+			HtmlBody:    params.ConfirmationEmail.HTMLBody,
+			AvailableAt: params.EmailAvailableAt,
+		}); err != nil {
+			return db.User{}, fmt.Errorf("enqueue confirmation email: %w", err)
+		}
 
-	if err := tx.Commit(); err != nil {
-		return db.User{}, fmt.Errorf("commit register user transaction: %w", err)
-	}
-
-	return userFromCreateUserRow(user), nil
+		return userFromCreateUserRow(user), nil
+	})
 }
 
 func (s *AuthStore) GetUserByEmail(ctx context.Context, email string) (db.User, error) {
@@ -254,99 +236,67 @@ func (s *AuthStore) ConsumePasswordResetToken(ctx context.Context, tokenHash str
 }
 
 func (s *AuthStore) RequestPasswordReset(ctx context.Context, params services.RequestPasswordResetParams) error {
-	tx, err := s.db.BeginTx(ctx, nil)
-	if err != nil {
-		return fmt.Errorf("begin password reset request transaction: %w", err)
-	}
-	defer tx.Rollback()
+	return withTx(ctx, s.db, s.queries, "password reset request", func(queries *db.Queries) error {
+		if _, err := queries.CreatePasswordResetToken(ctx, db.CreatePasswordResetTokenParams{
+			UserID:    params.UserID,
+			TokenHash: params.TokenHash,
+			ExpiresAt: params.TokenExpiresAt,
+		}); err != nil {
+			return fmt.Errorf("create password reset token: %w", err)
+		}
 
-	queries := s.queries.WithTx(tx)
-	if _, err := queries.CreatePasswordResetToken(ctx, db.CreatePasswordResetTokenParams{
-		UserID:    params.UserID,
-		TokenHash: params.TokenHash,
-		ExpiresAt: params.TokenExpiresAt,
-	}); err != nil {
-		return fmt.Errorf("create password reset token: %w", err)
-	}
+		if _, err := queries.EnqueueEmail(ctx, db.EnqueueEmailParams{
+			Sender:      params.PasswordResetEmail.From,
+			Recipient:   params.PasswordResetEmail.To,
+			Subject:     params.PasswordResetEmail.Subject,
+			TextBody:    params.PasswordResetEmail.TextBody,
+			HtmlBody:    params.PasswordResetEmail.HTMLBody,
+			AvailableAt: params.EmailAvailableAt,
+		}); err != nil {
+			return fmt.Errorf("enqueue password reset email: %w", err)
+		}
 
-	if _, err := queries.EnqueueEmail(ctx, db.EnqueueEmailParams{
-		Sender:      params.PasswordResetEmail.From,
-		Recipient:   params.PasswordResetEmail.To,
-		Subject:     params.PasswordResetEmail.Subject,
-		TextBody:    params.PasswordResetEmail.TextBody,
-		HtmlBody:    params.PasswordResetEmail.HTMLBody,
-		AvailableAt: params.EmailAvailableAt,
-	}); err != nil {
-		return fmt.Errorf("enqueue password reset email: %w", err)
-	}
-
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("commit password reset request transaction: %w", err)
-	}
-
-	return nil
+		return nil
+	})
 }
 
 func (s *AuthStore) RequestEmailChange(ctx context.Context, params services.RequestEmailChangeParams) error {
-	tx, err := s.db.BeginTx(ctx, nil)
-	if err != nil {
-		return fmt.Errorf("begin email change request transaction: %w", err)
-	}
-	defer tx.Rollback()
+	return withTx(ctx, s.db, s.queries, "email change request", func(queries *db.Queries) error {
+		if _, err := queries.CreateEmailChangeToken(ctx, db.CreateEmailChangeTokenParams{
+			UserID:    params.UserID,
+			NewEmail:  params.NewEmail,
+			TokenHash: params.TokenHash,
+			ExpiresAt: params.TokenExpiresAt,
+		}); err != nil {
+			return fmt.Errorf("create email change token: %w", err)
+		}
 
-	queries := s.queries.WithTx(tx)
-	if _, err := queries.CreateEmailChangeToken(ctx, db.CreateEmailChangeTokenParams{
-		UserID:    params.UserID,
-		NewEmail:  params.NewEmail,
-		TokenHash: params.TokenHash,
-		ExpiresAt: params.TokenExpiresAt,
-	}); err != nil {
-		return fmt.Errorf("create email change token: %w", err)
-	}
+		if _, err := queries.EnqueueEmail(ctx, db.EnqueueEmailParams{
+			Sender:      params.EmailChangeVerifyEmail.From,
+			Recipient:   params.EmailChangeVerifyEmail.To,
+			Subject:     params.EmailChangeVerifyEmail.Subject,
+			TextBody:    params.EmailChangeVerifyEmail.TextBody,
+			HtmlBody:    params.EmailChangeVerifyEmail.HTMLBody,
+			AvailableAt: params.EmailAvailableAt,
+		}); err != nil {
+			return fmt.Errorf("enqueue email change verification email: %w", err)
+		}
 
-	if _, err := queries.EnqueueEmail(ctx, db.EnqueueEmailParams{
-		Sender:      params.EmailChangeVerifyEmail.From,
-		Recipient:   params.EmailChangeVerifyEmail.To,
-		Subject:     params.EmailChangeVerifyEmail.Subject,
-		TextBody:    params.EmailChangeVerifyEmail.TextBody,
-		HtmlBody:    params.EmailChangeVerifyEmail.HTMLBody,
-		AvailableAt: params.EmailAvailableAt,
-	}); err != nil {
-		return fmt.Errorf("enqueue email change verification email: %w", err)
-	}
-
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("commit email change request transaction: %w", err)
-	}
-
-	return nil
+		return nil
+	})
 }
 
 func (s *AuthStore) ChangeEmailImmediately(ctx context.Context, params services.ChangeEmailImmediatelyParams) (db.User, error) {
-	tx, err := s.db.BeginTx(ctx, nil)
-	if err != nil {
-		return db.User{}, fmt.Errorf("begin change email transaction: %w", err)
-	}
-	defer tx.Rollback()
-
-	queries := s.queries.WithTx(tx)
-	user, err := applyEmailChange(ctx, queries, applyEmailChangeParams{
-		UserID:                 params.UserID,
-		NewEmail:               params.NewEmail,
-		ChangedAt:              params.ChangedAt,
-		OldEmailNoticeOptions:  params.OldEmailNoticeOptions,
-		NoticeEmailAvailableAt: params.NoticeEmailAvailableAt,
-		SendOldEmailNotice:     params.SendOldEmailNotice,
+	return withTxResult(ctx, s.db, s.queries, "change email", func(queries *db.Queries) (db.User, error) {
+		return applyEmailChange(ctx, queries, applyEmailChangeParams{
+			UserID:                 params.UserID,
+			NewEmail:               params.NewEmail,
+			ChangedAt:              params.ChangedAt,
+			OldEmailNoticeOptions:  params.OldEmailNoticeOptions,
+			NoticeEmailAvailableAt: params.NoticeEmailAvailableAt,
+			SendOldEmailNotice:     params.SendOldEmailNotice,
+		})
 	})
-	if err != nil {
-		return db.User{}, err
-	}
-
-	if err := tx.Commit(); err != nil {
-		return db.User{}, fmt.Errorf("commit change email transaction: %w", err)
-	}
-
-	return user, nil
 }
 
 func (s *AuthStore) CreateEmailVerificationToken(ctx context.Context, userID int64, tokenHash string, expiresAt time.Time) (db.EmailVerificationToken, error) {
@@ -363,69 +313,51 @@ func (s *AuthStore) CreateEmailVerificationToken(ctx context.Context, userID int
 }
 
 func (s *AuthStore) ResendEmailVerification(ctx context.Context, params services.ResendEmailVerificationParams) error {
-	tx, err := s.db.BeginTx(ctx, nil)
-	if err != nil {
-		return fmt.Errorf("begin resend email verification transaction: %w", err)
-	}
-	defer tx.Rollback()
+	return withTx(ctx, s.db, s.queries, "resend email verification", func(queries *db.Queries) error {
+		if _, err := queries.CreateEmailVerificationToken(ctx, db.CreateEmailVerificationTokenParams{
+			UserID:    params.UserID,
+			TokenHash: params.TokenHash,
+			ExpiresAt: params.TokenExpiresAt,
+		}); err != nil {
+			return fmt.Errorf("create email verification token: %w", err)
+		}
 
-	queries := s.queries.WithTx(tx)
-	if _, err := queries.CreateEmailVerificationToken(ctx, db.CreateEmailVerificationTokenParams{
-		UserID:    params.UserID,
-		TokenHash: params.TokenHash,
-		ExpiresAt: params.TokenExpiresAt,
-	}); err != nil {
-		return fmt.Errorf("create email verification token: %w", err)
-	}
+		if _, err := queries.EnqueueEmail(ctx, db.EnqueueEmailParams{
+			Sender:      params.ConfirmationEmail.From,
+			Recipient:   params.ConfirmationEmail.To,
+			Subject:     params.ConfirmationEmail.Subject,
+			TextBody:    params.ConfirmationEmail.TextBody,
+			HtmlBody:    params.ConfirmationEmail.HTMLBody,
+			AvailableAt: params.EmailAvailableAt,
+		}); err != nil {
+			return fmt.Errorf("enqueue confirmation email: %w", err)
+		}
 
-	if _, err := queries.EnqueueEmail(ctx, db.EnqueueEmailParams{
-		Sender:      params.ConfirmationEmail.From,
-		Recipient:   params.ConfirmationEmail.To,
-		Subject:     params.ConfirmationEmail.Subject,
-		TextBody:    params.ConfirmationEmail.TextBody,
-		HtmlBody:    params.ConfirmationEmail.HTMLBody,
-		AvailableAt: params.EmailAvailableAt,
-	}); err != nil {
-		return fmt.Errorf("enqueue confirmation email: %w", err)
-	}
-
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("commit resend email verification transaction: %w", err)
-	}
-
-	return nil
+		return nil
+	})
 }
 
 func (s *AuthStore) VerifyEmailByTokenHash(ctx context.Context, tokenHash string, verifiedAt time.Time) (db.User, error) {
-	tx, err := s.db.BeginTx(ctx, nil)
-	if err != nil {
-		return db.User{}, fmt.Errorf("begin verify email transaction: %w", err)
-	}
-	defer tx.Rollback()
+	return withTxResult(ctx, s.db, s.queries, "verify email", func(queries *db.Queries) (db.User, error) {
+		token, err := queries.ConsumeEmailVerificationToken(ctx, db.ConsumeEmailVerificationTokenParams{
+			ConsumedAt: sql.NullTime{Time: verifiedAt, Valid: true},
+			TokenHash:  tokenHash,
+			ExpiresAt:  verifiedAt,
+		})
+		if err != nil {
+			return db.User{}, fmt.Errorf("consume email verification token: %w", err)
+		}
 
-	queries := s.queries.WithTx(tx)
-	token, err := queries.ConsumeEmailVerificationToken(ctx, db.ConsumeEmailVerificationTokenParams{
-		ConsumedAt: sql.NullTime{Time: verifiedAt, Valid: true},
-		TokenHash:  tokenHash,
-		ExpiresAt:  verifiedAt,
+		user, err := queries.MarkUserEmailVerified(ctx, db.MarkUserEmailVerifiedParams{
+			EmailVerifiedAt: sql.NullTime{Time: verifiedAt, Valid: true},
+			ID:              token.UserID,
+		})
+		if err != nil {
+			return db.User{}, fmt.Errorf("mark user email verified: %w", err)
+		}
+
+		return userFromMarkUserEmailVerifiedRow(user), nil
 	})
-	if err != nil {
-		return db.User{}, fmt.Errorf("consume email verification token: %w", err)
-	}
-
-	user, err := queries.MarkUserEmailVerified(ctx, db.MarkUserEmailVerifiedParams{
-		EmailVerifiedAt: sql.NullTime{Time: verifiedAt, Valid: true},
-		ID:              token.UserID,
-	})
-	if err != nil {
-		return db.User{}, fmt.Errorf("mark user email verified: %w", err)
-	}
-
-	if err := tx.Commit(); err != nil {
-		return db.User{}, fmt.Errorf("commit verify email transaction: %w", err)
-	}
-
-	return userFromMarkUserEmailVerifiedRow(user), nil
 }
 
 func userFromCreateUserRow(row db.CreateUserRow) db.User {
@@ -479,39 +411,25 @@ func userFromUpdateUserEmailRow(row db.UpdateUserEmailRow) db.User {
 }
 
 func (s *AuthStore) ConfirmEmailChange(ctx context.Context, params services.ConfirmEmailChangeParams) (db.User, error) {
-	tx, err := s.db.BeginTx(ctx, nil)
-	if err != nil {
-		return db.User{}, fmt.Errorf("begin confirm email change transaction: %w", err)
-	}
-	defer tx.Rollback()
+	return withTxResult(ctx, s.db, s.queries, "confirm email change", func(queries *db.Queries) (db.User, error) {
+		token, err := queries.ConsumeEmailChangeToken(ctx, db.ConsumeEmailChangeTokenParams{
+			ConsumedAt: sql.NullTime{Time: params.ChangedAt, Valid: true},
+			TokenHash:  params.TokenHash,
+			ExpiresAt:  params.ChangedAt,
+		})
+		if err != nil {
+			return db.User{}, fmt.Errorf("consume email change token: %w", err)
+		}
 
-	queries := s.queries.WithTx(tx)
-	token, err := queries.ConsumeEmailChangeToken(ctx, db.ConsumeEmailChangeTokenParams{
-		ConsumedAt: sql.NullTime{Time: params.ChangedAt, Valid: true},
-		TokenHash:  params.TokenHash,
-		ExpiresAt:  params.ChangedAt,
+		return applyEmailChange(ctx, queries, applyEmailChangeParams{
+			UserID:                 token.UserID,
+			NewEmail:               token.NewEmail,
+			ChangedAt:              params.ChangedAt,
+			OldEmailNoticeOptions:  params.OldEmailNoticeOptions,
+			NoticeEmailAvailableAt: params.NoticeEmailAvailableAt,
+			SendOldEmailNotice:     params.SendOldEmailNotice,
+		})
 	})
-	if err != nil {
-		return db.User{}, fmt.Errorf("consume email change token: %w", err)
-	}
-
-	user, err := applyEmailChange(ctx, queries, applyEmailChangeParams{
-		UserID:                 token.UserID,
-		NewEmail:               token.NewEmail,
-		ChangedAt:              params.ChangedAt,
-		OldEmailNoticeOptions:  params.OldEmailNoticeOptions,
-		NoticeEmailAvailableAt: params.NoticeEmailAvailableAt,
-		SendOldEmailNotice:     params.SendOldEmailNotice,
-	})
-	if err != nil {
-		return db.User{}, err
-	}
-
-	if err := tx.Commit(); err != nil {
-		return db.User{}, fmt.Errorf("commit confirm email change transaction: %w", err)
-	}
-
-	return user, nil
 }
 
 type applyEmailChangeParams struct {
