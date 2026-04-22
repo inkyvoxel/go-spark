@@ -26,7 +26,6 @@ This repository is intentionally structured to be:
 ### Frontend
 
 * PicoCSS for default styling and semantic HTML components.
-* HTMX for progressive enhancement.
 * Minimal JavaScript only when necessary.
 * Project-specific CSS only when the defaults need overrides.
 
@@ -56,7 +55,6 @@ This repository is intentionally structured to be:
 The application uses server-side rendering as the default:
 
 * HTML is rendered on the server using `html/template`.
-* HTMX is used for partial updates and interactivity.
 * SPA-style complexity is avoided unless clearly needed.
 
 This keeps state on the server, centralizes logic, and keeps the frontend predictable.
@@ -143,7 +141,7 @@ Templates cannot import Go packages directly, so handlers pass a route catalog i
 
 ```html
 <a href="{{ .Routes.Login }}">Sign in</a>
-<form method="post" action="{{ .Routes.ForgotPassword }}" hx-post="{{ .Routes.ForgotPassword }}">
+<form method="post" action="{{ .Routes.ForgotPassword }}">
 ```
 
 Template keys and fragment names are centralized in the server package. Use those constants in render calls and tests instead of inline strings such as `"login.html"` or `"login_form_section"`.
@@ -193,20 +191,6 @@ Templates should:
 * Avoid complex logic.
 
 Real logic belongs in Go code.
-
-### HTMX Usage
-
-HTMX is used for:
-
-* Partial page updates.
-* Forms and interactions.
-* Reducing full page reloads where it improves the user experience.
-
-Guidelines:
-
-* Return HTML fragments from handlers where appropriate.
-* Keep endpoints small and focused.
-* Prefer progressive enhancement.
 
 ### Database Strategy
 

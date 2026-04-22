@@ -9,8 +9,7 @@
 {{ define "register_form_section" }}
 <section id="register-form-section">
   {{ if .Error }}<p role="alert">{{ .Error }}</p>{{ end }}
-  <form method="post" action="{{ .Routes.Register }}" hx-post="{{ .Routes.Register }}" hx-target="#register-form-section" hx-swap="outerHTML"
-    hx-disabled-elt="button[type='submit']">
+  <form method="post" action="{{ .Routes.Register }}">
     <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
     <label>
       Email

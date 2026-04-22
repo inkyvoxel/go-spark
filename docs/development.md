@@ -91,35 +91,24 @@ dynamic.Handle(route(http.MethodGet, paths.Account), s.requireVerifiedAuth(http.
 
 Avoid creating extra constants that only mirror `paths.*` values. The small `route(method, path)` helper is the intended place where `net/http` method/path patterns are assembled.
 
-HTML templates receive route helpers through `.Routes`, which is populated from `paths.TemplateRoutes`. Template links, form actions, and HTMX attributes should use those helpers instead of inline literals:
+HTML templates receive route helpers through `.Routes`, which is populated from `paths.TemplateRoutes`. Template links and form actions should use those helpers instead of inline literals:
 
 ```html
 <a href="{{ .Routes.Login }}">Sign in</a>
-<form method="post" action="{{ .Routes.ResetPassword }}" hx-post="{{ .Routes.ResetPassword }}">
+<form method="post" action="{{ .Routes.ResetPassword }}">
 ```
 
 Template keys and fragment names live in `internal/server/template_constants.go`. Use those constants in render calls and tests to avoid drift between handlers and template files.
 
 ## Frontend Assets
 
-PicoCSS and HTMX are vendored in:
+PicoCSS is vendored in:
 
 ```text
 static/vendor
 ```
 
 This keeps local development independent from CDN availability and makes runtime assets visible in the repository. When intentionally upgrading a vendored asset, replace the file in `static/vendor`, verify the app in a browser, and commit the asset change with the code that depends on it.
-
-HTMX response swapping is configured in `templates/layout.html` via `meta[name="htmx-config"]`. We currently allow swaps for HTTP `422` responses so server-side validation fragments render inline, while malformed requests can still use HTTP `400` and other `4xx/5xx` responses keep the default non-swap behavior.
-
-For auth forms, the canonical HTMX pattern is:
-
-* Keep normal `method` and `action` attributes for non-HTMX fallback.
-* Add `hx-post`, `hx-target`, and `hx-swap="outerHTML"` so HTMX requests replace only the form/status section fragment.
-* Use `hx-disabled-elt="button[type='submit']"` to prevent duplicate submits during in-flight requests.
-* Keep templates CSP-safe by avoiding `hx-on::*` inline handlers (they require eval). Prefer declarative HTMX attributes plus CSS-based indicators.
-* In handlers, return full-page render/PRG redirects for regular requests, and fragment responses for `HX-Request`.
-* For success navigation on HTMX requests, return `HX-Redirect` while preserving the same destination as the non-HTMX redirect flow.
 
 ## Database Workflow
 

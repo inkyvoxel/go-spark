@@ -17,8 +17,7 @@
   {{ end }}
   {{ else }}
   {{ if .Error }}<p role="alert">{{ .Error }}</p>{{ end }}
-  <form method="post" action="{{ .Routes.ChangeEmail }}" hx-post="{{ .Routes.ChangeEmail }}"
-    hx-target="#account-change-email-section" hx-swap="outerHTML" hx-disabled-elt="button[type='submit']">
+  <form method="post" action="{{ .Routes.ChangeEmail }}">
     <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
     <label>
       New email address

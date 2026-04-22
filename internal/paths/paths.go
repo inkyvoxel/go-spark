@@ -5,7 +5,6 @@ const (
 	StaticPrefix                = "/static/"
 	StaticPicoCSS               = StaticPrefix + "vendor/pico/pico.min.css"
 	StaticStyles                = StaticPrefix + "styles.css"
-	StaticHTMX                  = StaticPrefix + "vendor/htmx/htmx.min.js"
 	Login                       = "/login"
 	Register                    = "/register"
 	Logout                      = "/logout"
@@ -27,7 +26,6 @@ type TemplateRouteSet struct {
 	Home                        string
 	StaticPicoCSS               string
 	StaticStyles                string
-	StaticHTMX                  string
 	Account                     string
 	Login                       string
 	Register                    string
@@ -47,7 +45,6 @@ var TemplateRoutes = TemplateRouteSet{
 	Home:                        Home,
 	StaticPicoCSS:               StaticPicoCSS,
 	StaticStyles:                StaticStyles,
-	StaticHTMX:                  StaticHTMX,
 	Account:                     Account,
 	Login:                       Login,
 	Register:                    Register,

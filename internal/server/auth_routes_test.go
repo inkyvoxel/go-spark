@@ -67,78 +67,6 @@ func TestRoutesLogin(t *testing.T) {
 	}
 }
 
-func TestRoutesLoginHTMXReturnsRedirectHeaderAndSession(t *testing.T) {
-	auth := &fakeAuthLookup{
-		user: verifiedRouteUser(),
-		loginSession: services.AuthSession{
-			Token:     "session-token",
-			ExpiresAt: time.Now().Add(time.Hour),
-		},
-	}
-	srv := newAuthRouteTestServer(t, auth)
-
-	form := url.Values{
-		"email":       []string{"user@example.com"},
-		"password":    []string{"password"},
-		csrfFieldName: []string{"csrf"},
-	}
-	req := httptest.NewRequest(http.MethodPost, paths.Login, strings.NewReader(form.Encode()))
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.Header.Set("HX-Request", "true")
-	addCSRFCookieAndHeader(t, srv, req)
-	rec := httptest.NewRecorder()
-
-	srv.Routes().ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
-	}
-	if location := rec.Header().Get("Location"); location != "" {
-		t.Fatalf("Location = %q, want empty for HTMX redirect", location)
-	}
-	if redirect := rec.Header().Get("HX-Redirect"); redirect != paths.Account {
-		t.Fatalf("HX-Redirect = %q, want %q", redirect, paths.Account)
-	}
-	session := cookieFromRecorder(t, rec, sessionCookieName)
-	if session.Value != "session-token" {
-		t.Fatalf("session cookie = %q, want %q", session.Value, "session-token")
-	}
-}
-
-func TestRoutesLoginHTMXRejectsInvalidCredentials(t *testing.T) {
-	auth := &fakeAuthLookup{
-		loginErr: services.ErrInvalidCredentials,
-	}
-	srv := newAuthRouteTestServer(t, auth)
-
-	form := url.Values{
-		"email":       []string{"user@example.com"},
-		"password":    []string{"wrong-password"},
-		csrfFieldName: []string{"csrf"},
-	}
-	req := httptest.NewRequest(http.MethodPost, paths.Login, strings.NewReader(form.Encode()))
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.Header.Set("HX-Request", "true")
-	addCSRFCookieAndHeader(t, srv, req)
-	rec := httptest.NewRecorder()
-
-	srv.Routes().ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusUnprocessableEntity {
-		t.Fatalf("status = %d, want %d", rec.Code, http.StatusUnprocessableEntity)
-	}
-	assertNoStoreCacheHeaders(t, rec)
-	if location := rec.Header().Get("Location"); location != "" {
-		t.Fatalf("Location = %q, want empty for HTMX fragment", location)
-	}
-	if redirect := rec.Header().Get("HX-Redirect"); redirect != "" {
-		t.Fatalf("HX-Redirect = %q, want empty for invalid credentials", redirect)
-	}
-	if !strings.Contains(rec.Body.String(), "Email or password is not correct.") {
-		t.Fatalf("body = %q, want invalid credentials error", rec.Body.String())
-	}
-}
-
 func TestRoutesLoginSetsSecureSessionCookieWhenConfigured(t *testing.T) {
 	auth := &fakeAuthLookup{
 		user: db.User{ID: 1, Email: "user@example.com"},
@@ -550,48 +478,6 @@ func TestRoutesRegisterOptionalVerificationRedirectsToAccount(t *testing.T) {
 	}
 }
 
-func TestRoutesRegisterHTMXReturnsRedirectHeaderAndSession(t *testing.T) {
-	auth := &fakeAuthLookup{
-		user: db.User{ID: 1, Email: "new@example.com"},
-		loginSession: services.AuthSession{
-			Token:     "new-session-token",
-			ExpiresAt: time.Now().Add(time.Hour),
-		},
-	}
-	srv := newAuthRouteTestServer(t, auth)
-
-	form := url.Values{
-		"email":            []string{"new@example.com"},
-		"password":         []string{"password"},
-		"confirm_password": []string{"password"},
-		csrfFieldName:      []string{"csrf"},
-	}
-	req := httptest.NewRequest(http.MethodPost, paths.Register, strings.NewReader(form.Encode()))
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.Header.Set("HX-Request", "true")
-	addCSRFCookieAndHeader(t, srv, req)
-	rec := httptest.NewRecorder()
-
-	srv.Routes().ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
-	}
-	if location := rec.Header().Get("Location"); location != "" {
-		t.Fatalf("Location = %q, want empty for HTMX redirect", location)
-	}
-	if redirect := rec.Header().Get("HX-Redirect"); redirect != paths.VerifyEmail {
-		t.Fatalf("HX-Redirect = %q, want %q", redirect, paths.VerifyEmail)
-	}
-	if !auth.registered {
-		t.Fatal("Register() was not called")
-	}
-	session := cookieFromRecorder(t, rec, sessionCookieName)
-	if session.Value != "new-session-token" {
-		t.Fatalf("session cookie = %q, want %q", session.Value, "new-session-token")
-	}
-}
-
 func TestRoutesRegisterRejectsMismatchedPasswordConfirmation(t *testing.T) {
 	auth := &fakeAuthLookup{}
 	srv := newAuthRouteTestServer(t, auth)
@@ -617,72 +503,6 @@ func TestRoutesRegisterRejectsMismatchedPasswordConfirmation(t *testing.T) {
 	}
 	if !strings.Contains(rec.Body.String(), "Passwords do not match.") {
 		t.Fatalf("body = %q, want confirmation error", rec.Body.String())
-	}
-}
-
-func TestRoutesRegisterHTMXRejectsMismatchedPasswordConfirmation(t *testing.T) {
-	auth := &fakeAuthLookup{}
-	srv := newAuthRouteTestServer(t, auth)
-
-	form := url.Values{
-		"email":            []string{"new@example.com"},
-		"password":         []string{"password"},
-		"confirm_password": []string{"different"},
-		csrfFieldName:      []string{"csrf"},
-	}
-	req := httptest.NewRequest(http.MethodPost, paths.Register, strings.NewReader(form.Encode()))
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.Header.Set("HX-Request", "true")
-	addCSRFCookieAndHeader(t, srv, req)
-	rec := httptest.NewRecorder()
-
-	srv.Routes().ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusUnprocessableEntity {
-		t.Fatalf("status = %d, want %d", rec.Code, http.StatusUnprocessableEntity)
-	}
-	if location := rec.Header().Get("Location"); location != "" {
-		t.Fatalf("Location = %q, want empty for HTMX fragment", location)
-	}
-	if redirect := rec.Header().Get("HX-Redirect"); redirect != "" {
-		t.Fatalf("HX-Redirect = %q, want empty for validation error", redirect)
-	}
-	if !strings.Contains(rec.Body.String(), "Passwords do not match.") {
-		t.Fatalf("body = %q, want confirmation error", rec.Body.String())
-	}
-}
-
-func TestRoutesRegisterHTMXShowsServiceValidationErrors(t *testing.T) {
-	auth := &fakeAuthLookup{
-		registerErr: services.ErrEmailAlreadyRegistered,
-	}
-	srv := newAuthRouteTestServer(t, auth)
-
-	form := url.Values{
-		"email":            []string{"new@example.com"},
-		"password":         []string{"password"},
-		"confirm_password": []string{"password"},
-		csrfFieldName:      []string{"csrf"},
-	}
-	req := httptest.NewRequest(http.MethodPost, paths.Register, strings.NewReader(form.Encode()))
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.Header.Set("HX-Request", "true")
-	addCSRFCookieAndHeader(t, srv, req)
-	rec := httptest.NewRecorder()
-
-	srv.Routes().ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusUnprocessableEntity {
-		t.Fatalf("status = %d, want %d", rec.Code, http.StatusUnprocessableEntity)
-	}
-	if location := rec.Header().Get("Location"); location != "" {
-		t.Fatalf("Location = %q, want empty for HTMX fragment", location)
-	}
-	if redirect := rec.Header().Get("HX-Redirect"); redirect != "" {
-		t.Fatalf("HX-Redirect = %q, want empty for validation error", redirect)
-	}
-	if !strings.Contains(rec.Body.String(), "An account with this email already exists.") {
-		t.Fatalf("body = %q, want duplicate email error", rec.Body.String())
 	}
 }
 
@@ -1037,39 +857,6 @@ func TestRoutesAccountRequiresAuth(t *testing.T) {
 	}
 }
 
-func TestRoutesRevokeSessionHTMX(t *testing.T) {
-	auth := &fakeAuthLookup{
-		user: verifiedRouteUser(),
-		managedSessions: []services.ManagedSession{
-			{ID: 1, Current: true},
-		},
-	}
-	srv := newAuthRouteTestServer(t, auth)
-
-	form := url.Values{
-		"session_id":  []string{"42"},
-		csrfFieldName: []string{"csrf"},
-	}
-	req := httptest.NewRequest(http.MethodPost, paths.AccountSessionsRevoke, strings.NewReader(form.Encode()))
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.Header.Set("HX-Request", "true")
-	req.AddCookie(&http.Cookie{Name: sessionCookieName, Value: "session-token"})
-	addCSRFCookieAndHeader(t, srv, req)
-	rec := httptest.NewRecorder()
-
-	srv.Routes().ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
-	}
-	if auth.revokeSessionID != 42 {
-		t.Fatalf("revokeSessionID = %d, want %d", auth.revokeSessionID, 42)
-	}
-	if !strings.Contains(rec.Body.String(), "status=session-revoked") {
-		t.Fatalf("body = %q, want session-revoked status", rec.Body.String())
-	}
-}
-
 func TestRoutesRevokeSessionRejectsCurrentSession(t *testing.T) {
 	auth := &fakeAuthLookup{
 		user:             verifiedRouteUser(),
@@ -1097,7 +884,7 @@ func TestRoutesRevokeSessionRejectsCurrentSession(t *testing.T) {
 	}
 }
 
-func TestRoutesRevokeOtherSessionsRedirectsForNonHTMX(t *testing.T) {
+func TestRoutesRevokeOtherSessionsRedirects(t *testing.T) {
 	auth := &fakeAuthLookup{
 		user: verifiedRouteUser(),
 	}
@@ -1117,11 +904,11 @@ func TestRoutesRevokeOtherSessionsRedirectsForNonHTMX(t *testing.T) {
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusSeeOther)
 	}
-	if location := rec.Header().Get("Location"); location != paths.Account+"?status=sessions-revoked" {
-		t.Fatalf("Location = %q, want %q", location, paths.Account+"?status=sessions-revoked")
+	if location := rec.Header().Get("Location"); location != withQueryParam(paths.Account, queryKeyStatus, statusSessionsRevoked) {
+		t.Fatalf("Location = %q, want %q", location, withQueryParam(paths.Account, queryKeyStatus, statusSessionsRevoked))
 	}
 	if !auth.revokeOtherCalled {
-		t.Fatal("revoke other sessions was not called")
+		t.Fatal("RevokeOtherSessions() was not called")
 	}
 }
 
@@ -1397,34 +1184,6 @@ func TestRoutesChangeEmailOptionalModeSignsUserOutToLogin(t *testing.T) {
 	}
 }
 
-func TestRoutesChangeEmailOptionalModeHTMXRedirectsToLogin(t *testing.T) {
-	auth := &fakeAuthLookup{
-		user: verifiedRouteUser(),
-	}
-	srv := newAuthRouteTestServerOptional(t, auth)
-
-	form := url.Values{
-		"email":            []string{"new@example.com"},
-		"current_password": []string{"password"},
-		csrfFieldName:      []string{"csrf"},
-	}
-	req := httptest.NewRequest(http.MethodPost, paths.ChangeEmail, strings.NewReader(form.Encode()))
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.Header.Set("HX-Request", "true")
-	req.AddCookie(&http.Cookie{Name: sessionCookieName, Value: "session-token"})
-	addCSRFCookieAndHeader(t, srv, req)
-	rec := httptest.NewRecorder()
-
-	srv.Routes().ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
-	}
-	if redirect := rec.Header().Get("HX-Redirect"); redirect != loginPathWithEmailChanged {
-		t.Fatalf("HX-Redirect = %q, want %q", redirect, loginPathWithEmailChanged)
-	}
-}
-
 func TestRoutesChangeEmailValidatesFields(t *testing.T) {
 	auth := &fakeAuthLookup{
 		user: verifiedRouteUser(),
@@ -1450,34 +1209,6 @@ func TestRoutesChangeEmailValidatesFields(t *testing.T) {
 		if !strings.Contains(rec.Body.String(), want) {
 			t.Fatalf("body = %q, want %q", rec.Body.String(), want)
 		}
-	}
-}
-
-func TestRoutesChangeEmailHTMXReturnsStatusFragment(t *testing.T) {
-	auth := &fakeAuthLookup{
-		user: verifiedRouteUser(),
-	}
-	srv := newAuthRouteTestServer(t, auth)
-
-	form := url.Values{
-		"email":            []string{"new@example.com"},
-		"current_password": []string{"password"},
-		csrfFieldName:      []string{"csrf"},
-	}
-	req := httptest.NewRequest(http.MethodPost, paths.ChangeEmail, strings.NewReader(form.Encode()))
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.Header.Set("HX-Request", "true")
-	req.AddCookie(&http.Cookie{Name: sessionCookieName, Value: "session-token"})
-	addCSRFCookieAndHeader(t, srv, req)
-	rec := httptest.NewRecorder()
-
-	srv.Routes().ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
-	}
-	if !strings.Contains(rec.Body.String(), "change-email-status=sent") {
-		t.Fatalf("body = %q, want sent status", rec.Body.String())
 	}
 }
 
@@ -1627,61 +1358,6 @@ func TestRoutesResendVerificationHandlesError(t *testing.T) {
 	}
 }
 
-func TestRoutesResendVerificationHTMXReturnsFragment(t *testing.T) {
-	auth := &fakeAuthLookup{
-		user: db.User{ID: 1, Email: "user@example.com"},
-	}
-	srv := newAuthRouteTestServer(t, auth)
-
-	form := url.Values{csrfFieldName: []string{"csrf"}}
-	req := httptest.NewRequest(http.MethodPost, paths.VerifyEmailResend, strings.NewReader(form.Encode()))
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.Header.Set("HX-Request", "true")
-	req.AddCookie(&http.Cookie{Name: sessionCookieName, Value: "session-token"})
-	addCSRFCookieAndHeader(t, srv, req)
-	rec := httptest.NewRecorder()
-
-	srv.Routes().ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
-	}
-	if location := rec.Header().Get("Location"); location != "" {
-		t.Fatalf("Location = %q, want empty for HTMX fragment", location)
-	}
-	if !strings.Contains(rec.Body.String(), "resend-status=sent") {
-		t.Fatalf("body = %q, want resend-status=sent", rec.Body.String())
-	}
-}
-
-func TestRoutesResendVerificationHTMXReturnsErrorFragment(t *testing.T) {
-	auth := &fakeAuthLookup{
-		user:      db.User{ID: 1, Email: "user@example.com"},
-		resendErr: errors.New("database unavailable"),
-	}
-	srv := newAuthRouteTestServer(t, auth)
-
-	form := url.Values{csrfFieldName: []string{"csrf"}}
-	req := httptest.NewRequest(http.MethodPost, paths.VerifyEmailResend, strings.NewReader(form.Encode()))
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.Header.Set("HX-Request", "true")
-	req.AddCookie(&http.Cookie{Name: sessionCookieName, Value: "session-token"})
-	addCSRFCookieAndHeader(t, srv, req)
-	rec := httptest.NewRecorder()
-
-	srv.Routes().ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
-	}
-	if location := rec.Header().Get("Location"); location != "" {
-		t.Fatalf("Location = %q, want empty for HTMX fragment", location)
-	}
-	if !strings.Contains(rec.Body.String(), "resend-status=error") {
-		t.Fatalf("body = %q, want resend-status=error", rec.Body.String())
-	}
-}
-
 func TestRoutesResendVerificationRequiresCSRF(t *testing.T) {
 	auth := &fakeAuthLookup{
 		user: db.User{ID: 1, Email: "user@example.com"},
@@ -1785,77 +1461,6 @@ func TestRoutesChangePasswordValidatesFields(t *testing.T) {
 		if !strings.Contains(body, want) {
 			t.Fatalf("body = %q, want %q", body, want)
 		}
-	}
-}
-
-func TestRoutesChangePasswordHTMXValidatesFields(t *testing.T) {
-	auth := &fakeAuthLookup{
-		user: verifiedRouteUser(),
-	}
-	srv := newAuthRouteTestServer(t, auth)
-
-	form := url.Values{
-		csrfFieldName: []string{"csrf"},
-	}
-	req := httptest.NewRequest(http.MethodPost, paths.ChangePassword, strings.NewReader(form.Encode()))
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.Header.Set("HX-Request", "true")
-	req.AddCookie(&http.Cookie{Name: sessionCookieName, Value: "session-token"})
-	addCSRFCookieAndHeader(t, srv, req)
-	rec := httptest.NewRecorder()
-
-	srv.Routes().ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusUnprocessableEntity {
-		t.Fatalf("status = %d, want %d", rec.Code, http.StatusUnprocessableEntity)
-	}
-	if location := rec.Header().Get("Location"); location != "" {
-		t.Fatalf("Location = %q, want empty for HTMX fragment", location)
-	}
-	if redirect := rec.Header().Get("HX-Redirect"); redirect != "" {
-		t.Fatalf("HX-Redirect = %q, want empty for validation error", redirect)
-	}
-	body := rec.Body.String()
-	for _, want := range []string{"change-password-visible", "Enter your current password.", "Enter a password.", "Confirm your password."} {
-		if !strings.Contains(body, want) {
-			t.Fatalf("body = %q, want %q", body, want)
-		}
-	}
-}
-
-func TestRoutesChangePasswordHTMXRedirectsOnSuccess(t *testing.T) {
-	auth := &fakeAuthLookup{
-		user: verifiedRouteUser(),
-	}
-	srv := newAuthRouteTestServer(t, auth)
-
-	form := url.Values{
-		"current_password": []string{"old-password"},
-		"new_password":     []string{"new-password"},
-		"confirm_password": []string{"new-password"},
-		csrfFieldName:      []string{"csrf"},
-	}
-	req := httptest.NewRequest(http.MethodPost, paths.ChangePassword, strings.NewReader(form.Encode()))
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.Header.Set("HX-Request", "true")
-	req.AddCookie(&http.Cookie{Name: sessionCookieName, Value: "session-token"})
-	addCSRFCookieAndHeader(t, srv, req)
-	rec := httptest.NewRecorder()
-
-	srv.Routes().ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
-	}
-	if location := rec.Header().Get("Location"); location != "" {
-		t.Fatalf("Location = %q, want empty for HTMX redirect", location)
-	}
-	if redirect := rec.Header().Get("HX-Redirect"); redirect != loginPathWithStatusChanged {
-		t.Fatalf("HX-Redirect = %q, want %q", redirect, loginPathWithStatusChanged)
-	}
-	session := cookieFromRecorder(t, rec, sessionCookieName)
-	if session.MaxAge != -1 {
-		t.Fatalf("session MaxAge = %d, want %d", session.MaxAge, -1)
 	}
 }
 
@@ -2125,91 +1730,6 @@ func TestRoutesPublicResendVerificationHandlesError(t *testing.T) {
 	}
 }
 
-func TestRoutesPublicResendVerificationHTMXReturnsFragment(t *testing.T) {
-	auth := &fakeAuthLookup{}
-	srv := newAuthRouteTestServer(t, auth)
-
-	form := url.Values{
-		"email":       []string{"user@example.com"},
-		csrfFieldName: []string{"csrf"},
-	}
-	req := httptest.NewRequest(http.MethodPost, paths.ResendVerification, strings.NewReader(form.Encode()))
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.Header.Set("HX-Request", "true")
-	addCSRFCookieAndHeader(t, srv, req)
-	rec := httptest.NewRecorder()
-
-	srv.Routes().ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
-	}
-	if location := rec.Header().Get("Location"); location != "" {
-		t.Fatalf("Location = %q, want empty for HTMX fragment", location)
-	}
-	if !strings.Contains(rec.Body.String(), "resend-status=sent") {
-		t.Fatalf("body = %q, want resend-status=sent", rec.Body.String())
-	}
-}
-
-func TestRoutesPublicResendVerificationHTMXReturnsErrorFragment(t *testing.T) {
-	auth := &fakeAuthLookup{
-		publicResendErr: errors.New("database unavailable"),
-	}
-	srv := newAuthRouteTestServer(t, auth)
-
-	form := url.Values{
-		"email":       []string{"user@example.com"},
-		csrfFieldName: []string{"csrf"},
-	}
-	req := httptest.NewRequest(http.MethodPost, paths.ResendVerification, strings.NewReader(form.Encode()))
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.Header.Set("HX-Request", "true")
-	addCSRFCookieAndHeader(t, srv, req)
-	rec := httptest.NewRecorder()
-
-	srv.Routes().ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
-	}
-	if location := rec.Header().Get("Location"); location != "" {
-		t.Fatalf("Location = %q, want empty for HTMX fragment", location)
-	}
-	if !strings.Contains(rec.Body.String(), "resend-status=error") {
-		t.Fatalf("body = %q, want resend-status=error", rec.Body.String())
-	}
-}
-
-func TestRoutesPublicResendVerificationHTMXRejectsInvalidEmail(t *testing.T) {
-	auth := &fakeAuthLookup{
-		publicResendErr: services.ErrInvalidEmail,
-	}
-	srv := newAuthRouteTestServer(t, auth)
-
-	form := url.Values{
-		"email":       []string{"not-an-email"},
-		csrfFieldName: []string{"csrf"},
-	}
-	req := httptest.NewRequest(http.MethodPost, paths.ResendVerification, strings.NewReader(form.Encode()))
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.Header.Set("HX-Request", "true")
-	addCSRFCookieAndHeader(t, srv, req)
-	rec := httptest.NewRecorder()
-
-	srv.Routes().ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusUnprocessableEntity {
-		t.Fatalf("status = %d, want %d", rec.Code, http.StatusUnprocessableEntity)
-	}
-	if location := rec.Header().Get("Location"); location != "" {
-		t.Fatalf("Location = %q, want empty for HTMX fragment", location)
-	}
-	if !strings.Contains(rec.Body.String(), "Enter a valid email address.") {
-		t.Fatalf("body = %q, want invalid email message", rec.Body.String())
-	}
-}
-
 func TestRoutesPublicResendVerificationRequiresCSRF(t *testing.T) {
 	srv := newAuthRouteTestServer(t, &fakeAuthLookup{})
 
@@ -2334,91 +1854,6 @@ func TestRoutesForgotPasswordHandlesError(t *testing.T) {
 	}
 	if location := rec.Header().Get("Location"); location != withQueryParam(paths.ForgotPassword, queryKeyStatus, statusError) {
 		t.Fatalf("Location = %q, want %q", location, withQueryParam(paths.ForgotPassword, queryKeyStatus, statusError))
-	}
-}
-
-func TestRoutesForgotPasswordHTMXReturnsFragment(t *testing.T) {
-	auth := &fakeAuthLookup{}
-	srv := newAuthRouteTestServer(t, auth)
-
-	form := url.Values{
-		"email":       []string{"user@example.com"},
-		csrfFieldName: []string{"csrf"},
-	}
-	req := httptest.NewRequest(http.MethodPost, paths.ForgotPassword, strings.NewReader(form.Encode()))
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.Header.Set("HX-Request", "true")
-	addCSRFCookieAndHeader(t, srv, req)
-	rec := httptest.NewRecorder()
-
-	srv.Routes().ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
-	}
-	if location := rec.Header().Get("Location"); location != "" {
-		t.Fatalf("Location = %q, want empty for HTMX fragment", location)
-	}
-	if !strings.Contains(rec.Body.String(), "forgot-status=sent") {
-		t.Fatalf("body = %q, want forgot-status=sent", rec.Body.String())
-	}
-}
-
-func TestRoutesForgotPasswordHTMXReturnsErrorFragment(t *testing.T) {
-	auth := &fakeAuthLookup{
-		requestResetErr: errors.New("database unavailable"),
-	}
-	srv := newAuthRouteTestServer(t, auth)
-
-	form := url.Values{
-		"email":       []string{"user@example.com"},
-		csrfFieldName: []string{"csrf"},
-	}
-	req := httptest.NewRequest(http.MethodPost, paths.ForgotPassword, strings.NewReader(form.Encode()))
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.Header.Set("HX-Request", "true")
-	addCSRFCookieAndHeader(t, srv, req)
-	rec := httptest.NewRecorder()
-
-	srv.Routes().ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
-	}
-	if location := rec.Header().Get("Location"); location != "" {
-		t.Fatalf("Location = %q, want empty for HTMX fragment", location)
-	}
-	if !strings.Contains(rec.Body.String(), "forgot-status=error") {
-		t.Fatalf("body = %q, want forgot-status=error", rec.Body.String())
-	}
-}
-
-func TestRoutesForgotPasswordHTMXRejectsInvalidEmail(t *testing.T) {
-	auth := &fakeAuthLookup{
-		requestResetErr: services.ErrInvalidEmail,
-	}
-	srv := newAuthRouteTestServer(t, auth)
-
-	form := url.Values{
-		"email":       []string{"not-an-email"},
-		csrfFieldName: []string{"csrf"},
-	}
-	req := httptest.NewRequest(http.MethodPost, paths.ForgotPassword, strings.NewReader(form.Encode()))
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.Header.Set("HX-Request", "true")
-	addCSRFCookieAndHeader(t, srv, req)
-	rec := httptest.NewRecorder()
-
-	srv.Routes().ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusUnprocessableEntity {
-		t.Fatalf("status = %d, want %d", rec.Code, http.StatusUnprocessableEntity)
-	}
-	if location := rec.Header().Get("Location"); location != "" {
-		t.Fatalf("Location = %q, want empty for HTMX fragment", location)
-	}
-	if !strings.Contains(rec.Body.String(), "Enter a valid email address.") {
-		t.Fatalf("body = %q, want invalid email message", rec.Body.String())
 	}
 }
 
@@ -2627,74 +2062,6 @@ func TestRoutesResetPasswordValidatesFields(t *testing.T) {
 		if !strings.Contains(body, want) {
 			t.Fatalf("body = %q, want %q", body, want)
 		}
-	}
-}
-
-func TestRoutesResetPasswordHTMXValidatesFields(t *testing.T) {
-	srv := newAuthRouteTestServer(t, &fakeAuthLookup{})
-
-	form := url.Values{
-		csrfFieldName: []string{"csrf"},
-	}
-	req := httptest.NewRequest(http.MethodPost, paths.ResetPassword, strings.NewReader(form.Encode()))
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.Header.Set("HX-Request", "true")
-	req.AddCookie(&http.Cookie{Name: resetCookieName, Value: "raw-token"})
-	addCSRFCookieAndHeader(t, srv, req)
-	rec := httptest.NewRecorder()
-
-	srv.Routes().ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusUnprocessableEntity {
-		t.Fatalf("status = %d, want %d", rec.Code, http.StatusUnprocessableEntity)
-	}
-	if location := rec.Header().Get("Location"); location != "" {
-		t.Fatalf("Location = %q, want empty for HTMX fragment", location)
-	}
-	if redirect := rec.Header().Get("HX-Redirect"); redirect != "" {
-		t.Fatalf("HX-Redirect = %q, want empty for validation error", redirect)
-	}
-	body := rec.Body.String()
-	for _, want := range []string{"reset-form", "Enter a password.", "Confirm your password."} {
-		if !strings.Contains(body, want) {
-			t.Fatalf("body = %q, want %q", body, want)
-		}
-	}
-}
-
-func TestRoutesResetPasswordHTMXRedirectsOnSuccess(t *testing.T) {
-	auth := &fakeAuthLookup{}
-	srv := newAuthRouteTestServer(t, auth)
-
-	form := url.Values{
-		"new_password":     []string{"new-password"},
-		"confirm_password": []string{"new-password"},
-		csrfFieldName:      []string{"csrf"},
-	}
-	req := httptest.NewRequest(http.MethodPost, paths.ResetPassword, strings.NewReader(form.Encode()))
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.Header.Set("HX-Request", "true")
-	req.AddCookie(&http.Cookie{Name: resetCookieName, Value: "raw-token"})
-	addCSRFCookieAndHeader(t, srv, req)
-	rec := httptest.NewRecorder()
-
-	srv.Routes().ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
-	}
-	if location := rec.Header().Get("Location"); location != "" {
-		t.Fatalf("Location = %q, want empty for HTMX redirect", location)
-	}
-	if redirect := rec.Header().Get("HX-Redirect"); redirect != loginPathWithStatusChanged {
-		t.Fatalf("HX-Redirect = %q, want %q", redirect, loginPathWithStatusChanged)
-	}
-	if auth.resetToken != "raw-token" || auth.resetNewPassword != "new-password" {
-		t.Fatalf("reset inputs = %q/%q", auth.resetToken, auth.resetNewPassword)
-	}
-	cookie := cookieFromRecorder(t, rec, resetCookieName)
-	if cookie.MaxAge != -1 {
-		t.Fatalf("reset cookie MaxAge = %d, want -1", cookie.MaxAge)
 	}
 }
 

@@ -99,14 +99,14 @@ func (s *Server) register(w http.ResponseWriter, r *http.Request) {
 		data.Email = strings.TrimSpace(email)
 		data.Error = "Check your details and try again."
 		data.FieldErrors = fieldErrors
-		s.renderStatusForRequest(w, r, http.StatusUnprocessableEntity, templateRegister, fragmentRegisterForm, data)
+		s.renderStatus(w, http.StatusUnprocessableEntity, templateRegister, data)
 		return
 	}
 
 	if _, err := s.auth.Register(r.Context(), email, password); err != nil {
 		data := s.newTemplateData(r, "Create Account")
 		data.Email = strings.TrimSpace(email)
-		s.handleAuthFormError(w, r, templateRegister, fragmentRegisterForm, data, err)
+		s.handleAuthFormError(w, templateRegister, data, err)
 		return
 	}
 
@@ -114,7 +114,7 @@ func (s *Server) register(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		data := s.newTemplateData(r, "Create Account")
 		data.Email = strings.TrimSpace(email)
-		s.handleAuthFormError(w, r, templateRegister, fragmentRegisterForm, data, err)
+		s.handleAuthFormError(w, templateRegister, data, err)
 		return
 	}
 
@@ -128,7 +128,7 @@ func (s *Server) register(w http.ResponseWriter, r *http.Request) {
 	if !s.emailVerificationPolicy.UserIsVerified(user) {
 		redirect = paths.VerifyEmail
 	}
-	s.redirectWithHTMX(w, r, redirect)
+	http.Redirect(w, r, redirect, http.StatusSeeOther)
 }
 
 func (s *Server) loginForm(w http.ResponseWriter, r *http.Request) {
@@ -163,27 +163,15 @@ func (s *Server) forgotPassword(w http.ResponseWriter, r *http.Request) {
 			data.Email = strings.TrimSpace(emailAddress)
 			data.Error = "Check your details and try again."
 			data.FieldErrors = map[string]string{"email": "Enter a valid email address."}
-			s.renderStatusForRequest(w, r, http.StatusUnprocessableEntity, templateForgotPassword, fragmentForgotPasswordForm, data)
+			s.renderStatus(w, http.StatusUnprocessableEntity, templateForgotPassword, data)
 			return
 		}
 
 		s.logger.Error("request password reset", "err", err)
-		if isHXRequest(r) {
-			data := s.newTemplateData(r, "Forgot Password")
-			data.ForgotPasswordStatus = statusError
-			s.renderFragmentStatus(w, http.StatusOK, templateForgotPassword, fragmentForgotPasswordForm, data)
-			return
-		}
 		http.Redirect(w, r, withQueryParam(paths.ForgotPassword, queryKeyStatus, statusError), http.StatusSeeOther)
 		return
 	}
 
-	if isHXRequest(r) {
-		data := s.newTemplateData(r, "Forgot Password")
-		data.ForgotPasswordStatus = statusSent
-		s.renderFragmentStatus(w, http.StatusOK, templateForgotPassword, fragmentForgotPasswordForm, data)
-		return
-	}
 	http.Redirect(w, r, withQueryParam(paths.ForgotPassword, queryKeyStatus, statusSent), http.StatusSeeOther)
 }
 
@@ -357,7 +345,7 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 		data := s.newTemplateData(r, "Sign In")
 		data.Email = strings.TrimSpace(r.FormValue("email"))
 		data.Next = safeRedirectPath(r.FormValue("next"))
-		s.handleAuthFormError(w, r, templateLogin, fragmentLoginForm, data, err)
+		s.handleAuthFormError(w, templateLogin, data, err)
 		return
 	}
 
@@ -374,7 +362,7 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
-	s.redirectWithHTMX(w, r, next)
+	http.Redirect(w, r, next, http.StatusSeeOther)
 }
 
 func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
@@ -423,7 +411,7 @@ func (s *Server) revokeSession(w http.ResponseWriter, r *http.Request) {
 		if !s.populateAccountSessions(w, r, &data) {
 			return
 		}
-		s.renderStatusForRequest(w, r, http.StatusUnprocessableEntity, templateAccount, fragmentAccountSessions, data)
+		s.renderStatus(w, http.StatusUnprocessableEntity, templateAccount, data)
 		return
 	}
 
@@ -434,11 +422,6 @@ func (s *Server) revokeSession(w http.ResponseWriter, r *http.Request) {
 		case errors.Is(err, services.ErrInvalidSession):
 			s.clearSessionCookie(w, r)
 			s.clearCSRFCookie(w, r)
-			if isHXRequest(r) {
-				w.Header().Set("HX-Redirect", paths.Login)
-				w.WriteHeader(http.StatusOK)
-				return
-			}
 			http.Redirect(w, r, paths.Login, http.StatusSeeOther)
 			return
 		case errors.Is(err, services.ErrCannotRevokeCurrentSession):
@@ -454,17 +437,7 @@ func (s *Server) revokeSession(w http.ResponseWriter, r *http.Request) {
 		if !s.populateAccountSessions(w, r, &data) {
 			return
 		}
-		s.renderStatusForRequest(w, r, http.StatusUnprocessableEntity, templateAccount, fragmentAccountSessions, data)
-		return
-	}
-
-	if isHXRequest(r) {
-		data := s.newTemplateData(r, "Account")
-		data.SessionManagementStatus = statusSessionRevoked
-		if !s.populateAccountSessions(w, r, &data) {
-			return
-		}
-		s.renderFragmentStatus(w, http.StatusOK, templateAccount, fragmentAccountSessions, data)
+		s.renderStatus(w, http.StatusUnprocessableEntity, templateAccount, data)
 		return
 	}
 
@@ -483,11 +456,6 @@ func (s *Server) revokeOtherSessions(w http.ResponseWriter, r *http.Request) {
 		case errors.Is(err, services.ErrInvalidSession):
 			s.clearSessionCookie(w, r)
 			s.clearCSRFCookie(w, r)
-			if isHXRequest(r) {
-				w.Header().Set("HX-Redirect", paths.Login)
-				w.WriteHeader(http.StatusOK)
-				return
-			}
 			http.Redirect(w, r, paths.Login, http.StatusSeeOther)
 			return
 		default:
@@ -495,16 +463,6 @@ func (s *Server) revokeOtherSessions(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 			return
 		}
-	}
-
-	if isHXRequest(r) {
-		data := s.newTemplateData(r, "Account")
-		data.SessionManagementStatus = statusSessionsRevoked
-		if !s.populateAccountSessions(w, r, &data) {
-			return
-		}
-		s.renderFragmentStatus(w, http.StatusOK, templateAccount, fragmentAccountSessions, data)
-		return
 	}
 
 	http.Redirect(w, r, withQueryParam(paths.Account, queryKeyStatus, statusSessionsRevoked), http.StatusSeeOther)
@@ -553,23 +511,12 @@ func (s *Server) resendVerification(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	data := s.newTemplateData(r, "Verify Email")
 	if err := s.auth.ResendVerificationEmail(r.Context(), user); err != nil {
 		s.logger.Error("resend verification email", "user_id", user.ID, "err", err)
-		if isHXRequest(r) {
-			data.ResendStatus = statusError
-			s.renderFragmentStatus(w, http.StatusOK, templateVerifyEmail, fragmentVerifyEmailResend, data)
-			return
-		}
 		http.Redirect(w, r, withQueryParam(paths.VerifyEmail, queryKeyResend, statusError), http.StatusSeeOther)
 		return
 	}
 
-	if isHXRequest(r) {
-		data.ResendStatus = statusSent
-		s.renderFragmentStatus(w, http.StatusOK, templateVerifyEmail, fragmentVerifyEmailResend, data)
-		return
-	}
 	http.Redirect(w, r, withQueryParam(paths.VerifyEmail, queryKeyResend, statusSent), http.StatusSeeOther)
 }
 
@@ -600,7 +547,7 @@ func (s *Server) changePassword(w http.ResponseWriter, r *http.Request) {
 		data := s.newChangePasswordTemplateData(r)
 		data.Error = "Check your details and try again."
 		data.FieldErrors = fieldErrors
-		s.renderStatusForRequest(w, r, http.StatusUnprocessableEntity, templateChangePassword, fragmentChangePasswordForm, data)
+		s.renderStatus(w, http.StatusUnprocessableEntity, templateChangePassword, data)
 		return
 	}
 
@@ -610,15 +557,15 @@ func (s *Server) changePassword(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case errors.Is(err, services.ErrCurrentPasswordIncorrect):
 			data.FieldErrors = map[string]string{"current_password": "Current password is not correct."}
-			s.renderStatusForRequest(w, r, http.StatusUnprocessableEntity, templateChangePassword, fragmentChangePasswordForm, data)
+			s.renderStatus(w, http.StatusUnprocessableEntity, templateChangePassword, data)
 			return
 		case errors.Is(err, services.ErrInvalidPassword):
 			data.FieldErrors = map[string]string{"new_password": fmt.Sprintf("Use at least %d characters.", data.PasswordMinLength)}
-			s.renderStatusForRequest(w, r, http.StatusUnprocessableEntity, templateChangePassword, fragmentChangePasswordForm, data)
+			s.renderStatus(w, http.StatusUnprocessableEntity, templateChangePassword, data)
 			return
 		case errors.Is(err, services.ErrPasswordUnchanged):
 			data.FieldErrors = map[string]string{"new_password": "Choose a different password."}
-			s.renderStatusForRequest(w, r, http.StatusUnprocessableEntity, templateChangePassword, fragmentChangePasswordForm, data)
+			s.renderStatus(w, http.StatusUnprocessableEntity, templateChangePassword, data)
 			return
 		default:
 			s.logger.Error("change password", "user_id", user.ID, "err", err)
@@ -629,7 +576,7 @@ func (s *Server) changePassword(w http.ResponseWriter, r *http.Request) {
 
 	s.clearSessionCookie(w, r)
 	s.clearCSRFCookie(w, r)
-	s.redirectWithHTMX(w, r, loginPathWithStatusChanged)
+	http.Redirect(w, r, loginPathWithStatusChanged, http.StatusSeeOther)
 }
 
 func (s *Server) changeEmail(w http.ResponseWriter, r *http.Request) {
@@ -659,7 +606,7 @@ func (s *Server) changeEmail(w http.ResponseWriter, r *http.Request) {
 		data.Email = strings.TrimSpace(newEmail)
 		data.Error = "Check your details and try again."
 		data.FieldErrors = fieldErrors
-		s.renderStatusForRequest(w, r, http.StatusUnprocessableEntity, templateChangeEmail, fragmentChangeEmailForm, data)
+		s.renderStatus(w, http.StatusUnprocessableEntity, templateChangeEmail, data)
 		return
 	}
 
@@ -681,23 +628,17 @@ func (s *Server) changeEmail(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 			return
 		}
-		s.renderStatusForRequest(w, r, http.StatusUnprocessableEntity, templateChangeEmail, fragmentChangeEmailForm, data)
+		s.renderStatus(w, http.StatusUnprocessableEntity, templateChangeEmail, data)
 		return
 	}
 
 	if !s.emailVerificationPolicy.RequiresEmailChangeVerification() {
 		s.clearSessionCookie(w, r)
 		s.clearCSRFCookie(w, r)
-		s.redirectWithHTMX(w, r, loginPathWithEmailChanged)
+		http.Redirect(w, r, loginPathWithEmailChanged, http.StatusSeeOther)
 		return
 	}
 
-	if isHXRequest(r) {
-		data := s.newChangeEmailTemplateData(r)
-		data.ChangeEmailStatus = statusSent
-		s.renderFragmentStatus(w, http.StatusOK, templateChangeEmail, fragmentChangeEmailForm, data)
-		return
-	}
 	http.Redirect(w, r, withQueryParam(paths.ChangeEmail, queryKeyStatus, statusSent), http.StatusSeeOther)
 }
 
@@ -716,7 +657,7 @@ func (s *Server) resetPassword(w http.ResponseWriter, r *http.Request) {
 		data := s.newTemplateData(r, "Reset Password")
 		data.Error = "Check your details and try again."
 		data.FieldErrors = fieldErrors
-		s.renderStatusForRequest(w, r, http.StatusUnprocessableEntity, templateResetPassword, fragmentResetPassword, data)
+		s.renderStatus(w, http.StatusUnprocessableEntity, templateResetPassword, data)
 		return
 	}
 
@@ -728,11 +669,11 @@ func (s *Server) resetPassword(w http.ResponseWriter, r *http.Request) {
 			s.clearResetCookie(w, r)
 			data.Error = "This password reset link is invalid or has expired."
 			data.ResetTokenInvalid = true
-			s.renderStatusForRequest(w, r, http.StatusBadRequest, templateResetPassword, fragmentResetPassword, data)
+			s.renderStatus(w, http.StatusBadRequest, templateResetPassword, data)
 			return
 		case errors.Is(err, services.ErrInvalidPassword):
 			data.FieldErrors = map[string]string{"new_password": fmt.Sprintf("Use at least %d characters.", data.PasswordMinLength)}
-			s.renderStatusForRequest(w, r, http.StatusUnprocessableEntity, templateResetPassword, fragmentResetPassword, data)
+			s.renderStatus(w, http.StatusUnprocessableEntity, templateResetPassword, data)
 			return
 		default:
 			s.logger.Error("reset password", "err", err)
@@ -742,7 +683,7 @@ func (s *Server) resetPassword(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.clearResetCookie(w, r)
-	s.redirectWithHTMX(w, r, loginPathWithStatusChanged)
+	http.Redirect(w, r, loginPathWithStatusChanged, http.StatusSeeOther)
 }
 
 func (s *Server) resendVerificationPublic(w http.ResponseWriter, r *http.Request) {
@@ -767,67 +708,45 @@ func (s *Server) resendVerificationPublic(w http.ResponseWriter, r *http.Request
 			data.Email = strings.TrimSpace(emailAddress)
 			data.Error = "Check your details and try again."
 			data.FieldErrors = map[string]string{"email": "Enter a valid email address."}
-			s.renderStatusForRequest(w, r, http.StatusUnprocessableEntity, templateResendVerification, fragmentResendVerification, data)
+			s.renderStatus(w, http.StatusUnprocessableEntity, templateResendVerification, data)
 			return
 		}
 
 		s.logger.Error("resend verification email (public)", "err", err)
-		if isHXRequest(r) {
-			data := s.newTemplateData(r, "Resend Verification Email")
-			data.ResendStatus = statusError
-			s.renderFragmentStatus(w, http.StatusOK, templateResendVerification, fragmentResendVerification, data)
-			return
-		}
 		http.Redirect(w, r, withQueryParam(paths.ResendVerification, queryKeyStatus, statusError), http.StatusSeeOther)
 		return
 	}
 
-	if isHXRequest(r) {
-		data := s.newTemplateData(r, "Resend Verification Email")
-		data.ResendStatus = statusSent
-		s.renderFragmentStatus(w, http.StatusOK, templateResendVerification, fragmentResendVerification, data)
-		return
-	}
 	http.Redirect(w, r, withQueryParam(paths.ResendVerification, queryKeyStatus, statusSent), http.StatusSeeOther)
 }
 
-func (s *Server) handleAuthFormError(w http.ResponseWriter, r *http.Request, templateName, fragmentName string, data templateData, err error) {
+func (s *Server) handleAuthFormError(w http.ResponseWriter, templateName string, data templateData, err error) {
 	if errors.Is(err, services.ErrInvalidEmail) {
 		data.Error = "Check your details and try again."
 		data.FieldErrors = map[string]string{"email": "Enter a valid email address."}
-		s.renderStatusForRequest(w, r, http.StatusUnprocessableEntity, templateName, fragmentName, data)
+		s.renderStatus(w, http.StatusUnprocessableEntity, templateName, data)
 		return
 	}
 	if errors.Is(err, services.ErrInvalidPassword) {
 		data.Error = "Check your details and try again."
 		data.FieldErrors = map[string]string{"password": fmt.Sprintf("Use at least %d characters.", data.PasswordMinLength)}
-		s.renderStatusForRequest(w, r, http.StatusUnprocessableEntity, templateName, fragmentName, data)
+		s.renderStatus(w, http.StatusUnprocessableEntity, templateName, data)
 		return
 	}
 	if errors.Is(err, services.ErrEmailAlreadyRegistered) {
 		data.Error = "Check your details and try again."
 		data.FieldErrors = map[string]string{"email": "An account with this email already exists."}
-		s.renderStatusForRequest(w, r, http.StatusUnprocessableEntity, templateName, fragmentName, data)
+		s.renderStatus(w, http.StatusUnprocessableEntity, templateName, data)
 		return
 	}
 	if errors.Is(err, services.ErrInvalidCredentials) {
 		data.Error = "Email or password is not correct."
-		s.renderStatusForRequest(w, r, http.StatusUnprocessableEntity, templateName, fragmentName, data)
+		s.renderStatus(w, http.StatusUnprocessableEntity, templateName, data)
 		return
 	}
 
 	s.logger.Error("auth form", "err", err)
 	http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-}
-
-func (s *Server) redirectWithHTMX(w http.ResponseWriter, r *http.Request, destination string) {
-	if isHXRequest(r) {
-		w.Header().Set("HX-Redirect", destination)
-		w.WriteHeader(http.StatusOK)
-		return
-	}
-
-	http.Redirect(w, r, destination, http.StatusSeeOther)
 }
 
 func (s *Server) validateRegistrationForm(email, password, confirmPassword string) map[string]string {
@@ -950,41 +869,6 @@ func (s *Server) renderTemplate(w io.Writer, templateName string, data templateD
 	}
 
 	return tmpl.ExecuteTemplate(w, templateLayout, data)
-}
-
-func (s *Server) renderFragmentStatus(w http.ResponseWriter, status int, templateName, fragmentName string, data templateData) {
-	var body bytes.Buffer
-	if err := s.renderTemplateFragment(&body, templateName, fragmentName, data); err != nil {
-		s.logger.Error("render template fragment", "template", templateName, "fragment", fragmentName, "err", err)
-		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-		return
-	}
-
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.WriteHeader(status)
-	_, _ = w.Write(body.Bytes())
-}
-
-func (s *Server) renderTemplateFragment(w io.Writer, templateName, fragmentName string, data templateData) error {
-	tmpl, ok := s.templates[templateName]
-	if !ok {
-		return fmt.Errorf("template %q not found", templateName)
-	}
-
-	return tmpl.ExecuteTemplate(w, fragmentName, data)
-}
-
-func isHXRequest(r *http.Request) bool {
-	return strings.EqualFold(strings.TrimSpace(r.Header.Get("HX-Request")), "true")
-}
-
-func (s *Server) renderStatusForRequest(w http.ResponseWriter, r *http.Request, status int, templateName, fragmentName string, data templateData) {
-	if isHXRequest(r) {
-		s.renderFragmentStatus(w, status, templateName, fragmentName, data)
-		return
-	}
-
-	s.renderStatus(w, status, templateName, data)
 }
 
 func withQueryParam(basePath, key, value string) string {

@@ -14,8 +14,7 @@
   {{ if eq .ResendStatus "error" }}<p role="alert">We couldn't send a verification email right now. Please try again.
   </p>{{ end }}
   {{ if .Error }}<p role="alert">{{ .Error }}</p>{{ end }}
-  <form method="post" action="{{ .Routes.ResendVerification }}" hx-post="{{ .Routes.ResendVerification }}"
-    hx-target="#resend-verification-form-section" hx-swap="outerHTML" hx-disabled-elt="button[type='submit']">
+  <form method="post" action="{{ .Routes.ResendVerification }}">
     <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
     <label>
       Email

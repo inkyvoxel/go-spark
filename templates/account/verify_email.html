@@ -16,8 +16,7 @@
   {{ else }}
   <p role="status">Check your email to confirm your account.</p>
   {{ end }}
-  <form method="post" action="{{ .Routes.VerifyEmailResend }}" hx-post="{{ .Routes.VerifyEmailResend }}"
-    hx-target="#verify-email-resend-section" hx-swap="outerHTML" hx-disabled-elt="button[type='submit']">
+  <form method="post" action="{{ .Routes.VerifyEmailResend }}">
     <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
     <button type="submit">Resend verification email</button>
   </form>

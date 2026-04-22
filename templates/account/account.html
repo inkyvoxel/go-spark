@@ -23,9 +23,7 @@
   <p role="alert">{{ .SessionManagementError }}</p>
   {{ end }}
 
-  <form method="post" action="{{ .Routes.AccountSessionsRevokeOthers }}"
-    hx-post="{{ .Routes.AccountSessionsRevokeOthers }}" hx-target="#account-sessions-section" hx-swap="outerHTML"
-    hx-disabled-elt="button[type='submit']">
+  <form method="post" action="{{ .Routes.AccountSessionsRevokeOthers }}">
     <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
     <button type="submit" class="secondary">Sign out other sessions</button>
   </form>
@@ -52,8 +50,7 @@
             {{ if .Current }}
             <small>Current</small>
             {{ else }}
-            <form method="post" action="{{ $.Routes.AccountSessionsRevoke }}" hx-post="{{ $.Routes.AccountSessionsRevoke }}"
-              hx-target="#account-sessions-section" hx-swap="outerHTML" hx-disabled-elt="button[type='submit']">
+            <form method="post" action="{{ $.Routes.AccountSessionsRevoke }}">
               <input type="hidden" name="csrf_token" value="{{ $.CSRFToken }}">
               <input type="hidden" name="session_id" value="{{ .ID }}">
               <button type="submit" class="secondary outline">Revoke</button>

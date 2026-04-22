@@ -72,9 +72,6 @@ func TestRoutesStaticFileIsServed(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
 	}
-	if !strings.Contains(rec.Body.String(), ".htmx-indicator") {
-		t.Fatalf("body = %q, want it to contain %q", rec.Body.String(), ".htmx-indicator")
-	}
 }
 
 func TestRoutesSetSecurityHeaders(t *testing.T) {
