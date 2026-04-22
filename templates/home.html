@@ -5,14 +5,5 @@
     Go Spark gives you a small, practical foundation: Go, SQLite, templates, sessions, CSRF protection, and auth already
     wired in, plus basic email support for account confirmation.
   </p>
-  <p>
-    {{ if .Authenticated }}
-    <a href="{{ .Routes.Account }}" role="button">Account</a>
-    {{ else }}
-    <a href="{{ .Routes.Register }}" role="button">Create account</a>
-    <a href="{{ .Routes.Login }}" role="button" class="secondary">Sign in</a>
-    {{ end }}
-    <a href="{{ .Routes.Healthz }}" role="button" class="contrast">Check health</a>
-  </p>
 </section>
 {{ end }}

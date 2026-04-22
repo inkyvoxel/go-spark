@@ -37,7 +37,6 @@ Open:
 
 ```text
 http://localhost:8080
-http://localhost:8080/healthz
 ```
 
 The app listens on `:8080` by default, stores its SQLite database at `./data/app.db`.

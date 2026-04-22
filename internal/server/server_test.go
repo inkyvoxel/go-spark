@@ -46,38 +46,6 @@ func TestRoutesHome(t *testing.T) {
 	}
 }
 
-func TestRoutesHealthz(t *testing.T) {
-	srv := testServer(t)
-
-	req := httptest.NewRequest(http.MethodGet, paths.Healthz, nil)
-	rec := httptest.NewRecorder()
-
-	srv.Routes().ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
-	}
-	if rec.Body.String() != "ok\n" {
-		t.Fatalf("body = %q, want %q", rec.Body.String(), "ok\n")
-	}
-}
-
-func TestRoutesHealthzReturnsUnavailableWhenDatabaseIsClosed(t *testing.T) {
-	srv := testServer(t)
-	if err := srv.db.Close(); err != nil {
-		t.Fatalf("Close() error = %v", err)
-	}
-
-	req := httptest.NewRequest(http.MethodGet, paths.Healthz, nil)
-	rec := httptest.NewRecorder()
-
-	srv.Routes().ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusServiceUnavailable {
-		t.Fatalf("status = %d, want %d", rec.Code, http.StatusServiceUnavailable)
-	}
-}
-
 func TestRoutesStaticDirectoryListingIsNotServed(t *testing.T) {
 	chdirProjectRoot(t)
 	srv := testServer(t)

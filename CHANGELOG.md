@@ -13,7 +13,7 @@ This project follows a simple, human-written changelog format. Versioning will b
 * Goose migration for users and sessions.
 * SQLC configuration and generated starter query package.
 * Project-pinned `sqlc` and `goose` tool dependencies.
-* Basic home page, static CSS, and `/healthz`.
+* Basic home page and CSS.
 * Focused tests for config, database opening, and routes.
 * Auth service foundation with bcrypt password hashing and database-backed sessions.
 * SQLC auth queries for users and sessions.

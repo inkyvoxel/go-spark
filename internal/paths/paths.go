@@ -2,7 +2,6 @@ package paths
 
 const (
 	Home                        = "/"
-	Healthz                     = "/healthz"
 	StaticPrefix                = "/static/"
 	StaticPicoCSS               = StaticPrefix + "vendor/pico/pico.min.css"
 	StaticStyles                = StaticPrefix + "styles.css"
@@ -26,7 +25,6 @@ const (
 
 type TemplateRouteSet struct {
 	Home                        string
-	Healthz                     string
 	StaticPicoCSS               string
 	StaticStyles                string
 	StaticHTMX                  string
@@ -47,7 +45,6 @@ type TemplateRouteSet struct {
 
 var TemplateRoutes = TemplateRouteSet{
 	Home:                        Home,
-	Healthz:                     Healthz,
 	StaticPicoCSS:               StaticPicoCSS,
 	StaticStyles:                StaticStyles,
 	StaticHTMX:                  StaticHTMX,

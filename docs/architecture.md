@@ -155,7 +155,6 @@ Core routes:
 | Method | Path | Purpose | Auth policy |
 | --- | --- | --- | --- |
 | `GET` | `/` | Home page | Optional session |
-| `GET` | `/healthz` | Health check | Public |
 | `GET` | `/static/*` | Static assets | Public |
 
 Auth and account routes:

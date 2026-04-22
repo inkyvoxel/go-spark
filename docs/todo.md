@@ -26,18 +26,6 @@
   - Risk: password reset and verification emails may silently stop for affected rows.
   - Recommendation: add `claimed_at`/lease fields, retry stale `sending` rows, and cap/trim `last_error` to avoid unbounded database growth.
 
-### Low priority / defense in depth
-
-- [ ] Review health endpoint exposure.
-  - Evidence: `/healthz` pings the database and returns `ok` or `database unavailable`.
-  - Risk: public health endpoints reveal service/database availability.
-  - Recommendation: keep simple liveness public if needed, but put detailed readiness behind infrastructure access controls or split `/livez` and `/readyz`.
-
-- [x] Add origin/referer validation as CSRF defense-in-depth.
-  - Implemented: unsafe methods now validate same-origin `Origin` (preferred) or `Referer` against `APP_BASE_URL` when those headers are present.
-  - Behavior: requests with both headers missing are still allowed for compatibility.
-
-- [x] Add tests for browser/security headers, request body limits, production config validation, session-token hashing, and reset-token URL scrubbing once implemented.
 
 ### Positive findings to preserve
 

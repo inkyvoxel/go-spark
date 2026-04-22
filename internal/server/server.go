@@ -146,7 +146,6 @@ func (s *Server) Routes() http.Handler {
 	dynamic := http.NewServeMux()
 
 	mux.Handle(route(http.MethodGet, paths.StaticPrefix), staticFileHandler())
-	mux.HandleFunc(route(http.MethodGet, paths.Healthz), s.health)
 
 	// Register new protected pages with requireAuth and anonymous-only pages with requireAnonymous.
 	dynamic.Handle(route(http.MethodGet, paths.Register), s.requireAnonymous(http.HandlerFunc(s.registerForm)))
@@ -248,17 +247,6 @@ func (s *Server) home(w http.ResponseWriter, r *http.Request) {
 	s.render(w, templateHome, s.newTemplateData(r, "Go Spark"))
 }
 
-func (s *Server) health(w http.ResponseWriter, r *http.Request) {
-	if err := s.db.PingContext(r.Context()); err != nil {
-		s.logger.Error("health check failed", "err", err)
-		http.Error(w, "database unavailable", http.StatusServiceUnavailable)
-		return
-	}
-
-	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write([]byte("ok\n"))
-}
 
 func (s *Server) logRequests(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
