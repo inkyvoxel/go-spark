@@ -76,49 +76,42 @@ func TestValidateSecurityConfigRequiresPepperInProduction(t *testing.T) {
 	cfg := productionSecurityConfig()
 	cfg.PasswordPepper = ""
 
-	err := validateSecurityConfig(cfg)
-	if err == nil {
-		t.Fatal("validateSecurityConfig() error = nil, want error")
-	}
+	assertValidateSecurityConfigErrorContains(t, cfg, "AUTH_PASSWORD_PEPPER")
+}
+
+func TestValidateSecurityConfigRejectsWhitespacePepperInProduction(t *testing.T) {
+	cfg := productionSecurityConfig()
+	cfg.PasswordPepper = " \t "
+
+	assertValidateSecurityConfigErrorContains(t, cfg, "AUTH_PASSWORD_PEPPER")
 }
 
 func TestValidateSecurityConfigRequiresCookieSecureInProduction(t *testing.T) {
 	cfg := productionSecurityConfig()
 	cfg.CookieSecure = false
 
-	err := validateSecurityConfig(cfg)
-	if err == nil {
-		t.Fatal("validateSecurityConfig() error = nil, want error")
-	}
-	if !strings.Contains(err.Error(), "APP_COOKIE_SECURE") {
-		t.Fatalf("validateSecurityConfig() error = %v, want APP_COOKIE_SECURE context", err)
-	}
+	assertValidateSecurityConfigErrorContains(t, cfg, "APP_COOKIE_SECURE")
 }
 
 func TestValidateSecurityConfigRequiresHTTPSAppBaseURLInProduction(t *testing.T) {
 	cfg := productionSecurityConfig()
 	cfg.AppBaseURL = "http://app.example.com"
 
-	err := validateSecurityConfig(cfg)
-	if err == nil {
-		t.Fatal("validateSecurityConfig() error = nil, want error")
-	}
-	if !strings.Contains(err.Error(), "APP_BASE_URL") {
-		t.Fatalf("validateSecurityConfig() error = %v, want APP_BASE_URL context", err)
-	}
+	assertValidateSecurityConfigErrorContains(t, cfg, "APP_BASE_URL")
 }
 
 func TestValidateSecurityConfigRequiresCSRFSigningKeyInProduction(t *testing.T) {
 	cfg := productionSecurityConfig()
 	cfg.CSRFSigningKey = ""
 
-	err := validateSecurityConfig(cfg)
-	if err == nil {
-		t.Fatal("validateSecurityConfig() error = nil, want error")
-	}
-	if !strings.Contains(err.Error(), "CSRF_SIGNING_KEY") {
-		t.Fatalf("validateSecurityConfig() error = %v, want CSRF_SIGNING_KEY context", err)
-	}
+	assertValidateSecurityConfigErrorContains(t, cfg, "CSRF_SIGNING_KEY")
+}
+
+func TestValidateSecurityConfigRejectsWhitespaceCSRFSigningKeyInProduction(t *testing.T) {
+	cfg := productionSecurityConfig()
+	cfg.CSRFSigningKey = " \n\t "
+
+	assertValidateSecurityConfigErrorContains(t, cfg, "CSRF_SIGNING_KEY")
 }
 
 func TestValidateSecurityConfigAllowsProductionWithSecureBaseline(t *testing.T) {
@@ -266,4 +259,16 @@ func assertWarningsContain(t *testing.T, warnings []string, fragment string) {
 	}
 
 	t.Fatalf("warnings %q did not contain %q", warnings, fragment)
+}
+
+func assertValidateSecurityConfigErrorContains(t *testing.T, cfg config.Config, fragment string) {
+	t.Helper()
+
+	err := validateSecurityConfig(cfg)
+	if err == nil {
+		t.Fatal("validateSecurityConfig() error = nil, want error")
+	}
+	if !strings.Contains(err.Error(), fragment) {
+		t.Fatalf("validateSecurityConfig() error = %v, want %s context", err, fragment)
+	}
 }

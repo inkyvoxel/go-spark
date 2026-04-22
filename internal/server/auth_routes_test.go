@@ -230,6 +230,37 @@ func TestRoutesLoginRejectsUnsafeNextPath(t *testing.T) {
 	}
 }
 
+func TestRoutesLoginRejectsOversizedBody(t *testing.T) {
+	auth := &fakeAuthLookup{}
+	srv := newAuthRouteTestServer(t, auth)
+
+	token, err := srv.newSignedCSRFToken(csrfAnonymousSessionHash, time.Now().UTC())
+	if err != nil {
+		t.Fatalf("newSignedCSRFToken() error = %v", err)
+	}
+
+	overSizedPayload := strings.Repeat("a", maxRequestBodyBytes+1024)
+	form := url.Values{
+		"email":       []string{"user@example.com"},
+		"password":    []string{"password"},
+		csrfFieldName: []string{token},
+		"payload":     []string{overSizedPayload},
+	}
+	req := httptest.NewRequest(http.MethodPost, paths.Login, strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: token})
+	rec := httptest.NewRecorder()
+
+	srv.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusRequestEntityTooLarge)
+	}
+	if auth.loginEmail != "" {
+		t.Fatalf("loginEmail = %q, want empty because handler should not run", auth.loginEmail)
+	}
+}
+
 func TestRoutesLoginFormIncludesSafeNextPath(t *testing.T) {
 	srv := newAuthRouteTestServer(t, &fakeAuthLookup{})
 
@@ -2457,6 +2488,23 @@ func TestRoutesResetPasswordForm(t *testing.T) {
 	}
 	if cookie.SameSite != http.SameSiteStrictMode {
 		t.Fatalf("reset cookie SameSite = %v, want %v", cookie.SameSite, http.SameSiteStrictMode)
+	}
+}
+
+func TestRoutesResetPasswordFormScrubsTokenAndExtraQueryParams(t *testing.T) {
+	auth := &fakeAuthLookup{}
+	srv := newAuthRouteTestServer(t, auth)
+
+	req := httptest.NewRequest(http.MethodGet, paths.ResetPassword+"?token=raw-token&utm_source=test", nil)
+	rec := httptest.NewRecorder()
+
+	srv.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusSeeOther)
+	}
+	if location := rec.Header().Get("Location"); location != paths.ResetPassword {
+		t.Fatalf("Location = %q, want %q", location, paths.ResetPassword)
 	}
 }
 

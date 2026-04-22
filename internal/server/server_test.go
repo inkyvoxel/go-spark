@@ -1,6 +1,7 @@
 package server
 
 import (
+	"crypto/tls"
 	"database/sql"
 	"html/template"
 	"io"
@@ -141,6 +142,20 @@ func TestRoutesSetHSTSWhenSecureCookiesEnabled(t *testing.T) {
 	srv.cookieSecure = true
 
 	req := httptest.NewRequest(http.MethodGet, paths.Home, nil)
+	rec := httptest.NewRecorder()
+
+	srv.Routes().ServeHTTP(rec, req)
+
+	if got := rec.Header().Get("Strict-Transport-Security"); got != "max-age=31536000" {
+		t.Fatalf("Strict-Transport-Security = %q, want %q", got, "max-age=31536000")
+	}
+}
+
+func TestRoutesSetHSTSWhenRequestIsTLS(t *testing.T) {
+	srv := testServer(t)
+
+	req := httptest.NewRequest(http.MethodGet, paths.Home, nil)
+	req.TLS = &tls.ConnectionState{}
 	rec := httptest.NewRecorder()
 
 	srv.Routes().ServeHTTP(rec, req)

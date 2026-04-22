@@ -37,7 +37,7 @@
   - Implemented: unsafe methods now validate same-origin `Origin` (preferred) or `Referer` against `APP_BASE_URL` when those headers are present.
   - Behavior: requests with both headers missing are still allowed for compatibility.
 
-- [ ] Add tests for browser/security headers, request body limits, production config validation, session-token hashing, and reset-token URL scrubbing once implemented.
+- [x] Add tests for browser/security headers, request body limits, production config validation, session-token hashing, and reset-token URL scrubbing once implemented.
 
 ### Positive findings to preserve
 
