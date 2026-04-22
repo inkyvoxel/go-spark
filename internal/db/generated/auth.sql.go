@@ -268,6 +268,46 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 	return i, err
 }
 
+const deleteOtherSessionsByUserIDAndTokenHash = `-- name: DeleteOtherSessionsByUserIDAndTokenHash :execrows
+DELETE FROM sessions
+WHERE user_id = ?
+  AND token_hash <> ?
+`
+
+type DeleteOtherSessionsByUserIDAndTokenHashParams struct {
+	UserID    int64
+	TokenHash string
+}
+
+func (q *Queries) DeleteOtherSessionsByUserIDAndTokenHash(ctx context.Context, arg DeleteOtherSessionsByUserIDAndTokenHashParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, deleteOtherSessionsByUserIDAndTokenHash, arg.UserID, arg.TokenHash)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+const deleteSessionByIDAndUserIDAndTokenHashNot = `-- name: DeleteSessionByIDAndUserIDAndTokenHashNot :execrows
+DELETE FROM sessions
+WHERE id = ?
+  AND user_id = ?
+  AND token_hash <> ?
+`
+
+type DeleteSessionByIDAndUserIDAndTokenHashNotParams struct {
+	ID        int64
+	UserID    int64
+	TokenHash string
+}
+
+func (q *Queries) DeleteSessionByIDAndUserIDAndTokenHashNot(ctx context.Context, arg DeleteSessionByIDAndUserIDAndTokenHashNotParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, deleteSessionByIDAndUserIDAndTokenHashNot, arg.ID, arg.UserID, arg.TokenHash)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const deleteSessionByTokenHash = `-- name: DeleteSessionByTokenHash :exec
 DELETE FROM sessions
 WHERE token_hash = ?
@@ -376,6 +416,43 @@ func (q *Queries) GetValidPasswordResetTokenByHash(ctx context.Context, arg GetV
 		&i.CreatedAt,
 	)
 	return i, err
+}
+
+const listActiveSessionsByUserID = `-- name: ListActiveSessionsByUserID :many
+SELECT id, user_id, token_hash, expires_at, created_at
+FROM sessions
+WHERE user_id = ?
+  AND expires_at > CURRENT_TIMESTAMP
+ORDER BY created_at DESC, id DESC
+`
+
+func (q *Queries) ListActiveSessionsByUserID(ctx context.Context, userID int64) ([]Session, error) {
+	rows, err := q.db.QueryContext(ctx, listActiveSessionsByUserID, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Session
+	for rows.Next() {
+		var i Session
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserID,
+			&i.TokenHash,
+			&i.ExpiresAt,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const markUserEmailVerified = `-- name: MarkUserEmailVerified :one

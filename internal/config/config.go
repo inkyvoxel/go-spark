@@ -33,6 +33,8 @@ type RateLimitPoliciesConfig struct {
 	AccountResendVerification RateLimitPolicyConfig
 	ChangePassword            RateLimitPolicyConfig
 	ChangeEmail               RateLimitPolicyConfig
+	RevokeSession             RateLimitPolicyConfig
+	RevokeOtherSessions       RateLimitPolicyConfig
 }
 
 type Config struct {
@@ -385,6 +387,14 @@ func rateLimitPoliciesFromEnv() (RateLimitPoliciesConfig, error) {
 	if err != nil {
 		return RateLimitPoliciesConfig{}, err
 	}
+	revokeSession, err := rateLimitPolicyFromEnv("RATE_LIMIT_REVOKE_SESSION")
+	if err != nil {
+		return RateLimitPoliciesConfig{}, err
+	}
+	revokeOtherSessions, err := rateLimitPolicyFromEnv("RATE_LIMIT_REVOKE_OTHER_SESSIONS")
+	if err != nil {
+		return RateLimitPoliciesConfig{}, err
+	}
 
 	return RateLimitPoliciesConfig{
 		Login:                     login,
@@ -395,6 +405,8 @@ func rateLimitPoliciesFromEnv() (RateLimitPoliciesConfig, error) {
 		AccountResendVerification: accountResendVerification,
 		ChangePassword:            changePassword,
 		ChangeEmail:               changeEmail,
+		RevokeSession:             revokeSession,
+		RevokeOtherSessions:       revokeOtherSessions,
 	}, nil
 }
 

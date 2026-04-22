@@ -160,6 +160,10 @@ func TestFromEnvUsesEnvironment(t *testing.T) {
 	t.Setenv("RATE_LIMIT_CHANGE_PASSWORD_WINDOW", "20m")
 	t.Setenv("RATE_LIMIT_CHANGE_EMAIL_MAX_REQUESTS", "6")
 	t.Setenv("RATE_LIMIT_CHANGE_EMAIL_WINDOW", "25m")
+	t.Setenv("RATE_LIMIT_REVOKE_SESSION_MAX_REQUESTS", "9")
+	t.Setenv("RATE_LIMIT_REVOKE_SESSION_WINDOW", "5m")
+	t.Setenv("RATE_LIMIT_REVOKE_OTHER_SESSIONS_MAX_REQUESTS", "3")
+	t.Setenv("RATE_LIMIT_REVOKE_OTHER_SESSIONS_WINDOW", "7m")
 
 	cfg, err := FromEnv(services.DefaultPasswordMinLength)
 	if err != nil {
@@ -231,6 +235,18 @@ func TestFromEnvUsesEnvironment(t *testing.T) {
 	}
 	if cfg.RateLimitPolicies.ChangeEmail.Window != 25*time.Minute {
 		t.Fatalf("RateLimitPolicies.ChangeEmail.Window = %v, want %v", cfg.RateLimitPolicies.ChangeEmail.Window, 25*time.Minute)
+	}
+	if cfg.RateLimitPolicies.RevokeSession.MaxRequests != 9 {
+		t.Fatalf("RateLimitPolicies.RevokeSession.MaxRequests = %d, want %d", cfg.RateLimitPolicies.RevokeSession.MaxRequests, 9)
+	}
+	if cfg.RateLimitPolicies.RevokeSession.Window != 5*time.Minute {
+		t.Fatalf("RateLimitPolicies.RevokeSession.Window = %v, want %v", cfg.RateLimitPolicies.RevokeSession.Window, 5*time.Minute)
+	}
+	if cfg.RateLimitPolicies.RevokeOtherSessions.MaxRequests != 3 {
+		t.Fatalf("RateLimitPolicies.RevokeOtherSessions.MaxRequests = %d, want %d", cfg.RateLimitPolicies.RevokeOtherSessions.MaxRequests, 3)
+	}
+	if cfg.RateLimitPolicies.RevokeOtherSessions.Window != 7*time.Minute {
+		t.Fatalf("RateLimitPolicies.RevokeOtherSessions.Window = %v, want %v", cfg.RateLimitPolicies.RevokeOtherSessions.Window, 7*time.Minute)
 	}
 }
 

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"unicode/utf8"
 
@@ -21,10 +22,12 @@ const (
 	queryKeyStatus = "status"
 	queryKeyResend = "resend"
 
-	statusChanged      = "password-changed"
-	statusEmailChanged = "email-changed"
-	statusError        = "error"
-	statusSent         = "sent"
+	statusChanged         = "password-changed"
+	statusEmailChanged    = "email-changed"
+	statusSessionRevoked  = "session-revoked"
+	statusSessionsRevoked = "sessions-revoked"
+	statusError           = "error"
+	statusSent            = "sent"
 
 	loginPathWithStatusChanged = paths.Login + "?" + queryKeyStatus + "=" + statusChanged
 	loginPathWithEmailChanged  = paths.Login + "?" + queryKeyStatus + "=" + statusEmailChanged
@@ -50,6 +53,9 @@ type templateData struct {
 	User                      db.User
 	PasswordMinLength         int
 	ResendStatus              string
+	ManagedSessions           []services.ManagedSession
+	SessionManagementStatus   string
+	SessionManagementError    string
 }
 
 type breadcrumbItem struct {
@@ -387,7 +393,121 @@ func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) account(w http.ResponseWriter, r *http.Request) {
-	s.render(w, templateAccount, s.newTemplateData(r, "Account"))
+	data := s.newTemplateData(r, "Account")
+	status := strings.TrimSpace(r.URL.Query().Get(queryKeyStatus))
+	if status == statusSessionRevoked || status == statusSessionsRevoked {
+		data.SessionManagementStatus = status
+	}
+	if !s.populateAccountSessions(w, r, &data) {
+		return
+	}
+	s.render(w, templateAccount, data)
+}
+
+func (s *Server) revokeSession(w http.ResponseWriter, r *http.Request) {
+	user, ok := currentUser(r.Context())
+	if !ok {
+		http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+		return
+	}
+
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+		return
+	}
+
+	sessionID, err := s.sessionIDFromRequest(r.FormValue("session_id"))
+	if err != nil {
+		data := s.newTemplateData(r, "Account")
+		data.SessionManagementError = "Select a valid session to revoke."
+		if !s.populateAccountSessions(w, r, &data) {
+			return
+		}
+		s.renderStatusForRequest(w, r, http.StatusUnprocessableEntity, templateAccount, fragmentAccountSessions, data)
+		return
+	}
+
+	err = s.auth.RevokeSessionByID(r.Context(), user.ID, sessionTokenFromCookie(r), sessionID)
+	if err != nil {
+		data := s.newTemplateData(r, "Account")
+		switch {
+		case errors.Is(err, services.ErrInvalidSession):
+			s.clearSessionCookie(w, r)
+			s.clearCSRFCookie(w, r)
+			if isHXRequest(r) {
+				w.Header().Set("HX-Redirect", paths.Login)
+				w.WriteHeader(http.StatusOK)
+				return
+			}
+			http.Redirect(w, r, paths.Login, http.StatusSeeOther)
+			return
+		case errors.Is(err, services.ErrCannotRevokeCurrentSession):
+			data.SessionManagementError = "You cannot revoke your current session. Use Sign out for this device."
+		case errors.Is(err, services.ErrInvalidSessionTarget):
+			data.SessionManagementError = "The selected session is no longer available."
+		default:
+			s.logger.Error("revoke session", "user_id", user.ID, "session_id", sessionID, "err", err)
+			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+			return
+		}
+
+		if !s.populateAccountSessions(w, r, &data) {
+			return
+		}
+		s.renderStatusForRequest(w, r, http.StatusUnprocessableEntity, templateAccount, fragmentAccountSessions, data)
+		return
+	}
+
+	if isHXRequest(r) {
+		data := s.newTemplateData(r, "Account")
+		data.SessionManagementStatus = statusSessionRevoked
+		if !s.populateAccountSessions(w, r, &data) {
+			return
+		}
+		s.renderFragmentStatus(w, http.StatusOK, templateAccount, fragmentAccountSessions, data)
+		return
+	}
+
+	http.Redirect(w, r, withQueryParam(paths.Account, queryKeyStatus, statusSessionRevoked), http.StatusSeeOther)
+}
+
+func (s *Server) revokeOtherSessions(w http.ResponseWriter, r *http.Request) {
+	user, ok := currentUser(r.Context())
+	if !ok {
+		http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+		return
+	}
+
+	if err := s.auth.RevokeOtherSessions(r.Context(), user.ID, sessionTokenFromCookie(r)); err != nil {
+		switch {
+		case errors.Is(err, services.ErrInvalidSession):
+			s.clearSessionCookie(w, r)
+			s.clearCSRFCookie(w, r)
+			if isHXRequest(r) {
+				w.Header().Set("HX-Redirect", paths.Login)
+				w.WriteHeader(http.StatusOK)
+				return
+			}
+			http.Redirect(w, r, paths.Login, http.StatusSeeOther)
+			return
+		default:
+			s.logger.Error("revoke other sessions", "user_id", user.ID, "err", err)
+			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+			return
+		}
+	}
+
+	if isHXRequest(r) {
+		data := s.newTemplateData(r, "Account")
+		data.SessionManagementStatus = statusSessionsRevoked
+		if !s.populateAccountSessions(w, r, &data) {
+			return
+		}
+		s.renderFragmentStatus(w, http.StatusOK, templateAccount, fragmentAccountSessions, data)
+		return
+	}
+
+	http.Redirect(w, r, withQueryParam(paths.Account, queryKeyStatus, statusSessionsRevoked), http.StatusSeeOther)
 }
 
 func (s *Server) changePasswordForm(w http.ResponseWriter, r *http.Request) {
@@ -720,6 +840,39 @@ func (s *Server) validateRegistrationForm(email, password, confirmPassword strin
 	}
 
 	return fieldErrors
+}
+
+func (s *Server) populateAccountSessions(w http.ResponseWriter, r *http.Request, data *templateData) bool {
+	user, ok := currentUser(r.Context())
+	if !ok {
+		http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+		return false
+	}
+
+	sessions, err := s.auth.ListManagedSessions(r.Context(), user.ID, sessionTokenFromCookie(r))
+	if err != nil {
+		if errors.Is(err, services.ErrInvalidSession) {
+			s.clearSessionCookie(w, r)
+			s.clearCSRFCookie(w, r)
+			http.Redirect(w, r, paths.Login, http.StatusSeeOther)
+			return false
+		}
+
+		s.logger.Error("list account sessions", "user_id", user.ID, "err", err)
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		return false
+	}
+
+	data.ManagedSessions = sessions
+	return true
+}
+
+func (s *Server) sessionIDFromRequest(raw string) (int64, error) {
+	sessionID, err := strconv.ParseInt(strings.TrimSpace(raw), 10, 64)
+	if err != nil || sessionID <= 0 {
+		return 0, errors.New("invalid session id")
+	}
+	return sessionID, nil
 }
 
 func (s *Server) validatePasswordPair(password, confirmPassword, passwordField, confirmPasswordField string) map[string]string {

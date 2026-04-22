@@ -48,6 +48,24 @@ WHERE token_hash = ?;
 DELETE FROM sessions
 WHERE user_id = ?;
 
+-- name: ListActiveSessionsByUserID :many
+SELECT id, user_id, token_hash, expires_at, created_at
+FROM sessions
+WHERE user_id = ?
+  AND expires_at > CURRENT_TIMESTAMP
+ORDER BY created_at DESC, id DESC;
+
+-- name: DeleteOtherSessionsByUserIDAndTokenHash :execrows
+DELETE FROM sessions
+WHERE user_id = ?
+  AND token_hash <> ?;
+
+-- name: DeleteSessionByIDAndUserIDAndTokenHashNot :execrows
+DELETE FROM sessions
+WHERE id = ?
+  AND user_id = ?
+  AND token_hash <> ?;
+
 -- name: UpdateUserPasswordHash :exec
 UPDATE users
 SET password_hash = ?

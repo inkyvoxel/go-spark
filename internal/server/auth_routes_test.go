@@ -970,6 +970,9 @@ func TestRoutesHomeShowsAuthenticatedNav(t *testing.T) {
 func TestRoutesAccountRequiresAuth(t *testing.T) {
 	auth := &fakeAuthLookup{
 		user: verifiedRouteUser(),
+		managedSessions: []services.ManagedSession{
+			{ID: 1, Current: true},
+		},
 	}
 	srv := newAuthRouteTestServer(t, auth)
 
@@ -985,8 +988,99 @@ func TestRoutesAccountRequiresAuth(t *testing.T) {
 	if !strings.Contains(rec.Body.String(), "user@example.com") {
 		t.Fatalf("body = %q, want account email", rec.Body.String())
 	}
+	if !strings.Contains(rec.Body.String(), "session=1:true") {
+		t.Fatalf("body = %q, want managed sessions", rec.Body.String())
+	}
 	if auth.token != "session-token" {
 		t.Fatalf("session lookup token = %q, want %q", auth.token, "session-token")
+	}
+}
+
+func TestRoutesRevokeSessionHTMX(t *testing.T) {
+	auth := &fakeAuthLookup{
+		user: verifiedRouteUser(),
+		managedSessions: []services.ManagedSession{
+			{ID: 1, Current: true},
+		},
+	}
+	srv := newAuthRouteTestServer(t, auth)
+
+	form := url.Values{
+		"session_id":  []string{"42"},
+		csrfFieldName: []string{"csrf"},
+	}
+	req := httptest.NewRequest(http.MethodPost, paths.AccountSessionsRevoke, strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("HX-Request", "true")
+	req.AddCookie(&http.Cookie{Name: sessionCookieName, Value: "session-token"})
+	addCSRFCookieAndHeader(t, srv, req)
+	rec := httptest.NewRecorder()
+
+	srv.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	if auth.revokeSessionID != 42 {
+		t.Fatalf("revokeSessionID = %d, want %d", auth.revokeSessionID, 42)
+	}
+	if !strings.Contains(rec.Body.String(), "status=session-revoked") {
+		t.Fatalf("body = %q, want session-revoked status", rec.Body.String())
+	}
+}
+
+func TestRoutesRevokeSessionRejectsCurrentSession(t *testing.T) {
+	auth := &fakeAuthLookup{
+		user:             verifiedRouteUser(),
+		revokeSessionErr: services.ErrCannotRevokeCurrentSession,
+	}
+	srv := newAuthRouteTestServer(t, auth)
+
+	form := url.Values{
+		"session_id":  []string{"7"},
+		csrfFieldName: []string{"csrf"},
+	}
+	req := httptest.NewRequest(http.MethodPost, paths.AccountSessionsRevoke, strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(&http.Cookie{Name: sessionCookieName, Value: "session-token"})
+	addCSRFCookieAndHeader(t, srv, req)
+	rec := httptest.NewRecorder()
+
+	srv.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusUnprocessableEntity)
+	}
+	if !strings.Contains(rec.Body.String(), "cannot revoke your current session") {
+		t.Fatalf("body = %q, want current-session error", rec.Body.String())
+	}
+}
+
+func TestRoutesRevokeOtherSessionsRedirectsForNonHTMX(t *testing.T) {
+	auth := &fakeAuthLookup{
+		user: verifiedRouteUser(),
+	}
+	srv := newAuthRouteTestServer(t, auth)
+
+	form := url.Values{
+		csrfFieldName: []string{"csrf"},
+	}
+	req := httptest.NewRequest(http.MethodPost, paths.AccountSessionsRevokeOthers, strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(&http.Cookie{Name: sessionCookieName, Value: "session-token"})
+	addCSRFCookieAndHeader(t, srv, req)
+	rec := httptest.NewRecorder()
+
+	srv.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusSeeOther)
+	}
+	if location := rec.Header().Get("Location"); location != paths.Account+"?status=sessions-revoked" {
+		t.Fatalf("Location = %q, want %q", location, paths.Account+"?status=sessions-revoked")
+	}
+	if !auth.revokeOtherCalled {
+		t.Fatal("revoke other sessions was not called")
 	}
 }
 
@@ -2623,7 +2717,7 @@ func newAuthRouteTestServer(t *testing.T, auth authService) *Server {
 			templateHome:               `home {{ if .Authenticated }}Account Sign out {{ .User.Email }}{{ else }}Sign in Create account{{ end }}`,
 			templateRegister:           `{{ define "content" }}{{ template "register_form_section" . }}{{ end }}{{ define "register_form_section" }}register {{ .Error }} {{ with index .FieldErrors "email" }}{{ . }}{{ end }} {{ with index .FieldErrors "password" }}{{ . }}{{ end }} {{ with index .FieldErrors "confirm_password" }}{{ . }}{{ end }} {{ .Email }} {{ .PasswordMinLength }} {{ .CSRFToken }}{{ end }}`,
 			templateLogin:              `{{ define "content" }}{{ template "login_form_section" . }} ` + paths.ForgotPassword + ` {{ if .EmailVerificationRequired }}` + paths.ResendVerification + `{{ end }}{{ end }}{{ define "login_form_section" }}login {{ .Error }} {{ with index .FieldErrors "email" }}{{ . }}{{ end }} {{ with index .FieldErrors "password" }}{{ . }}{{ end }} {{ .CSRFToken }} {{ .Next }} login-status={{ .LoginStatus }}{{ end }}`,
-			templateAccount:            `{{ define "content" }}account {{ .User.Email }} {{ .Routes.ChangePassword }} {{ .Routes.ChangeEmail }} {{ .CSRFToken }}{{ end }}`,
+			templateAccount:            `{{ define "content" }}account {{ .User.Email }} {{ .Routes.ChangePassword }} {{ .Routes.ChangeEmail }} {{ .CSRFToken }} {{ template "account_sessions_section" . }}{{ end }}{{ define "account_sessions_section" }}sessions status={{ .SessionManagementStatus }} error={{ .SessionManagementError }} revoke={{ .Routes.AccountSessionsRevoke }} revoke-others={{ .Routes.AccountSessionsRevokeOthers }} {{ range .ManagedSessions }}session={{ .ID }}:{{ .Current }} {{ end }}{{ end }}`,
 			templateChangeEmail:        `{{ define "content" }}change-email-page {{ .Routes.Account }} {{ range .Breadcrumbs }}breadcrumb={{ .Label }}:{{ .URL }}:{{ .Current }} {{ end }}{{ template "change_email_form_section" . }}{{ end }}{{ define "change_email_form_section" }}change-email-visible button-label={{ if .EmailVerificationRequired }}send-verification{{ else }}change-email{{ end }} change-email-status={{ .ChangeEmailStatus }} {{ .Error }} {{ .Email }} {{ with index .FieldErrors "email" }}{{ . }}{{ end }} {{ with index .FieldErrors "current_password" }}{{ . }}{{ end }}{{ end }}`,
 			templateChangePassword:     `{{ define "content" }}change-password-page {{ .Routes.Account }} {{ range .Breadcrumbs }}breadcrumb={{ .Label }}:{{ .URL }}:{{ .Current }} {{ end }}{{ template "change_password_form_section" . }}{{ end }}{{ define "change_password_form_section" }}change-password-visible {{ .Error }} {{ with index .FieldErrors "current_password" }}{{ . }}{{ end }} {{ with index .FieldErrors "new_password" }}{{ . }}{{ end }} {{ with index .FieldErrors "confirm_password" }}{{ . }}{{ end }}{{ end }}`,
 			templateConfirmEmail:       `confirm {{ if .Error }}{{ .Error }} {{ if .Authenticated }}Go to your account{{ else }}Sign in{{ end }}{{ else }}Email confirmed{{ end }}`,

@@ -116,6 +116,8 @@ func TestRouteRateLimitProtectedPostRoutesReturn429AfterThreshold(t *testing.T) 
 		AccountResendVerification: RateLimitPolicy{MaxRequests: 1, Window: time.Hour},
 		ChangePassword:            RateLimitPolicy{MaxRequests: 1, Window: time.Hour},
 		ChangeEmail:               RateLimitPolicy{MaxRequests: 1, Window: time.Hour},
+		RevokeSession:             RateLimitPolicy{MaxRequests: 1, Window: time.Hour},
+		RevokeOtherSessions:       RateLimitPolicy{MaxRequests: 1, Window: time.Hour},
 	}
 	routes := srv.Routes()
 
@@ -178,6 +180,20 @@ func TestRouteRateLimitProtectedPostRoutesReturn429AfterThreshold(t *testing.T) 
 				"email":            []string{"new@example.com"},
 				"current_password": []string{"password"},
 			},
+			sessionToken: "session-token",
+		},
+		{
+			name: "revoke-session",
+			path: paths.AccountSessionsRevoke,
+			form: url.Values{
+				"session_id": []string{"2"},
+			},
+			sessionToken: "session-token",
+		},
+		{
+			name:         "revoke-other-sessions",
+			path:         paths.AccountSessionsRevokeOthers,
+			form:         url.Values{},
 			sessionToken: "session-token",
 		},
 	}
@@ -264,6 +280,8 @@ func TestRouteRateLimitKeyingByIPAndUser(t *testing.T) {
 		AccountResendVerification: RateLimitPolicy{MaxRequests: 1, Window: time.Hour},
 		ChangePassword:            RateLimitPolicy{MaxRequests: 1, Window: time.Hour},
 		ChangeEmail:               RateLimitPolicy{MaxRequests: 1, Window: time.Hour},
+		RevokeSession:             RateLimitPolicy{MaxRequests: 1, Window: time.Hour},
+		RevokeOtherSessions:       RateLimitPolicy{MaxRequests: 1, Window: time.Hour},
 	}
 	routes := srv.Routes()
 

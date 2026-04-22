@@ -410,6 +410,12 @@ type fakeAuthLookup struct {
 	resetToken           string
 	resetNewPassword     string
 	resetErr             error
+	managedSessions      []services.ManagedSession
+	listSessionsErr      error
+	revokeSessionID      int64
+	revokeSessionErr     error
+	revokeOtherErr       error
+	revokeOtherCalled    bool
 }
 
 func (f *fakeAuthLookup) UserBySessionToken(ctx context.Context, token string) (db.User, error) {
@@ -499,6 +505,20 @@ func (f *fakeAuthLookup) ResetPasswordWithToken(ctx context.Context, token, newP
 		return services.ErrInvalidPasswordResetToken
 	}
 	return f.resetErr
+}
+
+func (f *fakeAuthLookup) ListManagedSessions(ctx context.Context, userID int64, currentSessionToken string) ([]services.ManagedSession, error) {
+	return f.managedSessions, f.listSessionsErr
+}
+
+func (f *fakeAuthLookup) RevokeOtherSessions(ctx context.Context, userID int64, currentSessionToken string) error {
+	f.revokeOtherCalled = true
+	return f.revokeOtherErr
+}
+
+func (f *fakeAuthLookup) RevokeSessionByID(ctx context.Context, userID int64, currentSessionToken string, sessionID int64) error {
+	f.revokeSessionID = sessionID
+	return f.revokeSessionErr
 }
 
 func newAuthMiddlewareTestServer(auth authService) *Server {

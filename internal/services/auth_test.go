@@ -195,6 +195,69 @@ func TestAuthServiceUserBySessionTokenAndLogout(t *testing.T) {
 	}
 }
 
+func TestAuthServiceListManagedSessionsAndRevokeControls(t *testing.T) {
+	service := newTestAuthService(t)
+	store := service.store.(*fakeAuthStore)
+
+	user, err := service.Register(context.Background(), "user@example.com", "password")
+	if err != nil {
+		t.Fatalf("Register() error = %v", err)
+	}
+
+	_, currentSession, err := service.Login(context.Background(), "user@example.com", "password")
+	if err != nil {
+		t.Fatalf("Login() error = %v", err)
+	}
+	_, otherSession, err := service.Login(context.Background(), "user@example.com", "password")
+	if err != nil {
+		t.Fatalf("Login() error = %v", err)
+	}
+	currentStoreSession := store.sessions[hashToken(currentSession.Token)]
+	otherStoreSession := store.sessions[hashToken(otherSession.Token)]
+
+	managed, err := service.ListManagedSessions(context.Background(), user.ID, currentSession.Token)
+	if err != nil {
+		t.Fatalf("ListManagedSessions() error = %v", err)
+	}
+	if len(managed) != 2 {
+		t.Fatalf("managed session count = %d, want %d", len(managed), 2)
+	}
+	var currentCount int
+	for _, session := range managed {
+		if session.Current {
+			currentCount++
+		}
+	}
+	if currentCount != 1 {
+		t.Fatalf("current session count = %d, want 1", currentCount)
+	}
+
+	if err := service.RevokeSessionByID(context.Background(), user.ID, currentSession.Token, currentStoreSession.ID); !errors.Is(err, ErrCannotRevokeCurrentSession) {
+		t.Fatalf("RevokeSessionByID(current) error = %v, want %v", err, ErrCannotRevokeCurrentSession)
+	}
+
+	if err := service.RevokeSessionByID(context.Background(), user.ID, currentSession.Token, otherStoreSession.ID); err != nil {
+		t.Fatalf("RevokeSessionByID(other) error = %v", err)
+	}
+	if _, ok := store.sessions[hashToken(otherSession.Token)]; ok {
+		t.Fatal("other session still present after revoke")
+	}
+
+	_, anotherSession, err := service.Login(context.Background(), "user@example.com", "password")
+	if err != nil {
+		t.Fatalf("Login() error = %v", err)
+	}
+	if err := service.RevokeOtherSessions(context.Background(), user.ID, currentSession.Token); err != nil {
+		t.Fatalf("RevokeOtherSessions() error = %v", err)
+	}
+	if _, ok := store.sessions[hashToken(currentSession.Token)]; !ok {
+		t.Fatal("current session missing after revoke others")
+	}
+	if _, ok := store.sessions[hashToken(anotherSession.Token)]; ok {
+		t.Fatal("other session still present after revoke others")
+	}
+}
+
 func TestAuthServiceChangePassword(t *testing.T) {
 	service := newTestAuthService(t)
 
@@ -1152,6 +1215,38 @@ func (s *fakeAuthStore) DeleteSessionsByUserID(ctx context.Context, userID int64
 	}
 
 	return nil
+}
+
+func (s *fakeAuthStore) ListActiveSessionsByUserID(ctx context.Context, userID int64) ([]db.Session, error) {
+	sessions := make([]db.Session, 0, len(s.sessions))
+	now := time.Now().UTC()
+	for _, session := range s.sessions {
+		if session.UserID == userID && session.ExpiresAt.After(now) {
+			sessions = append(sessions, session)
+		}
+	}
+	return sessions, nil
+}
+
+func (s *fakeAuthStore) DeleteOtherSessionsByUserIDAndTokenHash(ctx context.Context, userID int64, tokenHash string) (int64, error) {
+	var deleted int64
+	for token, session := range s.sessions {
+		if session.UserID == userID && token != tokenHash {
+			delete(s.sessions, token)
+			deleted++
+		}
+	}
+	return deleted, nil
+}
+
+func (s *fakeAuthStore) DeleteSessionByIDAndUserIDAndTokenHashNot(ctx context.Context, sessionID, userID int64, tokenHash string) (int64, error) {
+	for token, session := range s.sessions {
+		if session.ID == sessionID && session.UserID == userID && token != tokenHash {
+			delete(s.sessions, token)
+			return 1, nil
+		}
+	}
+	return 0, nil
 }
 
 func (s *fakeAuthStore) UpdateUserPasswordHash(ctx context.Context, userID int64, passwordHash string) error {

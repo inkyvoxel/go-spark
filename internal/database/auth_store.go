@@ -170,6 +170,40 @@ func (s *AuthStore) DeleteSessionsByUserID(ctx context.Context, userID int64) er
 	return nil
 }
 
+func (s *AuthStore) ListActiveSessionsByUserID(ctx context.Context, userID int64) ([]db.Session, error) {
+	sessions, err := s.queries.ListActiveSessionsByUserID(ctx, userID)
+	if err != nil {
+		return nil, fmt.Errorf("list active sessions by user ID: %w", err)
+	}
+
+	return sessions, nil
+}
+
+func (s *AuthStore) DeleteOtherSessionsByUserIDAndTokenHash(ctx context.Context, userID int64, tokenHash string) (int64, error) {
+	rows, err := s.queries.DeleteOtherSessionsByUserIDAndTokenHash(ctx, db.DeleteOtherSessionsByUserIDAndTokenHashParams{
+		UserID:    userID,
+		TokenHash: tokenHash,
+	})
+	if err != nil {
+		return 0, fmt.Errorf("delete other sessions by user ID and token hash: %w", err)
+	}
+
+	return rows, nil
+}
+
+func (s *AuthStore) DeleteSessionByIDAndUserIDAndTokenHashNot(ctx context.Context, sessionID, userID int64, tokenHash string) (int64, error) {
+	rows, err := s.queries.DeleteSessionByIDAndUserIDAndTokenHashNot(ctx, db.DeleteSessionByIDAndUserIDAndTokenHashNotParams{
+		ID:        sessionID,
+		UserID:    userID,
+		TokenHash: tokenHash,
+	})
+	if err != nil {
+		return 0, fmt.Errorf("delete session by ID and user ID and token hash not: %w", err)
+	}
+
+	return rows, nil
+}
+
 func (s *AuthStore) UpdateUserPasswordHash(ctx context.Context, userID int64, passwordHash string) error {
 	if err := s.queries.UpdateUserPasswordHash(ctx, db.UpdateUserPasswordHashParams{
 		PasswordHash: passwordHash,

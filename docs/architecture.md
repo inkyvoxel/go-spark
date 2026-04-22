@@ -172,6 +172,8 @@ Auth and account routes:
 | `POST` | `/account/change-password` | Change password | Verified authenticated, rate limited |
 | `GET` | `/account/change-email` | Change email request form | Verified authenticated |
 | `POST` | `/account/change-email` | Request email change verification | Verified authenticated, rate limited |
+| `POST` | `/account/sessions/revoke` | Revoke a specific non-current session | Verified authenticated, rate limited |
+| `POST` | `/account/sessions/revoke-others` | Revoke all non-current sessions | Verified authenticated, rate limited |
 | `GET` | `/account/confirm-email-change` | Consume email change token | Public |
 | `GET` | `/account/verify-email` | Unverified-account interstitial | Authenticated (redirects to `/account` when verification is optional) |
 | `POST` | `/account/verify-email/resend` | Resend confirmation for signed-in user | Authenticated, rate limited (redirects to `/account` when verification is optional) |

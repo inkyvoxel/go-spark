@@ -24,17 +24,19 @@ const (
 )
 
 var (
-	ErrEmailAlreadyRegistered    = errors.New("email already registered")
-	ErrCurrentPasswordIncorrect  = errors.New("current password incorrect")
-	ErrInvalidCredentials        = errors.New("invalid credentials")
-	ErrInvalidEmail              = errors.New("invalid email")
-	ErrInvalidPassword           = errors.New("invalid password")
-	ErrEmailUnchanged            = errors.New("email unchanged")
-	ErrPasswordUnchanged         = errors.New("password unchanged")
-	ErrInvalidPasswordResetToken = errors.New("invalid password reset token")
-	ErrInvalidSession            = errors.New("invalid session")
-	ErrInvalidEmailChangeToken   = errors.New("invalid email change token")
-	ErrInvalidVerificationToken  = errors.New("invalid verification token")
+	ErrEmailAlreadyRegistered     = errors.New("email already registered")
+	ErrCurrentPasswordIncorrect   = errors.New("current password incorrect")
+	ErrInvalidCredentials         = errors.New("invalid credentials")
+	ErrInvalidEmail               = errors.New("invalid email")
+	ErrInvalidPassword            = errors.New("invalid password")
+	ErrEmailUnchanged             = errors.New("email unchanged")
+	ErrPasswordUnchanged          = errors.New("password unchanged")
+	ErrInvalidPasswordResetToken  = errors.New("invalid password reset token")
+	ErrInvalidSession             = errors.New("invalid session")
+	ErrInvalidSessionTarget       = errors.New("invalid session target")
+	ErrCannotRevokeCurrentSession = errors.New("cannot revoke current session")
+	ErrInvalidEmailChangeToken    = errors.New("invalid email change token")
+	ErrInvalidVerificationToken   = errors.New("invalid verification token")
 )
 
 type AuthService struct {
@@ -56,6 +58,13 @@ type AuthSession struct {
 	ExpiresAt time.Time
 }
 
+type ManagedSession struct {
+	ID        int64
+	CreatedAt time.Time
+	ExpiresAt time.Time
+	Current   bool
+}
+
 type AuthStore interface {
 	CreateUser(ctx context.Context, email, passwordHash string) (db.User, error)
 	CreateVerifiedUser(ctx context.Context, email, passwordHash string, verifiedAt time.Time) (db.User, error)
@@ -65,6 +74,9 @@ type AuthStore interface {
 	GetUserBySessionTokenHash(ctx context.Context, tokenHash string) (db.User, error)
 	DeleteSessionByTokenHash(ctx context.Context, tokenHash string) error
 	DeleteSessionsByUserID(ctx context.Context, userID int64) error
+	ListActiveSessionsByUserID(ctx context.Context, userID int64) ([]db.Session, error)
+	DeleteOtherSessionsByUserIDAndTokenHash(ctx context.Context, userID int64, tokenHash string) (int64, error)
+	DeleteSessionByIDAndUserIDAndTokenHashNot(ctx context.Context, sessionID, userID int64, tokenHash string) (int64, error)
 	UpdateUserPasswordHash(ctx context.Context, userID int64, passwordHash string) error
 	CreatePasswordResetToken(ctx context.Context, userID int64, tokenHash string, expiresAt time.Time) (db.PasswordResetToken, error)
 	GetValidPasswordResetTokenByHash(ctx context.Context, tokenHash string, now time.Time) (db.PasswordResetToken, error)
@@ -314,6 +326,78 @@ func (s *AuthService) Logout(ctx context.Context, token string) error {
 	}
 
 	return nil
+}
+
+func (s *AuthService) ListManagedSessions(ctx context.Context, userID int64, currentSessionToken string) ([]ManagedSession, error) {
+	currentSessionToken = strings.TrimSpace(currentSessionToken)
+	if currentSessionToken == "" {
+		return nil, ErrInvalidSession
+	}
+
+	sessions, err := s.store.ListActiveSessionsByUserID(ctx, userID)
+	if err != nil {
+		return nil, fmt.Errorf("list active sessions by user ID: %w", err)
+	}
+
+	currentTokenHash := hashToken(currentSessionToken)
+	managed := make([]ManagedSession, 0, len(sessions))
+	for _, session := range sessions {
+		managed = append(managed, ManagedSession{
+			ID:        session.ID,
+			CreatedAt: session.CreatedAt,
+			ExpiresAt: session.ExpiresAt,
+			Current:   session.TokenHash == currentTokenHash,
+		})
+	}
+
+	return managed, nil
+}
+
+func (s *AuthService) RevokeOtherSessions(ctx context.Context, userID int64, currentSessionToken string) error {
+	currentSessionToken = strings.TrimSpace(currentSessionToken)
+	if currentSessionToken == "" {
+		return ErrInvalidSession
+	}
+
+	if _, err := s.store.DeleteOtherSessionsByUserIDAndTokenHash(ctx, userID, hashToken(currentSessionToken)); err != nil {
+		return fmt.Errorf("delete other sessions by user ID: %w", err)
+	}
+
+	return nil
+}
+
+func (s *AuthService) RevokeSessionByID(ctx context.Context, userID int64, currentSessionToken string, sessionID int64) error {
+	currentSessionToken = strings.TrimSpace(currentSessionToken)
+	if currentSessionToken == "" {
+		return ErrInvalidSession
+	}
+	if sessionID <= 0 {
+		return ErrInvalidSessionTarget
+	}
+
+	currentTokenHash := hashToken(currentSessionToken)
+	deleted, err := s.store.DeleteSessionByIDAndUserIDAndTokenHashNot(ctx, sessionID, userID, currentTokenHash)
+	if err != nil {
+		return fmt.Errorf("delete session by ID and user ID: %w", err)
+	}
+	if deleted > 0 {
+		return nil
+	}
+
+	sessions, err := s.store.ListActiveSessionsByUserID(ctx, userID)
+	if err != nil {
+		return fmt.Errorf("list active sessions by user ID: %w", err)
+	}
+	for _, session := range sessions {
+		if session.ID != sessionID {
+			continue
+		}
+		if session.TokenHash == currentTokenHash {
+			return ErrCannotRevokeCurrentSession
+		}
+	}
+
+	return ErrInvalidSessionTarget
 }
 
 func (s *AuthService) ChangePassword(ctx context.Context, user db.User, currentPassword, newPassword string) error {

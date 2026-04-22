@@ -24,6 +24,9 @@ type authService interface {
 	RequestEmailChange(context.Context, db.User, string, string) error
 	ConfirmEmailChange(context.Context, string) (db.User, error)
 	ChangePassword(context.Context, db.User, string, string) error
+	ListManagedSessions(context.Context, int64, string) ([]services.ManagedSession, error)
+	RevokeOtherSessions(context.Context, int64, string) error
+	RevokeSessionByID(context.Context, int64, string, int64) error
 	Login(context.Context, string, string) (db.User, services.AuthSession, error)
 	Logout(context.Context, string) error
 	RequestPasswordReset(context.Context, string) error
@@ -99,6 +102,14 @@ func (s *Server) clearResetCookie(w http.ResponseWriter, r *http.Request) {
 
 func resetTokenFromCookie(r *http.Request) string {
 	cookie, err := r.Cookie(resetCookieName)
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(cookie.Value)
+}
+
+func sessionTokenFromCookie(r *http.Request) string {
+	cookie, err := r.Cookie(sessionCookieName)
 	if err != nil {
 		return ""
 	}

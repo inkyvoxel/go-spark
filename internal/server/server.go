@@ -183,6 +183,18 @@ func (s *Server) Routes() http.Handler {
 			s.withRateLimit("change-email", s.rateLimitPolicies.ChangeEmail, rateLimitKeyByIPAndUser(), http.HandlerFunc(s.changeEmail)),
 		),
 	)
+	dynamic.Handle(
+		route(http.MethodPost, paths.AccountSessionsRevoke),
+		s.requireVerifiedAuth(
+			s.withRateLimit("revoke-session", s.rateLimitPolicies.RevokeSession, rateLimitKeyByIPAndUser(), http.HandlerFunc(s.revokeSession)),
+		),
+	)
+	dynamic.Handle(
+		route(http.MethodPost, paths.AccountSessionsRevokeOthers),
+		s.requireVerifiedAuth(
+			s.withRateLimit("revoke-other-sessions", s.rateLimitPolicies.RevokeOtherSessions, rateLimitKeyByIPAndUser(), http.HandlerFunc(s.revokeOtherSessions)),
+		),
+	)
 	dynamic.HandleFunc(route(http.MethodGet, paths.Home), s.home)
 
 	mux.Handle(paths.Home, s.securityHeaders(s.limitRequestBody(s.csrf(s.loadSession(dynamic)))))

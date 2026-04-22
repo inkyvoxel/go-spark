@@ -73,10 +73,11 @@
   - Risk: limits are bypassed across multiple app instances or after restarts, and reverse proxies can collapse many users into one `RemoteAddr` unless configured carefully.
   - Recommendation: keep the in-memory limiter for local/dev, but define a `rateLimitStore` adapter for Redis/Postgres/SQLite or document single-instance assumptions prominently. Add explicit trusted proxy configuration before honoring `X-Forwarded-For`.
 
-- [ ] Add account/session management controls.
+- [x] Add account/session management controls.
   - Evidence: sessions have expiry and are revoked on password change/reset, but users cannot see or revoke sessions manually.
   - Risk: stolen sessions remain valid until expiry unless the password is changed/reset.
   - Recommendation: add "sign out other sessions", session listing, last-used metadata, and optional session idle timeout.
+  - Progress: implemented v1 session management on `/account` with active-session listing (`created_at`/`expires_at`), per-session revoke for non-current sessions, and "sign out other sessions" controls. Added verified-auth POST routes with CSRF + rate limiting and HTMX fragment updates. Idle timeout and last-used/device metadata remain deferred.
 
 - [ ] Add database cleanup jobs for expired sessions, consumed/expired reset tokens, consumed/expired verification tokens, and old sent/failed email rows.
   - Evidence: queries ignore expired sessions/tokens, but migrations do not include cleanup behavior and the app does not schedule pruning.

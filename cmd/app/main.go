@@ -341,5 +341,13 @@ func toServerRateLimitPolicies(cfg config.RateLimitPoliciesConfig) server.RateLi
 			MaxRequests: cfg.ChangeEmail.MaxRequests,
 			Window:      cfg.ChangeEmail.Window,
 		},
+		RevokeSession: server.RateLimitPolicy{
+			MaxRequests: cfg.RevokeSession.MaxRequests,
+			Window:      cfg.RevokeSession.Window,
+		},
+		RevokeOtherSessions: server.RateLimitPolicy{
+			MaxRequests: cfg.RevokeOtherSessions.MaxRequests,
+			Window:      cfg.RevokeOtherSessions.Window,
+		},
 	}
 }

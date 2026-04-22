@@ -227,6 +227,168 @@ func TestAuthStoreDeleteSessionsByUserID(t *testing.T) {
 	}
 }
 
+func TestAuthStoreListActiveSessionsByUserID(t *testing.T) {
+	store := newTestAuthStore(t)
+
+	user, err := store.CreateUser(context.Background(), "user@example.com", "hash")
+	if err != nil {
+		t.Fatalf("CreateUser() error = %v", err)
+	}
+	otherUser, err := store.CreateUser(context.Background(), "other@example.com", "hash")
+	if err != nil {
+		t.Fatalf("CreateUser() error = %v", err)
+	}
+
+	now := time.Now().UTC()
+	activeA, err := store.CreateSession(context.Background(), user.ID, "token-a", now.Add(time.Hour))
+	if err != nil {
+		t.Fatalf("CreateSession() error = %v", err)
+	}
+	activeB, err := store.CreateSession(context.Background(), user.ID, "token-b", now.Add(2*time.Hour))
+	if err != nil {
+		t.Fatalf("CreateSession() error = %v", err)
+	}
+	if _, err := store.CreateSession(context.Background(), user.ID, "token-expired", now.Add(-time.Minute)); err != nil {
+		t.Fatalf("CreateSession() error = %v", err)
+	}
+	if _, err := store.CreateSession(context.Background(), otherUser.ID, "token-other-user", now.Add(time.Hour)); err != nil {
+		t.Fatalf("CreateSession() error = %v", err)
+	}
+
+	sessions, err := store.ListActiveSessionsByUserID(context.Background(), user.ID)
+	if err != nil {
+		t.Fatalf("ListActiveSessionsByUserID() error = %v", err)
+	}
+	if len(sessions) != 2 {
+		t.Fatalf("active session count = %d, want 2", len(sessions))
+	}
+
+	found := map[int64]bool{
+		activeA.ID: false,
+		activeB.ID: false,
+	}
+	for _, session := range sessions {
+		if _, ok := found[session.ID]; ok {
+			found[session.ID] = true
+		}
+	}
+	for id, ok := range found {
+		if !ok {
+			t.Fatalf("session ID %d missing from active sessions", id)
+		}
+	}
+}
+
+func TestAuthStoreDeleteOtherSessionsByUserIDAndTokenHash(t *testing.T) {
+	store := newTestAuthStore(t)
+
+	user, err := store.CreateUser(context.Background(), "user@example.com", "hash")
+	if err != nil {
+		t.Fatalf("CreateUser() error = %v", err)
+	}
+	otherUser, err := store.CreateUser(context.Background(), "other@example.com", "hash")
+	if err != nil {
+		t.Fatalf("CreateUser() error = %v", err)
+	}
+
+	now := time.Now().UTC()
+	current, err := store.CreateSession(context.Background(), user.ID, "token-current", now.Add(time.Hour))
+	if err != nil {
+		t.Fatalf("CreateSession() error = %v", err)
+	}
+	otherA, err := store.CreateSession(context.Background(), user.ID, "token-other-a", now.Add(time.Hour))
+	if err != nil {
+		t.Fatalf("CreateSession() error = %v", err)
+	}
+	otherB, err := store.CreateSession(context.Background(), user.ID, "token-other-b", now.Add(time.Hour))
+	if err != nil {
+		t.Fatalf("CreateSession() error = %v", err)
+	}
+	otherUserSession, err := store.CreateSession(context.Background(), otherUser.ID, "token-different-user", now.Add(time.Hour))
+	if err != nil {
+		t.Fatalf("CreateSession() error = %v", err)
+	}
+
+	deleted, err := store.DeleteOtherSessionsByUserIDAndTokenHash(context.Background(), user.ID, current.TokenHash)
+	if err != nil {
+		t.Fatalf("DeleteOtherSessionsByUserIDAndTokenHash() error = %v", err)
+	}
+	if deleted != 2 {
+		t.Fatalf("deleted sessions = %d, want 2", deleted)
+	}
+
+	if _, err := store.GetUserBySessionTokenHash(context.Background(), current.TokenHash); err != nil {
+		t.Fatalf("current session lookup error = %v", err)
+	}
+	if _, err := store.GetUserBySessionTokenHash(context.Background(), otherA.TokenHash); !errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("other session A lookup error = %v, want %v", err, sql.ErrNoRows)
+	}
+	if _, err := store.GetUserBySessionTokenHash(context.Background(), otherB.TokenHash); !errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("other session B lookup error = %v, want %v", err, sql.ErrNoRows)
+	}
+	remaining, err := store.GetUserBySessionTokenHash(context.Background(), otherUserSession.TokenHash)
+	if err != nil {
+		t.Fatalf("other user session lookup error = %v", err)
+	}
+	if remaining.ID != otherUser.ID {
+		t.Fatalf("other user session user ID = %d, want %d", remaining.ID, otherUser.ID)
+	}
+}
+
+func TestAuthStoreDeleteSessionByIDAndUserIDAndTokenHashNot(t *testing.T) {
+	store := newTestAuthStore(t)
+
+	user, err := store.CreateUser(context.Background(), "user@example.com", "hash")
+	if err != nil {
+		t.Fatalf("CreateUser() error = %v", err)
+	}
+	otherUser, err := store.CreateUser(context.Background(), "other@example.com", "hash")
+	if err != nil {
+		t.Fatalf("CreateUser() error = %v", err)
+	}
+
+	now := time.Now().UTC()
+	current, err := store.CreateSession(context.Background(), user.ID, "token-current", now.Add(time.Hour))
+	if err != nil {
+		t.Fatalf("CreateSession() error = %v", err)
+	}
+	other, err := store.CreateSession(context.Background(), user.ID, "token-other", now.Add(time.Hour))
+	if err != nil {
+		t.Fatalf("CreateSession() error = %v", err)
+	}
+	otherUserSession, err := store.CreateSession(context.Background(), otherUser.ID, "token-other-user", now.Add(time.Hour))
+	if err != nil {
+		t.Fatalf("CreateSession() error = %v", err)
+	}
+
+	deleted, err := store.DeleteSessionByIDAndUserIDAndTokenHashNot(context.Background(), other.ID, user.ID, current.TokenHash)
+	if err != nil {
+		t.Fatalf("DeleteSessionByIDAndUserIDAndTokenHashNot() error = %v", err)
+	}
+	if deleted != 1 {
+		t.Fatalf("deleted rows = %d, want 1", deleted)
+	}
+	if _, err := store.GetUserBySessionTokenHash(context.Background(), other.TokenHash); !errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("deleted session lookup error = %v, want %v", err, sql.ErrNoRows)
+	}
+
+	deleted, err = store.DeleteSessionByIDAndUserIDAndTokenHashNot(context.Background(), current.ID, user.ID, current.TokenHash)
+	if err != nil {
+		t.Fatalf("DeleteSessionByIDAndUserIDAndTokenHashNot() current error = %v", err)
+	}
+	if deleted != 0 {
+		t.Fatalf("deleted rows for current session = %d, want 0", deleted)
+	}
+
+	deleted, err = store.DeleteSessionByIDAndUserIDAndTokenHashNot(context.Background(), otherUserSession.ID, user.ID, current.TokenHash)
+	if err != nil {
+		t.Fatalf("DeleteSessionByIDAndUserIDAndTokenHashNot() cross-user error = %v", err)
+	}
+	if deleted != 0 {
+		t.Fatalf("deleted rows for cross-user session = %d, want 0", deleted)
+	}
+}
+
 func TestAuthStoreUnexpectedCreateUserErrorIsWrapped(t *testing.T) {
 	conn := newAuthStoreTestDB(t)
 	store := NewAuthStore(conn)
