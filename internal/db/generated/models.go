@@ -67,6 +67,6 @@ type User struct {
 	ID              int64
 	Email           string
 	PasswordHash    string
-	CreatedAt       time.Time
 	EmailVerifiedAt sql.NullTime
+	CreatedAt       time.Time
 }

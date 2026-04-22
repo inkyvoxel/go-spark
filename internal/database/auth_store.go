@@ -41,7 +41,7 @@ func (s *AuthStore) CreateUser(ctx context.Context, email, passwordHash string) 
 		return db.User{}, fmt.Errorf("create user: %w", err)
 	}
 
-	return user, nil
+	return userFromCreateUserRow(user), nil
 }
 
 func (s *AuthStore) CreateVerifiedUser(ctx context.Context, email, passwordHash string, verifiedAt time.Time) (db.User, error) {
@@ -52,7 +52,7 @@ func (s *AuthStore) CreateVerifiedUser(ctx context.Context, email, passwordHash 
 	defer tx.Rollback()
 
 	queries := s.queries.WithTx(tx)
-	user, err := queries.CreateUser(ctx, db.CreateUserParams{
+	createdUser, err := queries.CreateUser(ctx, db.CreateUserParams{
 		Email:        email,
 		PasswordHash: passwordHash,
 	})
@@ -63,9 +63,9 @@ func (s *AuthStore) CreateVerifiedUser(ctx context.Context, email, passwordHash 
 		return db.User{}, fmt.Errorf("create user: %w", err)
 	}
 
-	user, err = queries.MarkUserEmailVerified(ctx, db.MarkUserEmailVerifiedParams{
+	user, err := queries.MarkUserEmailVerified(ctx, db.MarkUserEmailVerifiedParams{
 		EmailVerifiedAt: sql.NullTime{Time: verifiedAt, Valid: true},
-		ID:              user.ID,
+		ID:              createdUser.ID,
 	})
 	if err != nil {
 		return db.User{}, fmt.Errorf("mark user email verified: %w", err)
@@ -75,7 +75,7 @@ func (s *AuthStore) CreateVerifiedUser(ctx context.Context, email, passwordHash 
 		return db.User{}, fmt.Errorf("commit create verified user transaction: %w", err)
 	}
 
-	return user, nil
+	return userFromMarkUserEmailVerifiedRow(user), nil
 }
 
 func (s *AuthStore) CreateUserWithEmailVerification(ctx context.Context, params services.CreateUserWithEmailVerificationParams) (db.User, error) {
@@ -120,7 +120,7 @@ func (s *AuthStore) CreateUserWithEmailVerification(ctx context.Context, params 
 		return db.User{}, fmt.Errorf("commit register user transaction: %w", err)
 	}
 
-	return user, nil
+	return userFromCreateUserRow(user), nil
 }
 
 func (s *AuthStore) GetUserByEmail(ctx context.Context, email string) (db.User, error) {
@@ -129,7 +129,7 @@ func (s *AuthStore) GetUserByEmail(ctx context.Context, email string) (db.User, 
 		return db.User{}, fmt.Errorf("get user by email: %w", err)
 	}
 
-	return user, nil
+	return userFromGetUserByEmailRow(user), nil
 }
 
 func (s *AuthStore) CreateSession(ctx context.Context, userID int64, tokenHash string, expiresAt time.Time) (db.Session, error) {
@@ -151,7 +151,7 @@ func (s *AuthStore) GetUserBySessionTokenHash(ctx context.Context, tokenHash str
 		return db.User{}, fmt.Errorf("get user by session token hash: %w", err)
 	}
 
-	return user, nil
+	return userFromGetUserBySessionTokenHashRow(user), nil
 }
 
 func (s *AuthStore) DeleteSessionByTokenHash(ctx context.Context, tokenHash string) error {
@@ -425,7 +425,57 @@ func (s *AuthStore) VerifyEmailByTokenHash(ctx context.Context, tokenHash string
 		return db.User{}, fmt.Errorf("commit verify email transaction: %w", err)
 	}
 
-	return user, nil
+	return userFromMarkUserEmailVerifiedRow(user), nil
+}
+
+func userFromCreateUserRow(row db.CreateUserRow) db.User {
+	return db.User{
+		ID:              row.ID,
+		Email:           row.Email,
+		PasswordHash:    row.PasswordHash,
+		EmailVerifiedAt: row.EmailVerifiedAt,
+		CreatedAt:       row.CreatedAt,
+	}
+}
+
+func userFromGetUserByEmailRow(row db.GetUserByEmailRow) db.User {
+	return db.User{
+		ID:              row.ID,
+		Email:           row.Email,
+		PasswordHash:    row.PasswordHash,
+		EmailVerifiedAt: row.EmailVerifiedAt,
+		CreatedAt:       row.CreatedAt,
+	}
+}
+
+func userFromGetUserBySessionTokenHashRow(row db.GetUserBySessionTokenHashRow) db.User {
+	return db.User{
+		ID:              row.ID,
+		Email:           row.Email,
+		PasswordHash:    row.PasswordHash,
+		EmailVerifiedAt: row.EmailVerifiedAt,
+		CreatedAt:       row.CreatedAt,
+	}
+}
+
+func userFromMarkUserEmailVerifiedRow(row db.MarkUserEmailVerifiedRow) db.User {
+	return db.User{
+		ID:              row.ID,
+		Email:           row.Email,
+		PasswordHash:    row.PasswordHash,
+		EmailVerifiedAt: row.EmailVerifiedAt,
+		CreatedAt:       row.CreatedAt,
+	}
+}
+
+func userFromUpdateUserEmailRow(row db.UpdateUserEmailRow) db.User {
+	return db.User{
+		ID:              row.ID,
+		Email:           row.Email,
+		PasswordHash:    row.PasswordHash,
+		EmailVerifiedAt: row.EmailVerifiedAt,
+		CreatedAt:       row.CreatedAt,
+	}
 }
 
 func (s *AuthStore) ConfirmEmailChange(ctx context.Context, params services.ConfirmEmailChangeParams) (db.User, error) {
@@ -512,7 +562,7 @@ func applyEmailChange(ctx context.Context, queries *db.Queries, params applyEmai
 		}
 	}
 
-	return user, nil
+	return userFromUpdateUserEmailRow(user), nil
 }
 
 func isSQLiteUniqueConstraint(err error) bool {

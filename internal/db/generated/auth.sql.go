@@ -255,9 +255,17 @@ type CreateUserParams struct {
 	PasswordHash string
 }
 
-func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, error) {
+type CreateUserRow struct {
+	ID              int64
+	Email           string
+	PasswordHash    string
+	CreatedAt       time.Time
+	EmailVerifiedAt sql.NullTime
+}
+
+func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (CreateUserRow, error) {
 	row := q.db.QueryRowContext(ctx, createUser, arg.Email, arg.PasswordHash)
-	var i User
+	var i CreateUserRow
 	err := row.Scan(
 		&i.ID,
 		&i.Email,
@@ -348,9 +356,17 @@ WHERE email = ?
 LIMIT 1
 `
 
-func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error) {
+type GetUserByEmailRow struct {
+	ID              int64
+	Email           string
+	PasswordHash    string
+	CreatedAt       time.Time
+	EmailVerifiedAt sql.NullTime
+}
+
+func (q *Queries) GetUserByEmail(ctx context.Context, email string) (GetUserByEmailRow, error) {
 	row := q.db.QueryRowContext(ctx, getUserByEmail, email)
-	var i User
+	var i GetUserByEmailRow
 	err := row.Scan(
 		&i.ID,
 		&i.Email,
@@ -368,9 +384,17 @@ WHERE id = ?
 LIMIT 1
 `
 
-func (q *Queries) GetUserByID(ctx context.Context, id int64) (User, error) {
+type GetUserByIDRow struct {
+	ID              int64
+	Email           string
+	PasswordHash    string
+	CreatedAt       time.Time
+	EmailVerifiedAt sql.NullTime
+}
+
+func (q *Queries) GetUserByID(ctx context.Context, id int64) (GetUserByIDRow, error) {
 	row := q.db.QueryRowContext(ctx, getUserByID, id)
-	var i User
+	var i GetUserByIDRow
 	err := row.Scan(
 		&i.ID,
 		&i.Email,
@@ -390,9 +414,17 @@ WHERE sessions.token_hash = ?
 LIMIT 1
 `
 
-func (q *Queries) GetUserBySessionTokenHash(ctx context.Context, tokenHash string) (User, error) {
+type GetUserBySessionTokenHashRow struct {
+	ID              int64
+	Email           string
+	PasswordHash    string
+	CreatedAt       time.Time
+	EmailVerifiedAt sql.NullTime
+}
+
+func (q *Queries) GetUserBySessionTokenHash(ctx context.Context, tokenHash string) (GetUserBySessionTokenHashRow, error) {
 	row := q.db.QueryRowContext(ctx, getUserBySessionTokenHash, tokenHash)
-	var i User
+	var i GetUserBySessionTokenHashRow
 	err := row.Scan(
 		&i.ID,
 		&i.Email,
@@ -480,9 +512,17 @@ type MarkUserEmailVerifiedParams struct {
 	ID              int64
 }
 
-func (q *Queries) MarkUserEmailVerified(ctx context.Context, arg MarkUserEmailVerifiedParams) (User, error) {
+type MarkUserEmailVerifiedRow struct {
+	ID              int64
+	Email           string
+	PasswordHash    string
+	CreatedAt       time.Time
+	EmailVerifiedAt sql.NullTime
+}
+
+func (q *Queries) MarkUserEmailVerified(ctx context.Context, arg MarkUserEmailVerifiedParams) (MarkUserEmailVerifiedRow, error) {
 	row := q.db.QueryRowContext(ctx, markUserEmailVerified, arg.EmailVerifiedAt, arg.ID)
-	var i User
+	var i MarkUserEmailVerifiedRow
 	err := row.Scan(
 		&i.ID,
 		&i.Email,
@@ -564,9 +604,17 @@ type UpdateUserEmailParams struct {
 	ID              int64
 }
 
-func (q *Queries) UpdateUserEmail(ctx context.Context, arg UpdateUserEmailParams) (User, error) {
+type UpdateUserEmailRow struct {
+	ID              int64
+	Email           string
+	PasswordHash    string
+	CreatedAt       time.Time
+	EmailVerifiedAt sql.NullTime
+}
+
+func (q *Queries) UpdateUserEmail(ctx context.Context, arg UpdateUserEmailParams) (UpdateUserEmailRow, error) {
 	row := q.db.QueryRowContext(ctx, updateUserEmail, arg.Email, arg.EmailVerifiedAt, arg.ID)
-	var i User
+	var i UpdateUserEmailRow
 	err := row.Scan(
 		&i.ID,
 		&i.Email,
