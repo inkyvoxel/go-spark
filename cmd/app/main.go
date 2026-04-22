@@ -18,6 +18,7 @@ import (
 	"github.com/inkyvoxel/go-spark/internal/config"
 	"github.com/inkyvoxel/go-spark/internal/database"
 	"github.com/inkyvoxel/go-spark/internal/email"
+	"github.com/inkyvoxel/go-spark/internal/jobs"
 	"github.com/inkyvoxel/go-spark/internal/server"
 	"github.com/inkyvoxel/go-spark/internal/services"
 )
@@ -82,9 +83,26 @@ func run(args []string, logger *slog.Logger) error {
 		return fmt.Errorf("configure email sender: %w", err)
 	}
 
-	emailWorker := email.NewWorker(database.NewEmailOutboxStore(db), emailSender, email.WorkerOptions{
+	emailProcessor := email.NewProcessor(database.NewEmailOutboxStore(db), emailSender, email.ProcessorOptions{
 		Logger: logger,
 	})
+	cleanupJob, err := jobs.NewCleanupJob(database.NewCleanupStore(db), jobs.CleanupOptions{
+		Logger:               logger,
+		TokenRetention:       cfg.CleanupTokenRetention,
+		SentEmailRetention:   cfg.CleanupSentEmailRetention,
+		FailedEmailRetention: cfg.CleanupFailedEmailRetention,
+	})
+	if err != nil {
+		return fmt.Errorf("configure cleanup job: %w", err)
+	}
+	jobsRunner, err := jobs.NewRunner(
+		logger,
+		jobs.NewEmailJob(emailProcessor, jobs.DefaultEmailInterval),
+		cleanupJob.Job(cfg.CleanupInterval),
+	)
+	if err != nil {
+		return fmt.Errorf("configure background jobs runner: %w", err)
+	}
 
 	app := server.New(server.Options{
 		Logger:                  logger,
@@ -112,11 +130,11 @@ func run(args []string, logger *slog.Logger) error {
 
 	switch cfg.Process {
 	case config.ProcessAll:
-		return runAll(ctx, logger, cfg, httpServer, emailWorker)
+		return runAll(ctx, logger, cfg, httpServer, jobsRunner)
 	case config.ProcessWeb:
 		return runWeb(ctx, logger, cfg, httpServer)
 	case config.ProcessWorker:
-		return runWorker(ctx, logger, cfg, emailWorker)
+		return runWorker(ctx, logger, cfg, jobsRunner)
 	default:
 		return fmt.Errorf("APP_PROCESS must be %q, %q, or %q", config.ProcessAll, config.ProcessWeb, config.ProcessWorker)
 	}
@@ -141,7 +159,7 @@ func processArg(args []string) (string, error) {
 	return process, nil
 }
 
-func runAll(ctx context.Context, logger *slog.Logger, cfg config.Config, httpServer *http.Server, emailWorker *email.Worker) error {
+func runAll(ctx context.Context, logger *slog.Logger, cfg config.Config, httpServer *http.Server, jobsRunner *jobs.Runner) error {
 	errs := make(chan error, 2)
 	go func() {
 		logger.Info("server listening", "addr", cfg.Addr, "env", cfg.Env, "email_provider", cfg.EmailProvider, "process", cfg.Process)
@@ -149,7 +167,7 @@ func runAll(ctx context.Context, logger *slog.Logger, cfg config.Config, httpSer
 	}()
 
 	go func() {
-		if err := emailWorker.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
+		if err := jobsRunner.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
 			errs <- err
 		}
 	}()
@@ -196,12 +214,12 @@ func runWeb(ctx context.Context, logger *slog.Logger, cfg config.Config, httpSer
 	}
 }
 
-func runWorker(ctx context.Context, logger *slog.Logger, cfg config.Config, emailWorker *email.Worker) error {
-	logger.Info("email worker starting", "env", cfg.Env, "email_provider", cfg.EmailProvider, "process", cfg.Process)
-	if err := emailWorker.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
+func runWorker(ctx context.Context, logger *slog.Logger, cfg config.Config, jobsRunner *jobs.Runner) error {
+	logger.Info("background jobs worker starting", "env", cfg.Env, "email_provider", cfg.EmailProvider, "process", cfg.Process)
+	if err := jobsRunner.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
 		return err
 	}
-	logger.Info("email worker stopped")
+	logger.Info("background jobs worker stopped")
 	return nil
 }
 

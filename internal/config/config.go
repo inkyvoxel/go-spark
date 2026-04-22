@@ -38,27 +38,31 @@ type RateLimitPoliciesConfig struct {
 }
 
 type Config struct {
-	Addr                      string
-	Process                   string
-	Env                       string
-	DatabasePath              string
-	CookieSecure              bool
-	CSRFSigningKey            string
-	EmailVerificationRequired bool
-	EmailChangeNoticeEnabled  bool
-	PasswordMinLength         int
-	PasswordPepper            string
-	AppBaseURL                string
-	EmailFrom                 string
-	EmailProvider             string
-	EmailLogBody              bool
-	SMTPHost                  string
-	SMTPPort                  int
-	SMTPUsername              string
-	SMTPPassword              string
-	SMTPFrom                  string
-	SMTPTLS                   bool
-	RateLimitPolicies         RateLimitPoliciesConfig
+	Addr                        string
+	Process                     string
+	Env                         string
+	DatabasePath                string
+	CookieSecure                bool
+	CSRFSigningKey              string
+	EmailVerificationRequired   bool
+	EmailChangeNoticeEnabled    bool
+	PasswordMinLength           int
+	PasswordPepper              string
+	AppBaseURL                  string
+	EmailFrom                   string
+	EmailProvider               string
+	EmailLogBody                bool
+	SMTPHost                    string
+	SMTPPort                    int
+	SMTPUsername                string
+	SMTPPassword                string
+	SMTPFrom                    string
+	SMTPTLS                     bool
+	CleanupInterval             time.Duration
+	CleanupTokenRetention       time.Duration
+	CleanupSentEmailRetention   time.Duration
+	CleanupFailedEmailRetention time.Duration
+	RateLimitPolicies           RateLimitPoliciesConfig
 }
 
 func LoadDotEnv(path string) error {
@@ -126,20 +130,24 @@ func FromEnvWithProcess(defaultPasswordMinLength int, processOverride string) (C
 	}
 
 	cfg := Config{
-		Addr:                      envOrDefault("APP_ADDR", ":8080"),
-		Process:                   process,
-		Env:                       envOrDefault("APP_ENV", "development"),
-		DatabasePath:              envOrDefault("DATABASE_PATH", "./data/app.db"),
-		CookieSecure:              cookieSecure,
-		CSRFSigningKey:            strings.TrimSpace(os.Getenv("CSRF_SIGNING_KEY")),
-		EmailVerificationRequired: emailVerificationRequired,
-		EmailChangeNoticeEnabled:  emailChangeNoticeEnabled,
-		PasswordMinLength:         passwordMinLength,
-		PasswordPepper:            os.Getenv("AUTH_PASSWORD_PEPPER"),
-		AppBaseURL:                appBaseURL,
-		EmailFrom:                 emailFrom,
-		EmailProvider:             emailProvider,
-		EmailLogBody:              emailLogBody,
+		Addr:                        envOrDefault("APP_ADDR", ":8080"),
+		Process:                     process,
+		Env:                         envOrDefault("APP_ENV", "development"),
+		DatabasePath:                envOrDefault("DATABASE_PATH", "./data/app.db"),
+		CookieSecure:                cookieSecure,
+		CSRFSigningKey:              strings.TrimSpace(os.Getenv("CSRF_SIGNING_KEY")),
+		EmailVerificationRequired:   emailVerificationRequired,
+		EmailChangeNoticeEnabled:    emailChangeNoticeEnabled,
+		PasswordMinLength:           passwordMinLength,
+		PasswordPepper:              os.Getenv("AUTH_PASSWORD_PEPPER"),
+		AppBaseURL:                  appBaseURL,
+		EmailFrom:                   emailFrom,
+		EmailProvider:               emailProvider,
+		EmailLogBody:                emailLogBody,
+		CleanupInterval:             envDurationOrDefault("JOBS_CLEANUP_INTERVAL", time.Hour),
+		CleanupTokenRetention:       envDurationOrDefault("JOBS_CLEANUP_TOKEN_RETENTION", 24*time.Hour),
+		CleanupSentEmailRetention:   envDurationOrDefault("JOBS_CLEANUP_SENT_EMAIL_RETENTION", 7*24*time.Hour),
+		CleanupFailedEmailRetention: envDurationOrDefault("JOBS_CLEANUP_FAILED_EMAIL_RETENTION", 14*24*time.Hour),
 	}
 
 	rateLimitPolicies, err := rateLimitPoliciesFromEnv()
@@ -296,6 +304,19 @@ func envDurationOptionalPositive(key string) (time.Duration, error) {
 		return 0, fmt.Errorf("%s must be greater than zero", key)
 	}
 	return value, nil
+}
+
+func envDurationOrDefault(key string, fallback time.Duration) time.Duration {
+	raw := strings.TrimSpace(os.Getenv(key))
+	if raw == "" {
+		return fallback
+	}
+
+	value, err := time.ParseDuration(raw)
+	if err != nil || value <= 0 {
+		return fallback
+	}
+	return value
 }
 
 func envURL(key, fallback string) (string, error) {

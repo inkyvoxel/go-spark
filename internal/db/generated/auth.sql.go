@@ -268,6 +268,19 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 	return i, err
 }
 
+const deleteExpiredSessions = `-- name: DeleteExpiredSessions :execrows
+DELETE FROM sessions
+WHERE expires_at <= ?
+`
+
+func (q *Queries) DeleteExpiredSessions(ctx context.Context, expiresAt time.Time) (int64, error) {
+	result, err := q.db.ExecContext(ctx, deleteExpiredSessions, expiresAt)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const deleteOtherSessionsByUserIDAndTokenHash = `-- name: DeleteOtherSessionsByUserIDAndTokenHash :execrows
 DELETE FROM sessions
 WHERE user_id = ?
@@ -478,6 +491,63 @@ func (q *Queries) MarkUserEmailVerified(ctx context.Context, arg MarkUserEmailVe
 		&i.EmailVerifiedAt,
 	)
 	return i, err
+}
+
+const pruneEmailChangeTokens = `-- name: PruneEmailChangeTokens :execrows
+DELETE FROM email_change_tokens
+WHERE expires_at <= ?1
+   OR (consumed_at IS NOT NULL AND consumed_at <= ?2)
+`
+
+type PruneEmailChangeTokensParams struct {
+	ExpiredBefore  time.Time
+	ConsumedBefore sql.NullTime
+}
+
+func (q *Queries) PruneEmailChangeTokens(ctx context.Context, arg PruneEmailChangeTokensParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, pruneEmailChangeTokens, arg.ExpiredBefore, arg.ConsumedBefore)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+const pruneEmailVerificationTokens = `-- name: PruneEmailVerificationTokens :execrows
+DELETE FROM email_verification_tokens
+WHERE expires_at <= ?1
+   OR (consumed_at IS NOT NULL AND consumed_at <= ?2)
+`
+
+type PruneEmailVerificationTokensParams struct {
+	ExpiredBefore  time.Time
+	ConsumedBefore sql.NullTime
+}
+
+func (q *Queries) PruneEmailVerificationTokens(ctx context.Context, arg PruneEmailVerificationTokensParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, pruneEmailVerificationTokens, arg.ExpiredBefore, arg.ConsumedBefore)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+const prunePasswordResetTokens = `-- name: PrunePasswordResetTokens :execrows
+DELETE FROM password_reset_tokens
+WHERE expires_at <= ?1
+   OR (consumed_at IS NOT NULL AND consumed_at <= ?2)
+`
+
+type PrunePasswordResetTokensParams struct {
+	ExpiredBefore  time.Time
+	ConsumedBefore sql.NullTime
+}
+
+func (q *Queries) PrunePasswordResetTokens(ctx context.Context, arg PrunePasswordResetTokensParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, prunePasswordResetTokens, arg.ExpiredBefore, arg.ConsumedBefore)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }
 
 const updateUserEmail = `-- name: UpdateUserEmail :one

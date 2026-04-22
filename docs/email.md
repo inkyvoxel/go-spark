@@ -4,7 +4,7 @@ This document outlines a staged email architecture for Go Spark.
 
 The first email use cases are account confirmation and password reset. The design should keep request handlers fast, avoid provider lock-in, and stay small enough for a starter template.
 
-Current baseline in this starter: account confirmation and password reset emails are implemented, including hashed tokens, resend support, and a database-backed outbox worker.
+Current baseline in this starter: account confirmation and password reset emails are implemented, including hashed tokens, resend support, and a database-backed outbox processor that runs inside the background jobs worker.
 
 ## Goals
 
@@ -31,7 +31,7 @@ Use three separate concerns:
 * The database layer owns persistence for verification/reset tokens and email outbox rows.
 * `internal/paths` owns canonical public URL paths used in email links.
 
-The request path should create the relevant token and enqueue an email row in the database. A small worker should send queued emails outside the request path.
+The request path should create the relevant token and enqueue an email row in the database. A small background jobs worker should run an email processor that sends queued emails outside the request path.
 
 This is close to a queue, but the queue is just a database table. That is a good starting point for this template because it is durable, understandable, and does not require extra infrastructure.
 
@@ -40,8 +40,9 @@ This is close to a queue, but the queue is just a database table. That is a good
 Suggested package boundaries:
 
 ```text
-/cmd/app              wires config, database, services, sender, and worker
-/internal/email       message types, sender interface, sender adapters, worker
+/cmd/app              wires config, database, services, sender, and background jobs
+/internal/email       message types, sender interface, sender adapters, email processor
+/internal/jobs        periodic jobs runner and cleanup jobs
 /internal/paths       canonical public URL path constants for links
 /internal/services    auth/account verification business logic
 /internal/database    SQLite-backed stores and driver-specific behavior
@@ -182,22 +183,26 @@ Reset confirmation should:
 
 ## Delivery Model
 
-Start with a worker that can run either in the same process as the web server or as a separate process from the same binary:
+Start with a background jobs worker that can run either in the same process as the web server or as a separate process from the same binary:
 
-* `APP_PROCESS=all` runs the HTTP server and email worker together. This is the default for local development.
+* `APP_PROCESS=all` runs the HTTP server and background jobs worker together. This is the default for local development.
 * `APP_PROCESS=web` runs only the HTTP server.
-* `APP_PROCESS=worker` runs only the email outbox worker.
-* Polls pending outbox rows at a small interval.
-* Claims a small batch.
-* Sends each message through the configured `email.Sender`.
-* Marks successful rows as sent.
-* Marks failed rows with `last_error`, increments `attempts`, and schedules retry using `available_at`.
-* Marks rows as permanently failed after a small maximum attempt count.
-* Stops cleanly when the app context is canceled.
+* `APP_PROCESS=worker` runs only the background jobs worker.
+* The worker hosts small periodic jobs.
+* Email delivery is one of those jobs and keeps its explicit database outbox claim/retry model.
+* Database cleanup is another periodic job and prunes expired sessions, tokens, and old outbox rows.
+* Jobs stop cleanly when the app context is canceled.
 
 The same modes can also be selected with the first CLI argument, such as `./go-spark web` or `./go-spark worker`. A CLI argument wins over `APP_PROCESS`.
 
 This worker is intentionally modest. It is enough for a starter app, keeps local development in one process, and still gives production deployments a simple web/worker split.
+
+The starter uses two background-work patterns:
+
+* Use a periodic in-process job for recurring housekeeping.
+* Use a dedicated durable database table plus processor for delayed or retryable domain work.
+
+That keeps the design extensible without turning the starter into a generic jobs system too early.
 
 The outbox includes stale-claim recovery so rows left in `sending` after a crash can be reclaimed after lease expiry. Claims are ownership-guarded with a claim token so stale workers cannot overwrite newer claim outcomes.
 
@@ -280,9 +285,9 @@ Add:
 
 Registration should enqueue an account confirmation email after the user and token are created.
 
-### Slice 5: Worker
+### Slice 5: Background Jobs
 
-Add a small in-process worker that:
+Add a small in-process background jobs worker that:
 
 * polls pending outbox rows
 * sends through `email.Sender`
@@ -291,7 +296,7 @@ Add a small in-process worker that:
 * stops retrying after a small maximum attempt count
 * exits on context cancellation
 
-Start the worker from `cmd/app`.
+Start the background jobs worker from `cmd/app`.
 
 ### Slice 6: SMTP Adapter
 
@@ -305,7 +310,8 @@ Use focused tests at each boundary:
 
 * Service tests use fake stores and fake senders.
 * Store tests run against SQLite.
-* Worker tests use a fake sender and controlled retry timing where practical.
+* Email processor tests use a fake sender and controlled retry timing where practical.
+* Background jobs runner tests should verify scheduling, isolation, and shutdown behavior.
 * Route tests assert user-facing behavior and redirects, not provider calls.
 * Provider adapter tests should avoid real network calls by default.
 

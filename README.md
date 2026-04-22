@@ -46,9 +46,9 @@ The app listens on `:8080` by default, stores its SQLite database at `./data/app
 
 `APP_PROCESS` selects which long-running process the binary should run:
 
-* `all` starts the HTTP server and email worker together. This is the default and is best for local development.
+* `all` starts the HTTP server and background jobs worker together. This is the default and is best for local development.
 * `web` starts only the HTTP server.
-* `worker` starts only the email outbox worker.
+* `worker` starts only the background jobs worker.
 
 You can also pass the process mode as the first CLI argument. The CLI argument wins over `APP_PROCESS`:
 
@@ -63,6 +63,10 @@ You can also pass the process mode as the first CLI argument. The CLI argument w
 
 `AUTH_EMAIL_VERIFICATION_REQUIRED` controls whether account email verification is enforced. It defaults to `true`.
 `AUTH_EMAIL_CHANGE_NOTICE_ENABLED` controls whether the app sends an old-email notification when an account email address changes. It defaults to `true`.
+`JOBS_CLEANUP_INTERVAL` controls how often database cleanup runs. It defaults to `1h`.
+`JOBS_CLEANUP_TOKEN_RETENTION` controls how long consumed reset, verification, and email-change tokens are retained. It defaults to `24h`.
+`JOBS_CLEANUP_SENT_EMAIL_RETENTION` controls how long sent outbox rows are retained. It defaults to `168h`.
+`JOBS_CLEANUP_FAILED_EMAIL_RETENTION` controls how long failed outbox rows are retained. It defaults to `336h`.
 
 ## CSRF Protection
 
@@ -92,7 +96,8 @@ Built-in email functionality includes:
 * Confirmation links at `/account/confirm-email`.
 * Resend confirmation from the account page for signed-in, unverified users.
 * Password reset emails with reset links at `/account/reset-password`.
-* Durable email delivery intent via a database outbox worker.
+* Durable email delivery intent via a database outbox processor.
+* Periodic database cleanup for expired sessions, auth tokens, and old outbox rows.
 
 When `AUTH_EMAIL_VERIFICATION_REQUIRED=false`:
 
@@ -101,6 +106,16 @@ When `AUTH_EMAIL_VERIFICATION_REQUIRED=false`:
 * Verification routes remain mounted for compatibility but redirect to normal login/account flows.
 
 Email delivery defaults to `EMAIL_PROVIDER=log` for safe local development. Set `EMAIL_PROVIDER=smtp` with `SMTP_*` values to send real mail.
+
+The starter uses two background-work patterns:
+
+* Durable domain work uses explicit database tables with claim/retry semantics, such as `email_outbox`.
+* Periodic housekeeping uses the in-process background jobs worker, such as database cleanup.
+
+This is intentionally not a generic persisted jobs framework. When adding future background work:
+
+* use a periodic job for recurring housekeeping
+* use a dedicated table plus processor when work must be durable, delayed, retried, or claimed safely across restarts
 
 ## Auth Rate Limiting
 
@@ -222,7 +237,7 @@ Before deploying an app based on this template:
 * Keep secrets out of Git and load them from environment or your deployment platform.
 * Back up the SQLite database file.
 * Run migrations as part of deploy or a controlled release step.
-* Use `APP_PROCESS=web` for the HTTP process and `APP_PROCESS=worker` for the email worker when you want to run them separately.
+* Use `APP_PROCESS=web` for the HTTP process and `APP_PROCESS=worker` for the background jobs worker when you want to run them separately.
 * Set file permissions so the app can read and write the database path, but does not expose it publicly.
 * Set `APP_COOKIE_SECURE=true` when the app is served over HTTPS by a reverse proxy or load balancer.
 * Keep `AUTH_PASSWORD_MIN_LENGTH` at 12 or higher unless you have a clear compatibility reason.
@@ -231,7 +246,7 @@ Before deploying an app based on this template:
 * Set `CSRF_SIGNING_KEY` to a strong secret in production.
 * Add request timeouts and deployment-specific logging/metrics as the app grows.
 
-A simple deployment can run the same binary as two services, for example one service with `APP_PROCESS=web` behind Caddy, nginx, or another reverse proxy, and one service with `APP_PROCESS=worker` for email delivery.
+A simple deployment can run the same binary as two services, for example one service with `APP_PROCESS=web` behind Caddy, nginx, or another reverse proxy, and one service with `APP_PROCESS=worker` for background jobs.
 
 ## Replacing SQLite
 

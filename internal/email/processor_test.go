@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-func TestWorkerProcessPendingMarksSent(t *testing.T) {
+func TestProcessorProcessPendingMarksSent(t *testing.T) {
 	store := &fakeOutboxStore{
 		claimed: []OutboxEmail{
 			{
@@ -25,13 +25,13 @@ func TestWorkerProcessPendingMarksSent(t *testing.T) {
 		},
 	}
 	sender := &fakeSender{}
-	worker := NewWorker(store, sender, WorkerOptions{
+	processor := NewProcessor(store, sender, ProcessorOptions{
 		BatchSize:  5,
 		RetryDelay: time.Minute,
 		ClaimTTL:   2 * time.Minute,
 	})
 
-	if err := worker.ProcessPending(context.Background()); err != nil {
+	if err := processor.ProcessPending(context.Background()); err != nil {
 		t.Fatalf("ProcessPending() error = %v", err)
 	}
 
@@ -55,14 +55,14 @@ func TestWorkerProcessPendingMarksSent(t *testing.T) {
 	}
 }
 
-func TestWorkerProcessPendingMarksFailedWhenSendFails(t *testing.T) {
+func TestProcessorProcessPendingMarksFailedWhenSendFails(t *testing.T) {
 	store := &fakeOutboxStore{
 		claimed: []OutboxEmail{{ID: 1, ClaimToken: "claim-1", Message: Message{To: "user@example.com"}}},
 	}
 	sender := &fakeSender{err: errors.New("provider unavailable")}
-	worker := NewWorker(store, sender, WorkerOptions{RetryDelay: 2 * time.Minute})
+	processor := NewProcessor(store, sender, ProcessorOptions{RetryDelay: 2 * time.Minute})
 
-	if err := worker.ProcessPending(context.Background()); err != nil {
+	if err := processor.ProcessPending(context.Background()); err != nil {
 		t.Fatalf("ProcessPending() error = %v", err)
 	}
 
@@ -83,14 +83,14 @@ func TestWorkerProcessPendingMarksFailedWhenSendFails(t *testing.T) {
 	}
 }
 
-func TestWorkerProcessPendingMarksFailedPermanentlyAtMaxAttempts(t *testing.T) {
+func TestProcessorProcessPendingMarksFailedPermanentlyAtMaxAttempts(t *testing.T) {
 	store := &fakeOutboxStore{
 		claimed: []OutboxEmail{{ID: 1, ClaimToken: "claim-1", Attempts: DefaultMaxAttempts - 1, Message: Message{To: "user@example.com"}}},
 	}
 	sender := &fakeSender{err: errors.New("bad recipient")}
-	worker := NewWorker(store, sender, WorkerOptions{})
+	processor := NewProcessor(store, sender, ProcessorOptions{})
 
-	if err := worker.ProcessPending(context.Background()); err != nil {
+	if err := processor.ProcessPending(context.Background()); err != nil {
 		t.Fatalf("ProcessPending() error = %v", err)
 	}
 
@@ -105,10 +105,10 @@ func TestWorkerProcessPendingMarksFailedPermanentlyAtMaxAttempts(t *testing.T) {
 	}
 }
 
-func TestWorkerProcessPendingReturnsClaimError(t *testing.T) {
-	worker := NewWorker(&fakeOutboxStore{claimErr: errors.New("database unavailable")}, &fakeSender{}, WorkerOptions{})
+func TestProcessorProcessPendingReturnsClaimError(t *testing.T) {
+	processor := NewProcessor(&fakeOutboxStore{claimErr: errors.New("database unavailable")}, &fakeSender{}, ProcessorOptions{})
 
-	err := worker.ProcessPending(context.Background())
+	err := processor.ProcessPending(context.Background())
 	if err == nil {
 		t.Fatal("ProcessPending() error = nil, want error")
 	}
@@ -117,65 +117,65 @@ func TestWorkerProcessPendingReturnsClaimError(t *testing.T) {
 	}
 }
 
-func TestWorkerProcessPendingReturnsMarkSentError(t *testing.T) {
+func TestProcessorProcessPendingReturnsMarkSentError(t *testing.T) {
 	store := &fakeOutboxStore{
 		claimed:     []OutboxEmail{{ID: 1, ClaimToken: "claim-1", Message: Message{To: "user@example.com"}}},
 		markSentErr: errors.New("write failed"),
 	}
-	worker := NewWorker(store, &fakeSender{}, WorkerOptions{})
+	processor := NewProcessor(store, &fakeSender{}, ProcessorOptions{})
 
-	err := worker.ProcessPending(context.Background())
+	err := processor.ProcessPending(context.Background())
 	if err == nil {
 		t.Fatal("ProcessPending() error = nil, want error")
 	}
 }
 
-func TestWorkerProcessPendingReturnsMarkFailedError(t *testing.T) {
+func TestProcessorProcessPendingReturnsMarkFailedError(t *testing.T) {
 	store := &fakeOutboxStore{
 		claimed:       []OutboxEmail{{ID: 1, ClaimToken: "claim-1", Message: Message{To: "user@example.com"}}},
 		markFailedErr: errors.New("write failed"),
 	}
-	worker := NewWorker(store, &fakeSender{err: errors.New("provider unavailable")}, WorkerOptions{})
+	processor := NewProcessor(store, &fakeSender{err: errors.New("provider unavailable")}, ProcessorOptions{})
 
-	err := worker.ProcessPending(context.Background())
+	err := processor.ProcessPending(context.Background())
 	if err == nil {
 		t.Fatal("ProcessPending() error = nil, want error")
 	}
 }
 
-func TestWorkerProcessPendingReturnsMarkFailedPermanentlyError(t *testing.T) {
+func TestProcessorProcessPendingReturnsMarkFailedPermanentlyError(t *testing.T) {
 	store := &fakeOutboxStore{
 		claimed:                []OutboxEmail{{ID: 1, ClaimToken: "claim-1", Attempts: DefaultMaxAttempts - 1, Message: Message{To: "user@example.com"}}},
 		markPermanentFailedErr: errors.New("write failed"),
 	}
-	worker := NewWorker(store, &fakeSender{err: errors.New("bad recipient")}, WorkerOptions{})
+	processor := NewProcessor(store, &fakeSender{err: errors.New("bad recipient")}, ProcessorOptions{})
 
-	err := worker.ProcessPending(context.Background())
+	err := processor.ProcessPending(context.Background())
 	if err == nil {
 		t.Fatal("ProcessPending() error = nil, want error")
 	}
 }
 
-func TestWorkerProcessPendingContinuesWhenClaimOwnershipIsLost(t *testing.T) {
+func TestProcessorProcessPendingContinuesWhenClaimOwnershipIsLost(t *testing.T) {
 	store := &fakeOutboxStore{
 		claimed: []OutboxEmail{{ID: 1, ClaimToken: "claim-1", Message: Message{To: "user@example.com"}}},
 	}
 	store.markSentErr = sql.ErrNoRows
-	worker := NewWorker(store, &fakeSender{}, WorkerOptions{})
+	processor := NewProcessor(store, &fakeSender{}, ProcessorOptions{})
 
-	if err := worker.ProcessPending(context.Background()); err != nil {
+	if err := processor.ProcessPending(context.Background()); err != nil {
 		t.Fatalf("ProcessPending() error = %v, want nil", err)
 	}
 }
 
-func TestWorkerProcessPendingTruncatesLongLastError(t *testing.T) {
+func TestProcessorProcessPendingTruncatesLongLastError(t *testing.T) {
 	store := &fakeOutboxStore{
 		claimed: []OutboxEmail{{ID: 1, ClaimToken: "claim-1", Message: Message{To: "user@example.com"}}},
 	}
 	sender := &fakeSender{err: errors.New(strings.Repeat("x", MaxLastErrorLength+20))}
-	worker := NewWorker(store, sender, WorkerOptions{})
+	processor := NewProcessor(store, sender, ProcessorOptions{})
 
-	if err := worker.ProcessPending(context.Background()); err != nil {
+	if err := processor.ProcessPending(context.Background()); err != nil {
 		t.Fatalf("ProcessPending() error = %v", err)
 	}
 	if len(store.lastError) != MaxLastErrorLength {
@@ -183,12 +183,12 @@ func TestWorkerProcessPendingTruncatesLongLastError(t *testing.T) {
 	}
 }
 
-func TestWorkerRunRequiresDependencies(t *testing.T) {
-	if err := NewWorker(nil, &fakeSender{}, WorkerOptions{}).Run(context.Background()); err == nil {
-		t.Fatal("Run() with nil store error = nil, want error")
+func TestProcessorValidateRequiresDependencies(t *testing.T) {
+	if err := NewProcessor(nil, &fakeSender{}, ProcessorOptions{}).Validate(); err == nil {
+		t.Fatal("Validate() with nil store error = nil, want error")
 	}
-	if err := NewWorker(&fakeOutboxStore{}, nil, WorkerOptions{}).Run(context.Background()); err == nil {
-		t.Fatal("Run() with nil sender error = nil, want error")
+	if err := NewProcessor(&fakeOutboxStore{}, nil, ProcessorOptions{}).Validate(); err == nil {
+		t.Fatal("Validate() with nil sender error = nil, want error")
 	}
 }
 

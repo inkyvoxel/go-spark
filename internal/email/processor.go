@@ -10,7 +10,6 @@ import (
 )
 
 const (
-	DefaultWorkerInterval  = 5 * time.Second
 	DefaultWorkerBatchSize = 10
 	DefaultRetryDelay      = time.Minute
 	DefaultMaxAttempts     = 5
@@ -32,35 +31,28 @@ type OutboxStore interface {
 	MarkFailedPermanently(ctx context.Context, id int64, claimToken, lastError string, failedAt time.Time) error
 }
 
-type Worker struct {
+type Processor struct {
 	store       OutboxStore
 	sender      Sender
 	logger      *slog.Logger
-	interval    time.Duration
 	batchSize   int64
 	retryDelay  time.Duration
 	maxAttempts int64
 	claimTTL    time.Duration
 }
 
-type WorkerOptions struct {
+type ProcessorOptions struct {
 	Logger      *slog.Logger
-	Interval    time.Duration
 	BatchSize   int64
 	RetryDelay  time.Duration
 	MaxAttempts int64
 	ClaimTTL    time.Duration
 }
 
-func NewWorker(store OutboxStore, sender Sender, opts WorkerOptions) *Worker {
+func NewProcessor(store OutboxStore, sender Sender, opts ProcessorOptions) *Processor {
 	logger := opts.Logger
 	if logger == nil {
 		logger = slog.Default()
-	}
-
-	interval := opts.Interval
-	if interval == 0 {
-		interval = DefaultWorkerInterval
 	}
 
 	batchSize := opts.BatchSize
@@ -83,11 +75,10 @@ func NewWorker(store OutboxStore, sender Sender, opts WorkerOptions) *Worker {
 		claimTTL = DefaultClaimTTL
 	}
 
-	return &Worker{
+	return &Processor{
 		store:       store,
 		sender:      sender,
 		logger:      logger,
-		interval:    interval,
 		batchSize:   batchSize,
 		retryDelay:  retryDelay,
 		maxAttempts: maxAttempts,
@@ -95,59 +86,46 @@ func NewWorker(store OutboxStore, sender Sender, opts WorkerOptions) *Worker {
 	}
 }
 
-func (w *Worker) Run(ctx context.Context) error {
-	if w.store == nil {
-		return fmt.Errorf("email worker store is required")
+func (p *Processor) Validate() error {
+	if p.store == nil {
+		return fmt.Errorf("email processor store is required")
 	}
-	if w.sender == nil {
-		return fmt.Errorf("email worker sender is required")
+	if p.sender == nil {
+		return fmt.Errorf("email processor sender is required")
 	}
-
-	if err := w.ProcessPending(ctx); err != nil && !errors.Is(err, context.Canceled) {
-		w.logger.Error("process pending email", "err", err)
-	}
-
-	ticker := time.NewTicker(w.interval)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-ticker.C:
-			if err := w.ProcessPending(ctx); err != nil && !errors.Is(err, context.Canceled) {
-				w.logger.Error("process pending email", "err", err)
-			}
-		}
-	}
+	return nil
 }
 
-func (w *Worker) ProcessPending(ctx context.Context) error {
+func (p *Processor) ProcessPending(ctx context.Context) error {
+	if err := p.Validate(); err != nil {
+		return err
+	}
+
 	now := time.Now().UTC()
-	messages, err := w.store.ClaimPending(ctx, now, w.claimTTL, w.batchSize)
+	messages, err := p.store.ClaimPending(ctx, now, p.claimTTL, p.batchSize)
 	if err != nil {
 		return fmt.Errorf("claim pending email: %w", err)
 	}
 
 	for _, outboxEmail := range messages {
-		if err := w.sender.Send(ctx, outboxEmail.Message); err != nil {
+		if err := p.sender.Send(ctx, outboxEmail.Message); err != nil {
 			nextAttempt := outboxEmail.Attempts + 1
 			lastError := truncateLastError(err.Error())
-			if nextAttempt >= w.maxAttempts {
-				if markErr := w.store.MarkFailedPermanently(ctx, outboxEmail.ID, outboxEmail.ClaimToken, lastError, time.Now().UTC()); markErr != nil {
+			if nextAttempt >= p.maxAttempts {
+				if markErr := p.store.MarkFailedPermanently(ctx, outboxEmail.ID, outboxEmail.ClaimToken, lastError, time.Now().UTC()); markErr != nil {
 					if errors.Is(markErr, sql.ErrNoRows) {
-						w.logger.Warn("email outbox claim no longer owned while marking permanent failure", "outbox_id", outboxEmail.ID)
+						p.logger.Warn("email outbox claim no longer owned while marking permanent failure", "outbox_id", outboxEmail.ID)
 						continue
 					}
 					return fmt.Errorf("mark email permanently failed after send error %q: %w", err.Error(), markErr)
 				}
-				w.logger.Warn("email delivery failed permanently", "outbox_id", outboxEmail.ID, "attempts", nextAttempt, "err", err)
+				p.logger.Warn("email delivery failed permanently", "outbox_id", outboxEmail.ID, "attempts", nextAttempt, "err", err)
 				continue
 			}
 
-			if markErr := w.store.MarkFailed(ctx, outboxEmail.ID, outboxEmail.ClaimToken, lastError, time.Now().UTC().Add(w.retryDelay)); markErr != nil {
+			if markErr := p.store.MarkFailed(ctx, outboxEmail.ID, outboxEmail.ClaimToken, lastError, time.Now().UTC().Add(p.retryDelay)); markErr != nil {
 				if errors.Is(markErr, sql.ErrNoRows) {
-					w.logger.Warn("email outbox claim no longer owned while marking retry", "outbox_id", outboxEmail.ID)
+					p.logger.Warn("email outbox claim no longer owned while marking retry", "outbox_id", outboxEmail.ID)
 					continue
 				}
 				return fmt.Errorf("mark email failed after send error %q: %w", err.Error(), markErr)
@@ -155,9 +133,9 @@ func (w *Worker) ProcessPending(ctx context.Context) error {
 			continue
 		}
 
-		if err := w.store.MarkSent(ctx, outboxEmail.ID, outboxEmail.ClaimToken, time.Now().UTC()); err != nil {
+		if err := p.store.MarkSent(ctx, outboxEmail.ID, outboxEmail.ClaimToken, time.Now().UTC()); err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
-				w.logger.Warn("email outbox claim no longer owned while marking sent", "outbox_id", outboxEmail.ID)
+				p.logger.Warn("email outbox claim no longer owned while marking sent", "outbox_id", outboxEmail.ID)
 				continue
 			}
 			return fmt.Errorf("mark email sent: %w", err)

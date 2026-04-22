@@ -68,14 +68,31 @@ make tools
 
 The app binary supports process modes:
 
-* `make run` starts the default `all` mode, which runs the HTTP server and email worker together.
+* `make run` starts the default `all` mode, which runs the HTTP server and background jobs worker together.
 * `make run-all` starts the same all-in-one mode explicitly.
 * `make run-web` starts only the HTTP server.
-* `make run-worker` starts only the email outbox worker.
+* `make run-worker` starts only the background jobs worker.
 
 For deployed environments, set `APP_PROCESS=web` and `APP_PROCESS=worker` in separate process manager entries, or pass `web` or `worker` as the first binary argument.
 
 This starter includes basic transactional email out of the box for account confirmation, resend-verification, and password reset flows.
+
+The `worker` process hosts all background jobs in the starter. That includes:
+
+* email outbox delivery
+* database cleanup for expired sessions, tokens, and old outbox rows
+
+When extending the starter:
+
+* add a periodic job for recurring housekeeping
+* add an explicit durable table plus processor for delayed or retryable domain work
+
+Optional cleanup tuning env vars:
+
+* `JOBS_CLEANUP_INTERVAL`
+* `JOBS_CLEANUP_TOKEN_RETENTION`
+* `JOBS_CLEANUP_SENT_EMAIL_RETENTION`
+* `JOBS_CLEANUP_FAILED_EMAIL_RETENTION`
 
 For email, keep `EMAIL_PROVIDER=log` during local development. To send real mail, set `EMAIL_PROVIDER=smtp` and provide `SMTP_HOST`, `SMTP_PORT`, and `SMTP_FROM` (plus `SMTP_USERNAME` and `SMTP_PASSWORD` when your server requires authentication).
 

@@ -98,6 +98,7 @@ The intended codebase structure is:
   /config           environment config
   /database         database connection setup
   /email            email rendering, sending, and outbox delivery
+  /jobs             background jobs runner and cleanup jobs
   /paths            canonical public URL path constants
   /server           HTTP routes and handlers
   /services         business logic
@@ -117,6 +118,7 @@ Guidelines:
 * The DB layer owns persistence, generated queries, and database-driver error translation.
 * Shared public URL paths live in `internal/paths` so server code, email links, tests, and templates do not drift apart.
 * Templates render data and avoid business rules.
+* Background jobs stay small and explicit: recurring housekeeping belongs in `internal/jobs`, while durable delayed work should use domain tables with focused processors.
 
 ### Route and Template Constants
 

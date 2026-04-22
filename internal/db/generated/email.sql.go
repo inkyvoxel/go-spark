@@ -311,3 +311,32 @@ func (q *Queries) MarkEmailSent(ctx context.Context, arg MarkEmailSentParams) (E
 	)
 	return i, err
 }
+
+const pruneFailedEmailOutboxRows = `-- name: PruneFailedEmailOutboxRows :execrows
+DELETE FROM email_outbox
+WHERE status = 'failed'
+  AND available_at <= ?
+`
+
+func (q *Queries) PruneFailedEmailOutboxRows(ctx context.Context, availableAt time.Time) (int64, error) {
+	result, err := q.db.ExecContext(ctx, pruneFailedEmailOutboxRows, availableAt)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+const pruneSentEmailOutboxRows = `-- name: PruneSentEmailOutboxRows :execrows
+DELETE FROM email_outbox
+WHERE status = 'sent'
+  AND sent_at IS NOT NULL
+  AND sent_at <= ?
+`
+
+func (q *Queries) PruneSentEmailOutboxRows(ctx context.Context, sentAt sql.NullTime) (int64, error) {
+	result, err := q.db.ExecContext(ctx, pruneSentEmailOutboxRows, sentAt)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}

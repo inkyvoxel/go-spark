@@ -87,6 +87,10 @@ func TestFromEnvUsesDefaults(t *testing.T) {
 	t.Setenv("EMAIL_FROM", "")
 	t.Setenv("EMAIL_PROVIDER", "")
 	t.Setenv("EMAIL_LOG_BODY", "")
+	t.Setenv("JOBS_CLEANUP_INTERVAL", "")
+	t.Setenv("JOBS_CLEANUP_TOKEN_RETENTION", "")
+	t.Setenv("JOBS_CLEANUP_SENT_EMAIL_RETENTION", "")
+	t.Setenv("JOBS_CLEANUP_FAILED_EMAIL_RETENTION", "")
 
 	cfg, err := FromEnv(services.DefaultPasswordMinLength)
 	if err != nil {
@@ -135,6 +139,18 @@ func TestFromEnvUsesDefaults(t *testing.T) {
 	if cfg.EmailLogBody {
 		t.Fatal("EmailLogBody = true, want false")
 	}
+	if cfg.CleanupInterval != time.Hour {
+		t.Fatalf("CleanupInterval = %v, want %v", cfg.CleanupInterval, time.Hour)
+	}
+	if cfg.CleanupTokenRetention != 24*time.Hour {
+		t.Fatalf("CleanupTokenRetention = %v, want %v", cfg.CleanupTokenRetention, 24*time.Hour)
+	}
+	if cfg.CleanupSentEmailRetention != 7*24*time.Hour {
+		t.Fatalf("CleanupSentEmailRetention = %v, want %v", cfg.CleanupSentEmailRetention, 7*24*time.Hour)
+	}
+	if cfg.CleanupFailedEmailRetention != 14*24*time.Hour {
+		t.Fatalf("CleanupFailedEmailRetention = %v, want %v", cfg.CleanupFailedEmailRetention, 14*24*time.Hour)
+	}
 }
 
 func TestFromEnvUsesEnvironment(t *testing.T) {
@@ -152,6 +168,10 @@ func TestFromEnvUsesEnvironment(t *testing.T) {
 	t.Setenv("EMAIL_FROM", "Example <mail@example.com>")
 	t.Setenv("EMAIL_PROVIDER", "LOG")
 	t.Setenv("EMAIL_LOG_BODY", "true")
+	t.Setenv("JOBS_CLEANUP_INTERVAL", "30m")
+	t.Setenv("JOBS_CLEANUP_TOKEN_RETENTION", "36h")
+	t.Setenv("JOBS_CLEANUP_SENT_EMAIL_RETENTION", "240h")
+	t.Setenv("JOBS_CLEANUP_FAILED_EMAIL_RETENTION", "360h")
 	t.Setenv("RATE_LIMIT_LOGIN_MAX_REQUESTS", "7")
 	t.Setenv("RATE_LIMIT_LOGIN_WINDOW", "2m")
 	t.Setenv("RATE_LIMIT_RESET_PASSWORD_MAX_REQUESTS", "8")
@@ -211,6 +231,18 @@ func TestFromEnvUsesEnvironment(t *testing.T) {
 	}
 	if !cfg.EmailLogBody {
 		t.Fatal("EmailLogBody = false, want true")
+	}
+	if cfg.CleanupInterval != 30*time.Minute {
+		t.Fatalf("CleanupInterval = %v, want %v", cfg.CleanupInterval, 30*time.Minute)
+	}
+	if cfg.CleanupTokenRetention != 36*time.Hour {
+		t.Fatalf("CleanupTokenRetention = %v, want %v", cfg.CleanupTokenRetention, 36*time.Hour)
+	}
+	if cfg.CleanupSentEmailRetention != 240*time.Hour {
+		t.Fatalf("CleanupSentEmailRetention = %v, want %v", cfg.CleanupSentEmailRetention, 240*time.Hour)
+	}
+	if cfg.CleanupFailedEmailRetention != 360*time.Hour {
+		t.Fatalf("CleanupFailedEmailRetention = %v, want %v", cfg.CleanupFailedEmailRetention, 360*time.Hour)
 	}
 	if cfg.RateLimitPolicies.Login.MaxRequests != 7 {
 		t.Fatalf("RateLimitPolicies.Login.MaxRequests = %d, want %d", cfg.RateLimitPolicies.Login.MaxRequests, 7)

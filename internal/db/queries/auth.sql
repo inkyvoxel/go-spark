@@ -44,6 +44,10 @@ RETURNING id, user_id, token_hash, expires_at, created_at;
 DELETE FROM sessions
 WHERE token_hash = ?;
 
+-- name: DeleteExpiredSessions :execrows
+DELETE FROM sessions
+WHERE expires_at <= ?;
+
 -- name: DeleteSessionsByUserID :exec
 DELETE FROM sessions
 WHERE user_id = ?;
@@ -113,6 +117,11 @@ WHERE token_hash = ?
   AND expires_at > ?
 RETURNING id, user_id, token_hash, expires_at, consumed_at, created_at;
 
+-- name: PrunePasswordResetTokens :execrows
+DELETE FROM password_reset_tokens
+WHERE expires_at <= sqlc.arg(expired_before)
+   OR (consumed_at IS NOT NULL AND consumed_at <= sqlc.arg(consumed_before));
+
 -- name: CreateEmailVerificationToken :one
 INSERT INTO email_verification_tokens (
     user_id,
@@ -133,6 +142,11 @@ WHERE token_hash = ?
   AND expires_at > ?
 RETURNING id, user_id, token_hash, expires_at, consumed_at, created_at;
 
+-- name: PruneEmailVerificationTokens :execrows
+DELETE FROM email_verification_tokens
+WHERE expires_at <= sqlc.arg(expired_before)
+   OR (consumed_at IS NOT NULL AND consumed_at <= sqlc.arg(consumed_before));
+
 -- name: ConsumeEmailChangeToken :one
 UPDATE email_change_tokens
 SET consumed_at = ?
@@ -140,6 +154,11 @@ WHERE token_hash = ?
   AND consumed_at IS NULL
   AND expires_at > ?
 RETURNING id, user_id, new_email, token_hash, expires_at, consumed_at, created_at;
+
+-- name: PruneEmailChangeTokens :execrows
+DELETE FROM email_change_tokens
+WHERE expires_at <= sqlc.arg(expired_before)
+   OR (consumed_at IS NOT NULL AND consumed_at <= sqlc.arg(consumed_before));
 
 -- name: MarkUserEmailVerified :one
 UPDATE users

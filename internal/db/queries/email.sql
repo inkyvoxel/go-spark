@@ -80,3 +80,14 @@ SET status = 'failed',
 WHERE id = sqlc.arg(id)
   AND claim_token = sqlc.arg(claim_token)
 RETURNING id, sender, recipient, subject, text_body, html_body, status, attempts, last_error, available_at, claimed_at, claim_expires_at, claim_token, sent_at, created_at;
+
+-- name: PruneSentEmailOutboxRows :execrows
+DELETE FROM email_outbox
+WHERE status = 'sent'
+  AND sent_at IS NOT NULL
+  AND sent_at <= ?;
+
+-- name: PruneFailedEmailOutboxRows :execrows
+DELETE FROM email_outbox
+WHERE status = 'failed'
+  AND available_at <= ?;
