@@ -2,27 +2,16 @@
 
 A small starter template for server-rendered Go web applications.
 
-The default shape is intentionally simple: Go, `net/http`, `html/template`, PicoCSS, SQLite, SQL migrations, and a small set of conventions that are easy to change later.
+Go Spark keeps the default shape intentionally simple:
 
-It includes a runnable app, SQLite setup, migrations, generated SQL code, CSRF protection, and email/password session authentication with basic transactional email support.
+* Go with `net/http`
+* server-rendered HTML with `html/template`
+* SQLite with `database/sql`
+* SQL-first data access with `sqlc`
+* SQL migrations with `goose`
+* structured logging with `log/slog`
 
-Frontend assets are vendored under `static/vendor` so the starter works without runtime CDN dependencies.
-
-Auth business logic is kept behind a small storage interface. The default storage adapter uses SQLite and `sqlc`, but database-specific driver behavior stays out of services and HTTP handlers.
-
-## Tech Stack
-
-* Go
-* `net/http`
-* `html/template`
-* PicoCSS
-* SQLite via `modernc.org/sqlite`
-* `database/sql`
-* `sqlc`
-* `goose`
-* `log/slog`
-
-See [docs/architecture.md](docs/architecture.md) for the longer rationale and authentication approach.
+It includes a runnable app, basic auth flows, transactional email, and a small background jobs worker.
 
 ## Quick Start
 
@@ -32,238 +21,91 @@ make migrate-up
 make run
 ```
 
-Open:
+Open `http://localhost:8080`.
 
-```text
-http://localhost:8080
-```
+The default SQLite database path is `./data/app.db`.
 
-The app listens on `:8080` by default, stores its SQLite database at `./data/app.db`.
+## Process Modes
 
-## Environment variables
+`APP_PROCESS` selects which long-running process to run:
 
-`make run` loads `.env` when the file exists. Environment variables already set in your shell take precedence over values in `.env`.
+* `all`: HTTP server plus background jobs worker
+* `web`: HTTP server only
+* `worker`: background jobs worker only
 
-`APP_PROCESS` selects which long-running process the binary should run:
-
-* `all` starts the HTTP server and background jobs worker together. This is the default and is best for local development.
-* `web` starts only the HTTP server.
-* `worker` starts only the background jobs worker.
-
-You can also pass the process mode as the first CLI argument. The CLI argument wins over `APP_PROCESS`:
+You can also pass the mode as the first CLI argument:
 
 ```sh
+./go-spark all
 ./go-spark web
 ./go-spark worker
-./go-spark all
 ```
 
-`AUTH_PASSWORD_PEPPER` is optional. When set, the app uses it as an application-level secret in password hashing by applying an HMAC-SHA256 pre-hash before Argon2id. When blank, no pepper is applied.
-`CSRF_SIGNING_KEY` is used to sign CSRF tokens. It is required in production. In non-production, when blank, the app generates an ephemeral in-memory key at startup.
+## What’s Included
 
-`AUTH_EMAIL_VERIFICATION_REQUIRED` controls whether account email verification is enforced. It defaults to `true`.
-`AUTH_EMAIL_CHANGE_NOTICE_ENABLED` controls whether the app sends an old-email notification when an account email address changes. It defaults to `true`.
-`JOBS_CLEANUP_INTERVAL` controls how often database cleanup runs. It defaults to `1h`.
-`JOBS_CLEANUP_TOKEN_RETENTION` controls how long consumed reset, verification, and email-change tokens are retained. It defaults to `24h`.
-`JOBS_CLEANUP_SENT_EMAIL_RETENTION` controls how long sent outbox rows are retained. It defaults to `168h`.
-`JOBS_CLEANUP_FAILED_EMAIL_RETENTION` controls how long failed outbox rows are retained. It defaults to `336h`.
+* email/password authentication
+* server-side sessions
+* CSRF protection
+* account email verification
+* password reset
+* email outbox delivery
+* periodic database cleanup jobs
 
-## CSRF Protection
-
-State-changing requests use signed CSRF tokens that are bound to the current session context:
-
-* Token format is versioned and HMAC-signed.
-* Payload includes expiry and a session binding (`sha256(session cookie)` for authenticated requests, `anon` otherwise).
-* Unsafe methods require:
-  * submitted token (form field or `X-CSRF-Token` header),
-  * exact match between submitted token and CSRF cookie,
-  * valid signature,
-  * unexpired token,
-  * session binding match,
-  * when present, `Origin` (preferred) or `Referer` must match `APP_BASE_URL` origin.
-
-Token rotation behavior:
-
-* CSRF token rotates on successful login/register.
-* CSRF cookie is cleared on logout and other session-invalidating transitions.
-* Legacy unsigned tokens are not accepted (hard cutover).
-
-## Emails
-
-Built-in email functionality includes:
-
-* Account confirmation emails on registration.
-* Confirmation links at `/account/confirm-email`.
-* Resend confirmation from the account page for signed-in, unverified users.
-* Password reset emails with reset links at `/account/reset-password`.
-* Durable email delivery intent via a database outbox processor.
-* Periodic database cleanup for expired sessions, auth tokens, and old outbox rows.
-
-When `AUTH_EMAIL_VERIFICATION_REQUIRED=false`:
-
-* New users are marked verified at registration time.
-* Verification emails are not enqueued.
-* Verification routes remain mounted for compatibility but redirect to normal login/account flows.
-
-Email delivery defaults to `EMAIL_PROVIDER=log` for safe local development. Set `EMAIL_PROVIDER=smtp` with `SMTP_*` values to send real mail.
-
-The starter uses two background-work patterns:
-
-* Durable domain work uses explicit database tables with claim/retry semantics, such as `email_outbox`.
-* Periodic housekeeping uses the in-process background jobs worker, such as database cleanup.
-
-This is intentionally not a generic persisted jobs framework. When adding future background work:
-
-* use a periodic job for recurring housekeeping
-* use a dedicated table plus processor when work must be durable, delayed, retried, or claimed safely across restarts
-
-## Auth Rate Limiting
-
-Sensitive auth POST endpoints are protected by an in-memory fixed-window limiter:
-
-* `POST /login` keyed by `IP + normalized email`
-* `POST /register` keyed by `IP + normalized email`
-* `POST /account/forgot-password` keyed by `IP + normalized email`
-* `POST /account/reset-password` keyed by `IP + reset-cookie token hash prefix`
-* `POST /account/resend-verification` keyed by `IP + normalized email`
-* `POST /account/verify-email/resend` keyed by `IP + userID`
-* `POST /account/change-password` keyed by `IP + userID`
-* `POST /account/change-email` keyed by `IP + userID`
-* `POST /account/sessions/revoke` keyed by `IP + userID`
-* `POST /account/sessions/revoke-others` keyed by `IP + userID`
-
-Default policies:
-
-* Login: `5/min`
-* Register: `3/10min`
-* Forgot password: `3/15min`
-* Reset password: `5/15min`
-* Public resend verification: `3/15min`
-* Account resend verification: `5/15min`
-* Change password: `5/15min`
-* Change email: `5/15min`
-* Revoke session: `20/15min`
-* Revoke other sessions: `10/15min`
-
-Behavior:
-
-* Denied requests return HTTP `429 Too Many Requests`.
-* `Retry-After` is set in seconds.
-* Limiter uses `RemoteAddr` IP parsing in v1 (forwarded headers are not trusted).
-* If email is missing or malformed, keying falls back to IP-only for safety.
-* Data is in-memory per app instance (not shared across replicas).
-
-Optional env overrides are available for each policy:
-
-* `RATE_LIMIT_<POLICY>_MAX_REQUESTS` (positive integer)
-* `RATE_LIMIT_<POLICY>_WINDOW` (Go duration, for example `1m`, `10m`, `15m`)
-
-Policy names:
-
-* `LOGIN`
-* `REGISTER`
-* `FORGOT_PASSWORD`
-* `RESET_PASSWORD`
-* `PUBLIC_RESEND_VERIFICATION`
-* `ACCOUNT_RESEND_VERIFICATION`
-* `CHANGE_PASSWORD`
-* `CHANGE_EMAIL`
-* `REVOKE_SESSION`
-* `REVOKE_OTHER_SESSIONS`
-
-Example:
-
-```sh
-RATE_LIMIT_LOGIN_MAX_REQUESTS=10
-RATE_LIMIT_LOGIN_WINDOW=1m
-RATE_LIMIT_FORGOT_PASSWORD_MAX_REQUESTS=5
-RATE_LIMIT_FORGOT_PASSWORD_WINDOW=30m
-```
+Email delivery defaults to `EMAIL_PROVIDER=log` for safe local development.
 
 ## Commands
 
 ```sh
 make run
+make run-web
+make run-worker
 make migrate-up
+make test
 make check
 ```
 
-Use `make check` before opening a pull request. It runs `make fmt`, `make tidy`, `make sqlc`, `make vulncheck`, and `make test` in order.
+Use `make check` before opening a pull request.
 
-`sqlc`, `goose`, and `govulncheck` are pinned as Go tool dependencies in `go.mod`, so the Makefile runs them through `go tool`. You do not need separate global installs.
+## Read Next
 
-See [docs/development.md](docs/development.md) for the full command reference. See [docs/email.md](docs/email.md) for the staged email and account-confirmation plan.
+Start here if you are new to the project:
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) before opening pull requests, and [CHANGELOG.md](CHANGELOG.md) for notable changes.
+* [docs/development.md](docs/development.md) for setup and day-to-day workflow
+* [docs/architecture.md](docs/architecture.md) for the codebase shape and conventions
+* [docs/jobs.md](docs/jobs.md) for background work patterns
+* [docs/email.md](docs/email.md) for auth email flows and outbox design
+
+Reference docs:
+
+* [CONTRIBUTING.md](CONTRIBUTING.md)
+* [SECURITY.md](SECURITY.md)
+* [docs/todo.md](docs/todo.md)
 
 ## Project Layout
 
 ```text
 /cmd/app            application entrypoint
 /internal/config    environment config
-/internal/database  SQLite connection setup
+/internal/database  SQLite connection setup and stores
 /internal/db        SQL queries and generated sqlc package
-/internal/email     email rendering, sending, and outbox delivery
-/internal/paths     canonical public URL path constants
+/internal/email     email messages, senders, and outbox processor
+/internal/jobs      background jobs runner and jobs
+/internal/paths     canonical public URL paths
 /internal/server    HTTP routes and handlers
 /internal/services  business logic
-/migrations         goose migrations
-/templates          server-rendered HTML, with auth/account pages in /templates/account
+/migrations         goose SQL migrations
+/templates          server-rendered HTML templates
 /static             CSS and static assets
-/docs               architecture and development notes
-.github             issue and pull request templates
+/docs               onboarding and design notes
 ```
 
-## After Cloning
+## Template Checklist
 
 If you use this as a template for a new project:
 
-- [ ] Rename the module in `go.mod`.
-- [ ] Update the app name in README, templates, and config where needed.
-- [ ] Copy `.env.example` to `.env`.
-- [ ] Review `DATABASE_PATH`.
-- [ ] Run migrations.
-- [ ] Replace or remove example routes and templates.
-- [ ] Add new public paths to `internal/paths` instead of scattering route strings through handlers, emails, templates, or tests.
-- [ ] Update the copyright holder in `LICENSE`.
-- [ ] Review production settings before deployment.
-
-## Production Notes
-
-Before deploying an app based on this template:
-
-* Serve over HTTPS.
-* Use secure, HTTP-only cookies for session tokens.
-* Keep secrets out of Git and load them from environment or your deployment platform.
-* Back up the SQLite database file.
-* Run migrations as part of deploy or a controlled release step.
-* Use `APP_PROCESS=web` for the HTTP process and `APP_PROCESS=worker` for the background jobs worker when you want to run them separately.
-* Set file permissions so the app can read and write the database path, but does not expose it publicly.
-* Set `APP_COOKIE_SECURE=true` when the app is served over HTTPS by a reverse proxy or load balancer.
-* Keep `AUTH_PASSWORD_MIN_LENGTH` at 12 or higher unless you have a clear compatibility reason.
-* Set `AUTH_PASSWORD_PEPPER` in production for defense in depth.
-* Plan pepper rotation carefully: changing `AUTH_PASSWORD_PEPPER` invalidates existing password verification until users reset passwords.
-* Set `CSRF_SIGNING_KEY` to a strong secret in production.
-* Add request timeouts and deployment-specific logging/metrics as the app grows.
-
-A simple deployment can run the same binary as two services, for example one service with `APP_PROCESS=web` behind Caddy, nginx, or another reverse proxy, and one service with `APP_PROCESS=worker` for background jobs.
-
-## Replacing SQLite
-
-SQLite is a good default for a simple starter because it keeps local development and deployment small. If a future project needs multiple app instances, heavier write concurrency, or managed database operations, Postgres is the natural next step.
-
-The intended migration path is:
-
-1. Add a Postgres driver.
-2. Add or switch the database opener and config.
-3. Port migrations and SQL queries.
-4. Update `sqlc.yaml` to use the Postgres engine and regenerate generated code.
-5. Implement storage adapters that satisfy the service-owned interfaces, such as the auth store.
-6. Translate Postgres driver errors, such as unique violations, inside those adapters.
-7. Run adapter, service, route, and migration tests against the new database.
-
-Services own business rules, while storage adapters own SQL and database-driver details. Keeping that boundary small should make a database switch possible without rewriting HTTP handlers or auth business logic.
-
-## Removing Example Code
-
-As the starter grows, example code should stay easy to identify and delete. For a new project, start by replacing the home template, removing sample routes that do not fit, and adding the first real model, migration, query, service, and handler as a thin vertical slice.
+* rename the module in `go.mod`
+* copy `.env.example` to `.env`
+* run migrations
+* replace example routes, templates, and branding
+* keep new public paths in `internal/paths`
+* review production settings before deployment
