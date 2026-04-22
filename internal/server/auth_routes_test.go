@@ -44,6 +44,7 @@ func TestRoutesLogin(t *testing.T) {
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusSeeOther)
 	}
+	assertNoStoreCacheHeaders(t, rec)
 	if location := rec.Header().Get("Location"); location != paths.Account {
 		t.Fatalf("Location = %q, want %q", location, paths.Account)
 	}
@@ -123,6 +124,7 @@ func TestRoutesLoginHTMXRejectsInvalidCredentials(t *testing.T) {
 	if rec.Code != http.StatusUnprocessableEntity {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusUnprocessableEntity)
 	}
+	assertNoStoreCacheHeaders(t, rec)
 	if location := rec.Header().Get("Location"); location != "" {
 		t.Fatalf("Location = %q, want empty for HTMX fragment", location)
 	}
@@ -717,6 +719,7 @@ func TestRoutesConfirmEmail(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
 	}
+	assertNoStoreCacheHeaders(t, rec)
 	if auth.verifyToken != "raw-token" {
 		t.Fatalf("verify token = %q, want raw-token", auth.verifyToken)
 	}
@@ -739,6 +742,7 @@ func TestRoutesConfirmEmailRejectsInvalidToken(t *testing.T) {
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusBadRequest)
 	}
+	assertNoStoreCacheHeaders(t, rec)
 	if auth.verifyToken != "bad-token" {
 		t.Fatalf("verify token = %q, want bad-token", auth.verifyToken)
 	}
@@ -2428,6 +2432,7 @@ func TestRoutesResetPasswordForm(t *testing.T) {
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusSeeOther)
 	}
+	assertNoStoreCacheHeaders(t, rec)
 	if location := rec.Header().Get("Location"); location != paths.ResetPassword {
 		t.Fatalf("Location = %q, want %q", location, paths.ResetPassword)
 	}
@@ -2488,6 +2493,7 @@ func TestRoutesResetPasswordFormRejectsInvalidToken(t *testing.T) {
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusBadRequest)
 	}
+	assertNoStoreCacheHeaders(t, rec)
 	if !strings.Contains(rec.Body.String(), "invalid or has expired") {
 		t.Fatalf("body = %q, want invalid reset token message", rec.Body.String())
 	}

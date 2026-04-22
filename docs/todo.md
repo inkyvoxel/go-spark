@@ -96,10 +96,11 @@
 
 ### Low priority / defense in depth
 
-- [ ] Add cache-control headers for auth-sensitive pages.
+- [x] Add cache-control headers for auth-sensitive pages.
   - Evidence: account and reset pages are rendered normally without explicit cache headers.
   - Risk: shared/private browser caches may retain account pages or reset forms.
   - Recommendation: set `Cache-Control: no-store` for `/account`, `/login`, `/register`, `/account/forgot-password`, `/account/reset-password`, `/account/confirm-email`, and form POST responses.
+  - Progress: implemented centralized no-store middleware for auth-sensitive GET/POST routes with legacy compatibility headers (`Pragma: no-cache`, `Expires: 0`) and route tests covering redirect, HTMX fragment/error, and token-confirm/reset responses.
 
 - [ ] Add `MaxAge` to the session cookie in addition to `Expires`.
   - Evidence: `setSessionCookie` sets `Expires` but not `MaxAge`.

@@ -15,6 +15,9 @@ import (
 const (
 	maxRequestBodyBytes = 64 * 1024
 	cspHeaderValue      = "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; form-action 'self'; frame-ancestors 'none'; base-uri 'self'"
+	cacheControlNoStore = "no-store"
+	pragmaNoCache       = "no-cache"
+	expiresImmediately  = "0"
 )
 
 type Server struct {
@@ -197,7 +200,7 @@ func (s *Server) Routes() http.Handler {
 	)
 	dynamic.HandleFunc(route(http.MethodGet, paths.Home), s.home)
 
-	mux.Handle(paths.Home, s.securityHeaders(s.limitRequestBody(s.csrf(s.loadSession(dynamic)))))
+	mux.Handle(paths.Home, s.cacheControlHeaders(s.securityHeaders(s.limitRequestBody(s.csrf(s.loadSession(dynamic))))))
 
 	return s.logRequests(mux)
 }
@@ -242,6 +245,42 @@ func (s *Server) securityHeaders(next http.Handler) http.Handler {
 
 		next.ServeHTTP(w, r)
 	})
+}
+
+func (s *Server) cacheControlHeaders(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if shouldSetAuthSensitiveNoStore(r.Method, r.URL.Path) {
+			w.Header().Set("Cache-Control", cacheControlNoStore)
+			w.Header().Set("Pragma", pragmaNoCache)
+			w.Header().Set("Expires", expiresImmediately)
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+func shouldSetAuthSensitiveNoStore(method, path string) bool {
+	switch method {
+	case http.MethodGet:
+		return isAuthSensitivePagePath(path)
+	case http.MethodPost:
+		return isAuthSensitivePostPath(path)
+	default:
+		return false
+	}
+}
+
+func isAuthSensitivePagePath(path string) bool {
+	if path == paths.Login || path == paths.Register {
+		return true
+	}
+	return path == paths.Account || strings.HasPrefix(path, paths.Account+"/")
+}
+
+func isAuthSensitivePostPath(path string) bool {
+	if path == paths.Login || path == paths.Register || path == paths.Logout {
+		return true
+	}
+	return path == paths.Account || strings.HasPrefix(path, paths.Account+"/")
 }
 
 func (s *Server) limitRequestBody(next http.Handler) http.Handler {

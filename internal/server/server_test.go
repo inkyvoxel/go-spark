@@ -119,6 +119,42 @@ func TestRoutesSetHSTSWhenSecureCookiesEnabled(t *testing.T) {
 	}
 }
 
+func TestRoutesSetNoStoreCacheHeadersForAuthSensitiveGet(t *testing.T) {
+	srv := testServer(t)
+
+	req := httptest.NewRequest(http.MethodGet, paths.Account, nil)
+	rec := httptest.NewRecorder()
+
+	srv.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusSeeOther)
+	}
+	assertNoStoreCacheHeaders(t, rec)
+}
+
+func TestRoutesDoNotSetNoStoreCacheHeadersForPublicGet(t *testing.T) {
+	srv := testServer(t)
+
+	req := httptest.NewRequest(http.MethodGet, paths.Home, nil)
+	rec := httptest.NewRecorder()
+
+	srv.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	if got := rec.Header().Get("Cache-Control"); got != "" {
+		t.Fatalf("Cache-Control = %q, want empty", got)
+	}
+	if got := rec.Header().Get("Pragma"); got != "" {
+		t.Fatalf("Pragma = %q, want empty", got)
+	}
+	if got := rec.Header().Get("Expires"); got != "" {
+		t.Fatalf("Expires = %q, want empty", got)
+	}
+}
+
 func TestRenderReturnsInternalServerErrorForTemplateError(t *testing.T) {
 	srv := testServer(t)
 
@@ -231,4 +267,18 @@ func testTemplates(t *testing.T, pages map[string]string) map[string]*template.T
 	}
 
 	return templates
+}
+
+func assertNoStoreCacheHeaders(t *testing.T, rec *httptest.ResponseRecorder) {
+	t.Helper()
+
+	if got := rec.Header().Get("Cache-Control"); got != cacheControlNoStore {
+		t.Fatalf("Cache-Control = %q, want %q", got, cacheControlNoStore)
+	}
+	if got := rec.Header().Get("Pragma"); got != pragmaNoCache {
+		t.Fatalf("Pragma = %q, want %q", got, pragmaNoCache)
+	}
+	if got := rec.Header().Get("Expires"); got != expiresImmediately {
+		t.Fatalf("Expires = %q, want %q", got, expiresImmediately)
+	}
 }
