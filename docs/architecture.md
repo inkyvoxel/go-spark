@@ -23,6 +23,7 @@ Go Spark prefers:
 
 ```text
 /cmd/app            wires the application together
+/internal/app       application bootstrap and runtime assembly
 /internal/config    reads environment config
 /internal/database  SQLite-backed domain stores
 /internal/db        SQL queries and generated sqlc code
@@ -116,6 +117,21 @@ Current SQLite tuning defaults in `internal/platform/sqlite` are:
 WAL mode is intentionally not enabled by default yet. If the starter adopts it
 later, that should come with clear documentation about local development,
 backups, and multi-process tradeoffs.
+
+## Application Bootstrap
+
+`cmd/app` stays intentionally thin:
+
+* load environment and parse process mode
+* assemble signal handling and shutdown behavior
+* delegate runtime wiring to `internal/app`
+
+`internal/app` owns application assembly:
+
+* SQLite connection setup
+* service and store wiring
+* email sender and background job composition
+* HTTP server construction
 
 ## Background Work
 
