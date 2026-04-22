@@ -19,6 +19,7 @@ import (
 	"github.com/inkyvoxel/go-spark/internal/database"
 	"github.com/inkyvoxel/go-spark/internal/email"
 	"github.com/inkyvoxel/go-spark/internal/jobs"
+	"github.com/inkyvoxel/go-spark/internal/platform/sqlite"
 	"github.com/inkyvoxel/go-spark/internal/server"
 	"github.com/inkyvoxel/go-spark/internal/services"
 )
@@ -57,7 +58,7 @@ func run(args []string, logger *slog.Logger) error {
 		return fmt.Errorf("resolve CSRF signing key: %w", err)
 	}
 
-	db, err := database.Open(cfg.DatabasePath)
+	db, err := sqlite.Open(cfg.DatabasePath)
 	if err != nil {
 		return fmt.Errorf("open database: %w", err)
 	}

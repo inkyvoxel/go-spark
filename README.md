@@ -96,10 +96,11 @@ Reference docs:
 ```text
 /cmd/app            application entrypoint
 /internal/config    environment config
-/internal/database  current SQLite setup and SQLite-backed stores
+/internal/database  SQLite-backed domain stores
 /internal/db        SQL queries and generated sqlc package
 /internal/email     email messages, senders, and outbox processor
 /internal/jobs      background jobs runner and jobs
+/internal/platform  engine-specific platform code such as SQLite setup
 /internal/paths     canonical public URL paths
 /internal/server    HTTP routes and handlers
 /internal/services  business logic

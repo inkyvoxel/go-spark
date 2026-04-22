@@ -22,6 +22,7 @@ Email is split into a few clear responsibilities:
 * `internal/services` decides when email should be sent
 * `internal/email` builds messages and sends them
 * `internal/database` stores SQLite-backed tokens and outbox rows
+* `internal/platform/sqlite` owns SQLite connection setup
 * `internal/jobs` runs the outbox processor in the worker process
 
 The request path never calls SMTP directly. It creates the domain record, enqueues an outbox row, and returns. Delivery happens later in the worker.

@@ -1,4 +1,4 @@
-package database
+package sqlite
 
 import (
 	"path/filepath"
@@ -46,7 +46,30 @@ func TestOpenSetsSQLiteBusyTimeout(t *testing.T) {
 	if err := db.QueryRow("PRAGMA busy_timeout").Scan(&timeout); err != nil {
 		t.Fatalf("query busy_timeout pragma: %v", err)
 	}
-	if timeout != 5000 {
-		t.Fatalf("busy_timeout = %d, want 5000", timeout)
+	if timeout != defaultBusyTimeoutMillis {
+		t.Fatalf("busy_timeout = %d, want %d", timeout, defaultBusyTimeoutMillis)
+	}
+}
+
+func TestOpenWithOptionsOverridesDefaults(t *testing.T) {
+	db, err := OpenWithOptions(filepath.Join(t.TempDir(), "app.db"), OpenOptions{
+		BusyTimeoutMillis: 9000,
+		MaxOpenConns:      2,
+	})
+	if err != nil {
+		t.Fatalf("OpenWithOptions() error = %v", err)
+	}
+	defer db.Close()
+
+	var timeout int
+	if err := db.QueryRow("PRAGMA busy_timeout").Scan(&timeout); err != nil {
+		t.Fatalf("query busy_timeout pragma: %v", err)
+	}
+	if timeout != 9000 {
+		t.Fatalf("busy_timeout = %d, want 9000", timeout)
+	}
+
+	if maxOpen := db.Stats().MaxOpenConnections; maxOpen != 2 {
+		t.Fatalf("MaxOpenConnections = %d, want 2", maxOpen)
 	}
 }

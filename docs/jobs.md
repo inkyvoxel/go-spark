@@ -71,7 +71,7 @@ Choose a durable processor when:
 Keep the pattern small:
 
 1. add a focused job type in `internal/jobs`
-2. keep persistence in `internal/database` if the job needs SQLite access
+2. keep domain persistence in `internal/database` if the job needs SQLite access
 3. register it from `cmd/app`
 4. add tests for scheduling behavior and job-specific behavior
 

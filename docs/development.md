@@ -84,6 +84,8 @@ The template is SQLite-first today.
 * The template currently ships with one baseline schema migration for fresh projects.
 * SQL queries live in `internal/db/queries`.
 * Generated code lives in `internal/db/generated`.
+* SQLite connection setup now lives under `internal/platform/sqlite`.
+* SQLite-backed domain stores live in `internal/database`.
 
 If you change schema or queries, regenerate with:
 

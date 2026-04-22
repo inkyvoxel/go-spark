@@ -24,10 +24,11 @@ Go Spark prefers:
 ```text
 /cmd/app            wires the application together
 /internal/config    reads environment config
-/internal/database  current SQLite connection setup and SQLite-backed stores
+/internal/database  SQLite-backed domain stores
 /internal/db        SQL queries and generated sqlc code
 /internal/email     email messages, senders, and outbox processor
 /internal/jobs      jobs runner and periodic background jobs
+/internal/platform  engine-specific platform code such as SQLite setup
 /internal/paths     canonical public URL paths
 /internal/server    HTTP handlers, middleware, templates
 /internal/services  business logic
@@ -38,6 +39,7 @@ Rules of thumb:
 * handlers own HTTP concerns
 * services own business logic
 * stores own persistence and SQLite-specific translation today
+* engine setup belongs in engine-focused packages under `internal/platform`
 * templates render data, not business rules
 
 Go Spark keeps service/store seams because they protect business logic from
@@ -98,7 +100,7 @@ explicit refactor of the persistence layer.
 If later phases split connection setup away from stores, the preferred
 direction is:
 
-* move SQLite engine setup and tuning into an explicit SQLite-focused package
+* keep SQLite engine setup and tuning in an explicit SQLite-focused package
 * keep domain stores separate from engine setup
 * keep service/store seams because they support domain boundaries, not because
   they imply broad engine portability
