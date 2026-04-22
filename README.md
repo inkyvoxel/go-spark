@@ -170,23 +170,15 @@ RATE_LIMIT_FORGOT_PASSWORD_WINDOW=30m
 
 ```sh
 make run
-make run-all
-make run-web
-make run-worker
-make test
-make fmt
-make tidy
-make sqlc
-make vulncheck
 make migrate-up
-make migrate-down
-make migrate-status
-make tools
+make check
 ```
+
+Use `make check` before opening a pull request. It runs `make fmt`, `make tidy`, `make sqlc`, `make vulncheck`, and `make test` in order.
 
 `sqlc`, `goose`, and `govulncheck` are pinned as Go tool dependencies in `go.mod`, so the Makefile runs them through `go tool`. You do not need separate global installs.
 
-See [docs/development.md](docs/development.md) for tool and workflow details. See [docs/email.md](docs/email.md) for the staged email and account-confirmation plan.
+See [docs/development.md](docs/development.md) for the full command reference and workflow details. See [docs/email.md](docs/email.md) for the staged email and account-confirmation plan.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) before opening pull requests, and [CHANGELOG.md](CHANGELOG.md) for notable changes.
 

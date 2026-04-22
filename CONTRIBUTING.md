@@ -9,7 +9,7 @@ This project is intended to stay small, explicit, and easy to adapt. Contributio
 ```sh
 cp .env.example .env
 make tools
-make test
+make check
 ```
 
 The project pins development tools in `go.mod`, so `sqlc` and `goose` are run through `go tool` via the Makefile.
@@ -19,10 +19,7 @@ The project pins development tools in `go.mod`, so `sqlc` and `goose` are run th
 Run:
 
 ```sh
-make fmt
-make tidy
-make sqlc
-make test
+make check
 ```
 
 If you change migrations, also run:

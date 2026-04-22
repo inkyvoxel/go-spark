@@ -3,10 +3,6 @@
 
 ## Verification
 
-- [ ] `make fmt`
-- [ ] `make tidy`
-- [ ] `make sqlc`
-- [ ] `make test`
+- [ ] `make check`
 
 ## Notes
-

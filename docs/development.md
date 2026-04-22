@@ -47,13 +47,15 @@ $(go env GOPATH)/bin
 
 ```sh
 make run
+make check
 make run-all
 make run-web
 make run-worker
-make test
 make fmt
 make tidy
 make sqlc
+make vulncheck
+make test
 make migrate-up
 make migrate-down
 make migrate-status
@@ -61,6 +63,8 @@ make tools
 ```
 
 `make run` starts the app with `go run ./cmd/app`. On startup, the app loads `.env` when the file exists. Existing shell environment variables take precedence over `.env` values.
+
+`make check` is the default pre-PR verification command. It runs `make fmt`, `make tidy`, `make sqlc`, `make vulncheck`, and `make test` in order.
 
 The app binary supports process modes:
 
