@@ -94,6 +94,9 @@ func (s *Server) csrf(next http.Handler) http.Handler {
 
 func (s *Server) validRequestSourceOrigin(r *http.Request) bool {
 	origin := strings.TrimSpace(r.Header.Get("Origin"))
+	if strings.EqualFold(origin, "null") {
+		origin = ""
+	}
 	if origin != "" {
 		normalized, ok := normalizeHeaderOrigin(origin)
 		if !ok || s.appBaseOrigin == "" {

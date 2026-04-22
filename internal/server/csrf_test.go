@@ -133,6 +133,25 @@ func TestCSRFRejectsPostWithMismatchedOriginHeader(t *testing.T) {
 	}
 }
 
+func TestCSRFAllowsPostWithNullOriginHeader(t *testing.T) {
+	srv := newAuthMiddlewareTestServer(nil)
+	token := mustSignedCSRFToken(t, srv, csrfAnonymousSessionHash, time.Now().UTC())
+
+	req := httptest.NewRequest(http.MethodPost, "/submit", nil)
+	req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: token})
+	req.Header.Set(csrfHeaderName, token)
+	req.Header.Set("Origin", "null")
+	rec := httptest.NewRecorder()
+
+	srv.csrf(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	})).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusNoContent)
+	}
+}
+
 func TestCSRFAllowsPostWithMatchingRefererWhenOriginMissing(t *testing.T) {
 	srv := newAuthMiddlewareTestServer(nil)
 	token := mustSignedCSRFToken(t, srv, csrfAnonymousSessionHash, time.Now().UTC())
