@@ -178,7 +178,7 @@ Use `make check` before opening a pull request. It runs `make fmt`, `make tidy`,
 
 `sqlc`, `goose`, and `govulncheck` are pinned as Go tool dependencies in `go.mod`, so the Makefile runs them through `go tool`. You do not need separate global installs.
 
-See [docs/development.md](docs/development.md) for the full command reference and workflow details. See [docs/email.md](docs/email.md) for the staged email and account-confirmation plan.
+See [docs/development.md](docs/development.md) for the full command reference. See [docs/email.md](docs/email.md) for the staged email and account-confirmation plan.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) before opening pull requests, and [CHANGELOG.md](CHANGELOG.md) for notable changes.
 
@@ -197,7 +197,6 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) before opening pull requests, and [CHANGE
 /templates          server-rendered HTML, with auth/account pages in /templates/account
 /static             CSS and static assets
 /docs               architecture and development notes
-.github/workflows   CI configuration
 .github             issue and pull request templates
 ```
 

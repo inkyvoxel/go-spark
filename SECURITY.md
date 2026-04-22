@@ -20,6 +20,6 @@ Before deploying a project based on this template:
 * Set `APP_COOKIE_SECURE=true` when TLS is terminated before the Go process.
 * Keep secrets and database files out of Git.
 * Review deployment-specific headers, logging, backups, and access controls.
-* Keep Go modules, GitHub Actions, and browser assets up to date.
+* Keep Go modules and browser assets up to date.
 * Review and tune auth rate-limit settings (`RATE_LIMIT_*`) for your traffic profile.
 * Set `AUTH_PASSWORD_PEPPER` in production and treat it as a secret outside the database.
