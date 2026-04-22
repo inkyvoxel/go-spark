@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -485,12 +486,18 @@ func (f *fakeAuthLookup) RequestPasswordReset(ctx context.Context, email string)
 
 func (f *fakeAuthLookup) ValidatePasswordResetToken(ctx context.Context, token string) error {
 	f.validateResetToken = token
+	if strings.TrimSpace(token) == "" {
+		return services.ErrInvalidPasswordResetToken
+	}
 	return f.validateResetErr
 }
 
 func (f *fakeAuthLookup) ResetPasswordWithToken(ctx context.Context, token, newPassword string) error {
 	f.resetToken = token
 	f.resetNewPassword = newPassword
+	if strings.TrimSpace(token) == "" {
+		return services.ErrInvalidPasswordResetToken
+	}
 	return f.resetErr
 }
 

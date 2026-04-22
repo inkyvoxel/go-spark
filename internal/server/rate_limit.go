@@ -179,11 +179,10 @@ func rateLimitKeyByIPAndEmail(formField string) rateLimitKeyFunc {
 	}
 }
 
-func rateLimitKeyByIPAndResetToken(formField string) rateLimitKeyFunc {
+func rateLimitKeyByIPAndResetTokenCookie() rateLimitKeyFunc {
 	return func(r *http.Request) (string, string) {
 		ip := requestIP(r)
-		_ = r.ParseForm()
-		token := strings.TrimSpace(r.FormValue(formField))
+		token := resetTokenFromCookie(r)
 		if token == "" {
 			return "ip:" + ip, "ip"
 		}

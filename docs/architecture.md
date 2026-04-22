@@ -324,6 +324,8 @@ CREATE TABLE password_reset_tokens (
 
 Only token hashes are stored. The raw reset token is sent to the user once and must be treated as a bearer credential.
 
+Password reset handling exchanges `GET /account/reset-password?token=...` into a short-lived HttpOnly cookie and redirects to `/account/reset-password` without the query string before rendering the form. The POST reset action consumes the token from that cookie, reducing token exposure in URLs, browser history, and page HTML.
+
 ### Email Outbox Table
 
 ```sql

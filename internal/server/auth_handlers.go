@@ -43,7 +43,6 @@ type templateData struct {
 	LoginStatus               string
 	ChangeEmailStatus         string
 	Next                      string
-	ResetToken                string
 	ResetTokenInvalid         bool
 	Authenticated             bool
 	Verified                  bool
@@ -184,10 +183,30 @@ func (s *Server) forgotPassword(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) resetPasswordForm(w http.ResponseWriter, r *http.Request) {
 	data := s.newTemplateData(r, "Reset Password")
-	data.ResetToken = strings.TrimSpace(r.URL.Query().Get("token"))
+	token := strings.TrimSpace(r.URL.Query().Get("token"))
+	if token != "" {
+		if err := s.auth.ValidatePasswordResetToken(r.Context(), token); err != nil {
+			if errors.Is(err, services.ErrInvalidPasswordResetToken) {
+				s.clearResetCookie(w, r)
+				data.Error = "This password reset link is invalid or has expired."
+				data.ResetTokenInvalid = true
+				s.renderStatus(w, http.StatusBadRequest, templateResetPassword, data)
+				return
+			}
 
-	if err := s.auth.ValidatePasswordResetToken(r.Context(), data.ResetToken); err != nil {
+			s.logger.Error("validate password reset token", "err", err)
+			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+			return
+		}
+		s.setResetCookie(w, r, token)
+		http.Redirect(w, r, paths.ResetPassword, http.StatusSeeOther)
+		return
+	}
+
+	token = resetTokenFromCookie(r)
+	if err := s.auth.ValidatePasswordResetToken(r.Context(), token); err != nil {
 		if errors.Is(err, services.ErrInvalidPasswordResetToken) {
+			s.clearResetCookie(w, r)
 			data.Error = "This password reset link is invalid or has expired."
 			data.ResetTokenInvalid = true
 			s.renderStatus(w, http.StatusBadRequest, templateResetPassword, data)
@@ -568,14 +587,13 @@ func (s *Server) resetPassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	token := strings.TrimSpace(r.FormValue("token"))
+	token := resetTokenFromCookie(r)
 	newPassword := r.FormValue("new_password")
 	confirmPassword := r.FormValue("confirm_password")
 
 	fieldErrors := s.validatePasswordPair(newPassword, confirmPassword, "new_password", "confirm_password")
 	if len(fieldErrors) > 0 {
 		data := s.newTemplateData(r, "Reset Password")
-		data.ResetToken = token
 		data.Error = "Check your details and try again."
 		data.FieldErrors = fieldErrors
 		s.renderStatusForRequest(w, r, http.StatusUnprocessableEntity, templateResetPassword, fragmentResetPassword, data)
@@ -584,10 +602,10 @@ func (s *Server) resetPassword(w http.ResponseWriter, r *http.Request) {
 
 	if err := s.auth.ResetPasswordWithToken(r.Context(), token, newPassword); err != nil {
 		data := s.newTemplateData(r, "Reset Password")
-		data.ResetToken = token
 		data.Error = "Check your details and try again."
 		switch {
 		case errors.Is(err, services.ErrInvalidPasswordResetToken):
+			s.clearResetCookie(w, r)
 			data.Error = "This password reset link is invalid or has expired."
 			data.ResetTokenInvalid = true
 			s.renderStatusForRequest(w, r, http.StatusBadRequest, templateResetPassword, fragmentResetPassword, data)
@@ -603,6 +621,7 @@ func (s *Server) resetPassword(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	s.clearResetCookie(w, r)
 	s.redirectWithHTMX(w, r, loginPathWithStatusChanged)
 }
 

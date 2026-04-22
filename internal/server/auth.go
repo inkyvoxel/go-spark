@@ -13,7 +13,12 @@ import (
 	"github.com/inkyvoxel/go-spark/internal/services"
 )
 
-const sessionCookieName = "session"
+const (
+	sessionCookieName = "session"
+	resetCookieName   = "reset_token"
+	resetCookiePath   = "/account/reset-password"
+	resetCookieTTL    = 10 * time.Minute
+)
 
 type authService interface {
 	RequestEmailChange(context.Context, db.User, string, string) error
@@ -65,6 +70,39 @@ func (s *Server) clearSessionCookie(w http.ResponseWriter, r *http.Request) {
 		Secure:   s.secureCookie(r),
 		SameSite: http.SameSiteLaxMode,
 	})
+}
+
+func (s *Server) setResetCookie(w http.ResponseWriter, r *http.Request, token string) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     resetCookieName,
+		Value:    strings.TrimSpace(token),
+		Path:     resetCookiePath,
+		Expires:  time.Now().UTC().Add(resetCookieTTL),
+		HttpOnly: true,
+		Secure:   s.secureCookie(r),
+		SameSite: http.SameSiteStrictMode,
+	})
+}
+
+func (s *Server) clearResetCookie(w http.ResponseWriter, r *http.Request) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     resetCookieName,
+		Value:    "",
+		Path:     resetCookiePath,
+		Expires:  time.Unix(0, 0),
+		MaxAge:   -1,
+		HttpOnly: true,
+		Secure:   s.secureCookie(r),
+		SameSite: http.SameSiteStrictMode,
+	})
+}
+
+func resetTokenFromCookie(r *http.Request) string {
+	cookie, err := r.Cookie(resetCookieName)
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(cookie.Value)
 }
 
 func (s *Server) secureCookie(r *http.Request) bool {

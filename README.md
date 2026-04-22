@@ -110,7 +110,7 @@ Sensitive auth POST endpoints are protected by an in-memory fixed-window limiter
 * `POST /login` keyed by `IP + normalized email`
 * `POST /register` keyed by `IP + normalized email`
 * `POST /account/forgot-password` keyed by `IP + normalized email`
-* `POST /account/reset-password` keyed by `IP + reset token hash prefix`
+* `POST /account/reset-password` keyed by `IP + reset-cookie token hash prefix`
 * `POST /account/resend-verification` keyed by `IP + normalized email`
 * `POST /account/verify-email/resend` keyed by `IP + userID`
 * `POST /account/change-password` keyed by `IP + userID`
