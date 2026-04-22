@@ -86,6 +86,7 @@ func (s *Server) loadSession(next http.Handler) http.Handler {
 		user, err := s.auth.UserBySessionToken(r.Context(), cookie.Value)
 		if errors.Is(err, services.ErrInvalidSession) {
 			s.clearSessionCookie(w, r)
+			s.clearCSRFCookie(w, r)
 			next.ServeHTTP(w, r)
 			return
 		}

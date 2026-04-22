@@ -50,10 +50,11 @@
 
 ### Medium priority
 
-- [ ] Make CSRF protection session-bound or signed, and consider rotating after login.
-  - Evidence: CSRF uses a random cookie token with a matching hidden field/header. The cookie is HttpOnly, Secure when configured/TLS, SameSite=Lax, and valid for 24 hours.
-  - Risk: the current double-submit-style token is not bound to the authenticated session. SameSite=Lax gives meaningful protection, but a signed/session-bound token is stronger and easier to reason about for a starter.
+- [x] Make CSRF protection session-bound or signed, and consider rotating after login.
+  - Previous evidence (before fix): CSRF used a random cookie token with a matching hidden field/header. The cookie was HttpOnly, Secure when configured/TLS, SameSite=Lax, and valid for 24 hours.
+  - Previous risk (before fix): that double-submit-style token was not bound to the authenticated session. SameSite=Lax gave meaningful protection, but a signed/session-bound token is stronger and easier to reason about for a starter.
   - Recommendation: sign the CSRF token with an app secret or store the token server-side/session-side. Rotate CSRF token on login/logout or session changes.
+  - Progress: implemented with HMAC-signed CSRF tokens bound to the current session cookie hash (or `anon` for anonymous flows), hard-cutover validation, and explicit CSRF rotation/clearing on login/logout/session-invalidating transitions. Added `CSRF_SIGNING_KEY` config with production requirement and non-production ephemeral fallback in app startup.
 
 - [ ] Replace hidden reset-token form flow with a short-lived HttpOnly reset cookie flow.
   - Evidence: `/account/reset-password?token=...` validates the token and renders it into a hidden form field.

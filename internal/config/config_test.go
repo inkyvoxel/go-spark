@@ -78,6 +78,7 @@ func TestFromEnvUsesDefaults(t *testing.T) {
 	t.Setenv("APP_ENV", "")
 	t.Setenv("DATABASE_PATH", "")
 	t.Setenv("APP_COOKIE_SECURE", "")
+	t.Setenv("CSRF_SIGNING_KEY", "")
 	t.Setenv("AUTH_PASSWORD_MIN_LENGTH", "")
 	t.Setenv("AUTH_PASSWORD_PEPPER", "")
 	t.Setenv("APP_BASE_URL", "")
@@ -106,6 +107,9 @@ func TestFromEnvUsesDefaults(t *testing.T) {
 	}
 	if cfg.CookieSecure {
 		t.Fatal("CookieSecure = true, want false")
+	}
+	if cfg.CSRFSigningKey != "" {
+		t.Fatalf("CSRFSigningKey = %q, want empty", cfg.CSRFSigningKey)
 	}
 	if !cfg.EmailVerificationRequired {
 		t.Fatal("EmailVerificationRequired = false, want true")
@@ -139,6 +143,7 @@ func TestFromEnvUsesEnvironment(t *testing.T) {
 	t.Setenv("APP_ENV", "test")
 	t.Setenv("DATABASE_PATH", "/tmp/app-test.db")
 	t.Setenv("APP_COOKIE_SECURE", "true")
+	t.Setenv("CSRF_SIGNING_KEY", "csrf-signing-key")
 	t.Setenv("AUTH_PASSWORD_MIN_LENGTH", "16")
 	t.Setenv("APP_BASE_URL", "https://app.example.com/")
 	t.Setenv("AUTH_EMAIL_VERIFICATION_REQUIRED", "false")
@@ -175,6 +180,9 @@ func TestFromEnvUsesEnvironment(t *testing.T) {
 	}
 	if !cfg.CookieSecure {
 		t.Fatal("CookieSecure = false, want true")
+	}
+	if cfg.CSRFSigningKey != "csrf-signing-key" {
+		t.Fatalf("CSRFSigningKey = %q, want %q", cfg.CSRFSigningKey, "csrf-signing-key")
 	}
 	if cfg.EmailVerificationRequired {
 		t.Fatal("EmailVerificationRequired = true, want false")

@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -49,6 +51,10 @@ func run(args []string, logger *slog.Logger) error {
 		return fmt.Errorf("invalid security configuration: %w", err)
 	}
 	logSecurityConfigWarnings(cfg, logger)
+	csrfSigningKey, err := resolveCSRFSigningKey(cfg, logger)
+	if err != nil {
+		return fmt.Errorf("resolve CSRF signing key: %w", err)
+	}
 
 	db, err := database.Open(cfg.DatabasePath)
 	if err != nil {
@@ -85,6 +91,7 @@ func run(args []string, logger *slog.Logger) error {
 		DB:                      db,
 		Auth:                    auth,
 		CookieSecure:            cfg.CookieSecure,
+		CSRFSigningKey:          csrfSigningKey,
 		PasswordMinLength:       cfg.PasswordMinLength,
 		EmailVerificationPolicy: services.NewEmailVerificationPolicy(cfg.EmailVerificationRequired),
 		RateLimitPolicies:       toServerRateLimitPolicies(cfg.RateLimitPolicies),
@@ -238,7 +245,28 @@ func validateSecurityConfig(cfg config.Config) error {
 	if strings.TrimSpace(cfg.PasswordPepper) == "" {
 		return fmt.Errorf("AUTH_PASSWORD_PEPPER must be set when APP_ENV=production")
 	}
+	if strings.TrimSpace(cfg.CSRFSigningKey) == "" {
+		return fmt.Errorf("CSRF_SIGNING_KEY must be set when APP_ENV=production")
+	}
 	return nil
+}
+
+func resolveCSRFSigningKey(cfg config.Config, logger *slog.Logger) (string, error) {
+	key := strings.TrimSpace(cfg.CSRFSigningKey)
+	if key != "" {
+		return key, nil
+	}
+
+	random := make([]byte, 32)
+	if _, err := rand.Read(random); err != nil {
+		return "", err
+	}
+
+	ephemeralKey := base64.RawURLEncoding.EncodeToString(random)
+	if logger != nil {
+		logger.Warn("CSRF_SIGNING_KEY is not set; generated ephemeral key for non-production process startup")
+	}
+	return ephemeralKey, nil
 }
 
 func logSecurityConfigWarnings(cfg config.Config, logger *slog.Logger) {

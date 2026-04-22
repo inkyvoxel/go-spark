@@ -183,12 +183,12 @@ func TestRouteRateLimitProtectedPostRoutesReturn429AfterThreshold(t *testing.T) 
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			first := postFormWithCSRF(routes, tt.path, tt.form, tt.sessionToken)
+			first := postFormWithCSRF(t, srv, routes, tt.path, tt.form, tt.sessionToken)
 			if first.Code == http.StatusTooManyRequests {
 				t.Fatalf("first status = %d, want non-429", first.Code)
 			}
 
-			second := postFormWithCSRF(routes, tt.path, tt.form, tt.sessionToken)
+			second := postFormWithCSRF(t, srv, routes, tt.path, tt.form, tt.sessionToken)
 			if second.Code != http.StatusTooManyRequests {
 				t.Fatalf("second status = %d, want %d", second.Code, http.StatusTooManyRequests)
 			}
@@ -207,17 +207,17 @@ func TestRouteRateLimitKeyingByIPAndEmail(t *testing.T) {
 	}
 	routes := srv.Routes()
 
-	first := postFormWithCSRF(routes, paths.ForgotPassword, url.Values{"email": []string{"a@example.com"}}, "")
+	first := postFormWithCSRF(t, srv, routes, paths.ForgotPassword, url.Values{"email": []string{"a@example.com"}}, "")
 	if first.Code == http.StatusTooManyRequests {
 		t.Fatalf("first status = %d, want non-429", first.Code)
 	}
 
-	second := postFormWithCSRF(routes, paths.ForgotPassword, url.Values{"email": []string{"a@example.com"}}, "")
+	second := postFormWithCSRF(t, srv, routes, paths.ForgotPassword, url.Values{"email": []string{"a@example.com"}}, "")
 	if second.Code != http.StatusTooManyRequests {
 		t.Fatalf("second status = %d, want %d", second.Code, http.StatusTooManyRequests)
 	}
 
-	third := postFormWithCSRF(routes, paths.ForgotPassword, url.Values{"email": []string{"b@example.com"}}, "")
+	third := postFormWithCSRF(t, srv, routes, paths.ForgotPassword, url.Values{"email": []string{"b@example.com"}}, "")
 	if third.Code == http.StatusTooManyRequests {
 		t.Fatalf("third status = %d, want non-429 for different email", third.Code)
 	}
@@ -231,7 +231,7 @@ func TestRouteRateLimitKeyingByIPAndResetToken(t *testing.T) {
 	}
 	routes := srv.Routes()
 
-	first := postFormWithCSRF(routes, paths.ResetPassword, url.Values{
+	first := postFormWithCSRF(t, srv, routes, paths.ResetPassword, url.Values{
 		"token":            []string{"token-a"},
 		"new_password":     []string{"new-password"},
 		"confirm_password": []string{"new-password"},
@@ -240,7 +240,7 @@ func TestRouteRateLimitKeyingByIPAndResetToken(t *testing.T) {
 		t.Fatalf("first status = %d, want non-429", first.Code)
 	}
 
-	second := postFormWithCSRF(routes, paths.ResetPassword, url.Values{
+	second := postFormWithCSRF(t, srv, routes, paths.ResetPassword, url.Values{
 		"token":            []string{"token-a"},
 		"new_password":     []string{"new-password"},
 		"confirm_password": []string{"new-password"},
@@ -249,7 +249,7 @@ func TestRouteRateLimitKeyingByIPAndResetToken(t *testing.T) {
 		t.Fatalf("second status = %d, want %d", second.Code, http.StatusTooManyRequests)
 	}
 
-	third := postFormWithCSRF(routes, paths.ResetPassword, url.Values{
+	third := postFormWithCSRF(t, srv, routes, paths.ResetPassword, url.Values{
 		"token":            []string{"token-b"},
 		"new_password":     []string{"new-password"},
 		"confirm_password": []string{"new-password"},
@@ -274,7 +274,7 @@ func TestRouteRateLimitKeyingByIPAndUser(t *testing.T) {
 		"new_password":     []string{"new-password"},
 		"confirm_password": []string{"new-password"},
 	}
-	first := postFormWithCSRF(routes, paths.ChangePassword, changePasswordForm, "session-token")
+	first := postFormWithCSRF(t, srv, routes, paths.ChangePassword, changePasswordForm, "session-token")
 	if first.Code == http.StatusTooManyRequests {
 		t.Fatalf("first status = %d, want non-429", first.Code)
 	}
@@ -282,19 +282,21 @@ func TestRouteRateLimitKeyingByIPAndUser(t *testing.T) {
 	auth.user = verifiedRouteUser()
 	auth.user.ID = 2
 	auth.user.Email = "user2@example.com"
-	second := postFormWithCSRF(routes, paths.ChangePassword, changePasswordForm, "session-token")
+	second := postFormWithCSRF(t, srv, routes, paths.ChangePassword, changePasswordForm, "session-token")
 	if second.Code == http.StatusTooManyRequests {
 		t.Fatalf("second status = %d, want non-429 for different user", second.Code)
 	}
 
 	auth.user = verifiedRouteUser()
-	third := postFormWithCSRF(routes, paths.ChangePassword, changePasswordForm, "session-token")
+	third := postFormWithCSRF(t, srv, routes, paths.ChangePassword, changePasswordForm, "session-token")
 	if third.Code != http.StatusTooManyRequests {
 		t.Fatalf("third status = %d, want %d for original user", third.Code, http.StatusTooManyRequests)
 	}
 }
 
-func postFormWithCSRF(routes http.Handler, path string, form url.Values, sessionToken string) *httptest.ResponseRecorder {
+func postFormWithCSRF(t *testing.T, srv *Server, routes http.Handler, path string, form url.Values, sessionToken string) *httptest.ResponseRecorder {
+	t.Helper()
+
 	if form == nil {
 		form = url.Values{}
 	}
@@ -302,10 +304,10 @@ func postFormWithCSRF(routes http.Handler, path string, form url.Values, session
 
 	req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: "csrf"})
 	if sessionToken != "" {
 		req.AddCookie(&http.Cookie{Name: sessionCookieName, Value: sessionToken})
 	}
+	addCSRFCookieAndHeader(t, srv, req)
 	rec := httptest.NewRecorder()
 	routes.ServeHTTP(rec, req)
 	return rec

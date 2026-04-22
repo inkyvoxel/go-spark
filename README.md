@@ -61,9 +61,29 @@ You can also pass the process mode as the first CLI argument. The CLI argument w
 ```
 
 `AUTH_PASSWORD_PEPPER` is optional. When set, the app uses it as an application-level secret in password hashing by applying an HMAC-SHA256 pre-hash before Argon2id. When blank, no pepper is applied.
+`CSRF_SIGNING_KEY` is used to sign CSRF tokens. It is required in production. In non-production, when blank, the app generates an ephemeral in-memory key at startup.
 
 `AUTH_EMAIL_VERIFICATION_REQUIRED` controls whether account email verification is enforced. It defaults to `true`.
 `AUTH_EMAIL_CHANGE_NOTICE_ENABLED` controls whether the app sends an old-email notification when an account email address changes. It defaults to `true`.
+
+## CSRF Protection
+
+State-changing requests use signed CSRF tokens that are bound to the current session context:
+
+* Token format is versioned and HMAC-signed.
+* Payload includes expiry and a session binding (`sha256(session cookie)` for authenticated requests, `anon` otherwise).
+* Unsafe methods require:
+  * submitted token (form field or `X-CSRF-Token` header),
+  * exact match between submitted token and CSRF cookie,
+  * valid signature,
+  * unexpired token,
+  * session binding match.
+
+Token rotation behavior:
+
+* CSRF token rotates on successful login/register.
+* CSRF cookie is cleared on logout and other session-invalidating transitions.
+* Legacy unsigned tokens are not accepted (hard cutover).
 
 ## Emails
 
@@ -212,6 +232,7 @@ Before deploying an app based on this template:
 * Keep `AUTH_PASSWORD_MIN_LENGTH` at 12 or higher unless you have a clear compatibility reason.
 * Set `AUTH_PASSWORD_PEPPER` in production for defense in depth.
 * Plan pepper rotation carefully: changing `AUTH_PASSWORD_PEPPER` invalidates existing password verification until users reset passwords.
+* Set `CSRF_SIGNING_KEY` to a strong secret in production.
 * Add request timeouts and deployment-specific logging/metrics as the app grows.
 
 A simple deployment can run the same binary as two services, for example one service with `APP_PROCESS=web` behind Caddy, nginx, or another reverse proxy, and one service with `APP_PROCESS=worker` for email delivery.

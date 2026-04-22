@@ -421,11 +421,25 @@ Set `APP_COOKIE_SECURE=true` in production when HTTPS is terminated before the G
 
 All state-changing requests should include CSRF protection.
 
-Recommended approach:
+Current implementation in this starter:
 
-* Generate a CSRF token cookie.
-* Include the token in forms.
-* Validate submitted tokens against the cookie on unsafe requests.
+* CSRF tokens are HMAC-SHA256 signed with `CSRF_SIGNING_KEY`.
+* Tokens are session-bound:
+  * authenticated requests bind to `sha256(session cookie token)`,
+  * anonymous requests bind to `anon`.
+* Tokens are stored in an HttpOnly cookie and rendered into forms via template data.
+* Unsafe requests validate:
+  * token presence from form field (`csrf_token`) or header (`X-CSRF-Token`),
+  * submitted token exactly matches CSRF cookie value,
+  * signature is valid,
+  * token is not expired,
+  * session binding matches the current request context.
+* CSRF tokens rotate on login/register and are cleared on logout or session invalidation.
+
+Configuration:
+
+* `CSRF_SIGNING_KEY` is required in production.
+* In non-production, the app can generate an ephemeral in-memory key when unset.
 
 ### Token Generation
 

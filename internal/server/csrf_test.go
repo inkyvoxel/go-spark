@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestCSRFSetsTokenCookieOnSafeRequest(t *testing.T) {
@@ -35,6 +36,9 @@ func TestCSRFSetsTokenCookieOnSafeRequest(t *testing.T) {
 	if cookie.SameSite != http.SameSiteLaxMode {
 		t.Fatalf("csrf cookie SameSite = %v, want %v", cookie.SameSite, http.SameSiteLaxMode)
 	}
+	if !srv.validSignedCSRFToken(cookie.Value, csrfAnonymousSessionHash, time.Now().UTC()) {
+		t.Fatal("csrf cookie token is not a valid signed anonymous token")
+	}
 }
 
 func TestCSRFSetsSecureCookieWhenConfigured(t *testing.T) {
@@ -56,10 +60,11 @@ func TestCSRFSetsSecureCookieWhenConfigured(t *testing.T) {
 
 func TestCSRFAllowsPostWithHeaderToken(t *testing.T) {
 	srv := newAuthMiddlewareTestServer(nil)
+	token := mustSignedCSRFToken(t, srv, csrfAnonymousSessionHash, time.Now().UTC())
 
 	req := httptest.NewRequest(http.MethodPost, "/submit", nil)
-	req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: "token"})
-	req.Header.Set(csrfHeaderName, "token")
+	req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: token})
+	req.Header.Set(csrfHeaderName, token)
 	rec := httptest.NewRecorder()
 
 	srv.csrf(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -73,11 +78,12 @@ func TestCSRFAllowsPostWithHeaderToken(t *testing.T) {
 
 func TestCSRFAllowsPostWithFormToken(t *testing.T) {
 	srv := newAuthMiddlewareTestServer(nil)
+	token := mustSignedCSRFToken(t, srv, csrfAnonymousSessionHash, time.Now().UTC())
 
-	form := url.Values{csrfFieldName: []string{"token"}}
+	form := url.Values{csrfFieldName: []string{token}}
 	req := httptest.NewRequest(http.MethodPost, "/submit", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: "token"})
+	req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: token})
 	rec := httptest.NewRecorder()
 
 	srv.csrf(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -91,9 +97,10 @@ func TestCSRFAllowsPostWithFormToken(t *testing.T) {
 
 func TestCSRFRejectsPostWithoutToken(t *testing.T) {
 	srv := newAuthMiddlewareTestServer(nil)
+	token := mustSignedCSRFToken(t, srv, csrfAnonymousSessionHash, time.Now().UTC())
 
 	req := httptest.NewRequest(http.MethodPost, "/submit", nil)
-	req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: "token"})
+	req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: token})
 	rec := httptest.NewRecorder()
 
 	srv.csrf(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -107,10 +114,12 @@ func TestCSRFRejectsPostWithoutToken(t *testing.T) {
 
 func TestCSRFRejectsPostWithMismatchedToken(t *testing.T) {
 	srv := newAuthMiddlewareTestServer(nil)
+	cookieToken := mustSignedCSRFToken(t, srv, csrfAnonymousSessionHash, time.Now().UTC())
+	requestToken := mustSignedCSRFToken(t, srv, csrfAnonymousSessionHash, time.Now().UTC())
 
 	req := httptest.NewRequest(http.MethodPost, "/submit", nil)
-	req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: "token"})
-	req.Header.Set(csrfHeaderName, "different")
+	req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: cookieToken})
+	req.Header.Set(csrfHeaderName, requestToken)
 	rec := httptest.NewRecorder()
 
 	srv.csrf(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -122,17 +131,113 @@ func TestCSRFRejectsPostWithMismatchedToken(t *testing.T) {
 	}
 }
 
-func TestCSRFRejectsOversizedFormBody(t *testing.T) {
+func TestCSRFRejectsPostWithTamperedSignature(t *testing.T) {
+	srv := newAuthMiddlewareTestServer(nil)
+	token := mustSignedCSRFToken(t, srv, csrfAnonymousSessionHash, time.Now().UTC())
+	tampered := token[:len(token)-1] + "A"
+
+	req := httptest.NewRequest(http.MethodPost, "/submit", nil)
+	req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: tampered})
+	req.Header.Set(csrfHeaderName, tampered)
+	rec := httptest.NewRecorder()
+
+	srv.csrf(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatal("next handler should not run")
+	})).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusForbidden)
+	}
+}
+
+func TestCSRFRejectsExpiredToken(t *testing.T) {
+	srv := newAuthMiddlewareTestServer(nil)
+	token := mustSignedCSRFToken(t, srv, csrfAnonymousSessionHash, time.Now().UTC().Add(-2*csrfCookieTTL))
+
+	req := httptest.NewRequest(http.MethodPost, "/submit", nil)
+	req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: token})
+	req.Header.Set(csrfHeaderName, token)
+	rec := httptest.NewRecorder()
+
+	srv.csrf(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatal("next handler should not run")
+	})).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusForbidden)
+	}
+}
+
+func TestCSRFRejectsAnonymousTokenAfterSessionChange(t *testing.T) {
+	srv := newAuthMiddlewareTestServer(nil)
+	anonToken := mustSignedCSRFToken(t, srv, csrfAnonymousSessionHash, time.Now().UTC())
+
+	req := httptest.NewRequest(http.MethodPost, "/submit", nil)
+	req.AddCookie(&http.Cookie{Name: sessionCookieName, Value: "session-token"})
+	req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: anonToken})
+	req.Header.Set(csrfHeaderName, anonToken)
+	rec := httptest.NewRecorder()
+
+	srv.csrf(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatal("next handler should not run")
+	})).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusForbidden)
+	}
+}
+
+func TestCSRFRejectsSessionBoundTokenAfterLogout(t *testing.T) {
+	srv := newAuthMiddlewareTestServer(nil)
+	sessionToken := "session-token"
+	authToken := mustSignedCSRFToken(t, srv, csrfSessionHash(sessionToken), time.Now().UTC())
+
+	req := httptest.NewRequest(http.MethodPost, "/submit", nil)
+	req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: authToken})
+	req.Header.Set(csrfHeaderName, authToken)
+	rec := httptest.NewRecorder()
+
+	srv.csrf(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatal("next handler should not run")
+	})).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusForbidden)
+	}
+}
+
+func TestCSRFSafeRequestRotatesInvalidCookieToken(t *testing.T) {
 	srv := newAuthMiddlewareTestServer(nil)
 
-	oversizedPayload := strings.Repeat("a", maxRequestBodyBytes+1024)
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: "legacy-invalid-token"})
+	rec := httptest.NewRecorder()
+
+	srv.csrf(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	})).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusNoContent)
+	}
+	cookie := cookieFromRecorder(t, rec, csrfCookieName)
+	if cookie.Value == "legacy-invalid-token" {
+		t.Fatal("csrf token was not rotated")
+	}
+}
+
+func TestCSRFRejectsOversizedFormBody(t *testing.T) {
+	srv := newAuthMiddlewareTestServer(nil)
+	token := mustSignedCSRFToken(t, srv, csrfAnonymousSessionHash, time.Now().UTC())
+
+	overSizedPayload := strings.Repeat("a", maxRequestBodyBytes+1024)
 	form := url.Values{
-		csrfFieldName: []string{"token"},
-		"payload":     []string{oversizedPayload},
+		csrfFieldName: []string{token},
+		"payload":     []string{overSizedPayload},
 	}
 	req := httptest.NewRequest(http.MethodPost, "/submit", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: "token"})
+	req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: token})
 	rec := httptest.NewRecorder()
 
 	srv.limitRequestBody(srv.csrf(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -158,4 +263,14 @@ func TestIsUnsafeMethod(t *testing.T) {
 			t.Fatalf("isUnsafeMethod(%q) = false, want true", method)
 		}
 	}
+}
+
+func mustSignedCSRFToken(t *testing.T, srv *Server, sessionHash string, now time.Time) string {
+	t.Helper()
+
+	token, err := srv.newSignedCSRFToken(sessionHash, now)
+	if err != nil {
+		t.Fatalf("newSignedCSRFToken() error = %v", err)
+	}
+	return token
 }

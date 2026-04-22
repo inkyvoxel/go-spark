@@ -114,6 +114,11 @@ func (s *Server) register(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.setSessionCookie(w, r, session)
+	if err := s.rotateCSRFCookieForSession(w, r, session.Token); err != nil {
+		s.logger.Error("rotate csrf token after register login", "err", err)
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		return
+	}
 	redirect := paths.Account
 	if !s.emailVerificationPolicy.UserIsVerified(user) {
 		redirect = paths.VerifyEmail
@@ -284,6 +289,7 @@ func (s *Server) confirmEmailChange(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.clearSessionCookie(w, r)
+	s.clearCSRFCookie(w, r)
 	data.Authenticated = false
 	data.Verified = false
 	data.User = db.User{}
@@ -338,6 +344,11 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.setSessionCookie(w, r, session)
+	if err := s.rotateCSRFCookieForSession(w, r, session.Token); err != nil {
+		s.logger.Error("rotate csrf token after login", "err", err)
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		return
+	}
 	s.redirectWithHTMX(w, r, next)
 }
 
@@ -352,6 +363,7 @@ func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.clearSessionCookie(w, r)
+	s.clearCSRFCookie(w, r)
 	http.Redirect(w, r, paths.Home, http.StatusSeeOther)
 }
 
@@ -477,6 +489,7 @@ func (s *Server) changePassword(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.clearSessionCookie(w, r)
+	s.clearCSRFCookie(w, r)
 	s.redirectWithHTMX(w, r, loginPathWithStatusChanged)
 }
 
@@ -535,6 +548,7 @@ func (s *Server) changeEmail(w http.ResponseWriter, r *http.Request) {
 
 	if !s.emailVerificationPolicy.RequiresEmailChangeVerification() {
 		s.clearSessionCookie(w, r)
+		s.clearCSRFCookie(w, r)
 		s.redirectWithHTMX(w, r, loginPathWithEmailChanged)
 		return
 	}

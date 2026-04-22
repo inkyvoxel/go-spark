@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 	"path/filepath"
+	"strings"
 
 	"github.com/inkyvoxel/go-spark/internal/paths"
 	"github.com/inkyvoxel/go-spark/internal/services"
@@ -24,6 +25,7 @@ type Server struct {
 	templates               map[string]*template.Template
 	cookieSecure            bool
 	passwordMinLength       int
+	csrfSigningKey          []byte
 	rateLimiter             rateLimitStore
 	rateLimitPolicies       RateLimitPolicies
 }
@@ -34,6 +36,7 @@ type Options struct {
 	EmailVerificationPolicy services.EmailVerificationPolicy
 	Logger                  *slog.Logger
 	CookieSecure            bool
+	CSRFSigningKey          string
 	PasswordMinLength       int
 	RateLimitPolicies       RateLimitPolicies
 }
@@ -51,6 +54,7 @@ func New(opts Options) *Server {
 	if passwordMinLength == 0 {
 		passwordMinLength = services.DefaultPasswordMinLength
 	}
+	csrfSigningKey := []byte(strings.TrimSpace(opts.CSRFSigningKey))
 
 	return &Server{
 		db:                      opts.DB,
@@ -60,6 +64,7 @@ func New(opts Options) *Server {
 		templates:               mustParseTemplates(),
 		cookieSecure:            opts.CookieSecure,
 		passwordMinLength:       passwordMinLength,
+		csrfSigningKey:          csrfSigningKey,
 		rateLimiter:             newInMemoryRateLimiter(),
 		rateLimitPolicies:       rateLimitPoliciesWithDefaults(opts.RateLimitPolicies),
 	}

@@ -108,6 +108,19 @@ func TestValidateSecurityConfigRequiresHTTPSAppBaseURLInProduction(t *testing.T)
 	}
 }
 
+func TestValidateSecurityConfigRequiresCSRFSigningKeyInProduction(t *testing.T) {
+	cfg := productionSecurityConfig()
+	cfg.CSRFSigningKey = ""
+
+	err := validateSecurityConfig(cfg)
+	if err == nil {
+		t.Fatal("validateSecurityConfig() error = nil, want error")
+	}
+	if !strings.Contains(err.Error(), "CSRF_SIGNING_KEY") {
+		t.Fatalf("validateSecurityConfig() error = %v, want CSRF_SIGNING_KEY context", err)
+	}
+}
+
 func TestValidateSecurityConfigAllowsProductionWithSecureBaseline(t *testing.T) {
 	err := validateSecurityConfig(productionSecurityConfig())
 	if err != nil {
@@ -171,6 +184,28 @@ func TestSecurityConfigWarningsNonProductionReturnsNone(t *testing.T) {
 	}
 }
 
+func TestResolveCSRFSigningKeyUsesConfiguredValue(t *testing.T) {
+	key, err := resolveCSRFSigningKey(config.Config{
+		CSRFSigningKey: "configured-key",
+	}, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	if err != nil {
+		t.Fatalf("resolveCSRFSigningKey() error = %v", err)
+	}
+	if key != "configured-key" {
+		t.Fatalf("resolveCSRFSigningKey() = %q, want configured key", key)
+	}
+}
+
+func TestResolveCSRFSigningKeyGeneratesEphemeralWhenUnset(t *testing.T) {
+	key, err := resolveCSRFSigningKey(config.Config{}, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	if err != nil {
+		t.Fatalf("resolveCSRFSigningKey() error = %v", err)
+	}
+	if key == "" {
+		t.Fatal("resolveCSRFSigningKey() = empty, want generated key")
+	}
+}
+
 func TestProcessArgReturnsEmptyWhenNoArg(t *testing.T) {
 	process, err := processArg(nil)
 	if err != nil {
@@ -215,6 +250,7 @@ func productionSecurityConfig() config.Config {
 	return config.Config{
 		Env:            "production",
 		CookieSecure:   true,
+		CSRFSigningKey: "csrf-key",
 		AppBaseURL:     "https://app.example.com",
 		PasswordPepper: "pepper",
 	}
