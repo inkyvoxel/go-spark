@@ -55,6 +55,9 @@ func TestRoutesLogin(t *testing.T) {
 	if session.Value != "session-token" {
 		t.Fatalf("session cookie = %q, want %q", session.Value, "session-token")
 	}
+	if session.MaxAge <= 0 {
+		t.Fatalf("session MaxAge = %d, want positive value", session.MaxAge)
+	}
 	if !session.HttpOnly {
 		t.Fatal("session cookie HttpOnly = false, want true")
 	}
@@ -479,6 +482,9 @@ func TestRoutesRegister(t *testing.T) {
 	session := cookieFromRecorder(t, rec, sessionCookieName)
 	if session.Value != "new-session-token" {
 		t.Fatalf("session cookie = %q, want %q", session.Value, "new-session-token")
+	}
+	if session.MaxAge <= 0 {
+		t.Fatalf("session MaxAge = %d, want positive value", session.MaxAge)
 	}
 }
 

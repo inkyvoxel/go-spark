@@ -102,7 +102,7 @@
   - Recommendation: set `Cache-Control: no-store` for `/account`, `/login`, `/register`, `/account/forgot-password`, `/account/reset-password`, `/account/confirm-email`, and form POST responses.
   - Progress: implemented centralized no-store middleware for auth-sensitive GET/POST routes with legacy compatibility headers (`Pragma: no-cache`, `Expires: 0`) and route tests covering redirect, HTMX fragment/error, and token-confirm/reset responses.
 
-- [ ] Add `MaxAge` to the session cookie in addition to `Expires`.
+- [x] Add `MaxAge` to the session cookie in addition to `Expires`.
   - Evidence: `setSessionCookie` sets `Expires` but not `MaxAge`.
   - Risk: modern browsers handle `Expires`, but `MaxAge` is less ambiguous and aligns with clear-session behavior.
   - Recommendation: set `MaxAge` from `session.ExpiresAt.Sub(time.Now())`.

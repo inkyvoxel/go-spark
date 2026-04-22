@@ -56,10 +56,19 @@ func (s *Server) setSessionCookie(w http.ResponseWriter, r *http.Request, sessio
 		Value:    session.Token,
 		Path:     "/",
 		Expires:  session.ExpiresAt,
+		MaxAge:   sessionCookieMaxAge(session.ExpiresAt),
 		HttpOnly: true,
 		Secure:   s.secureCookie(r),
 		SameSite: http.SameSiteLaxMode,
 	})
+}
+
+func sessionCookieMaxAge(expiresAt time.Time) int {
+	maxAge := int(time.Until(expiresAt).Seconds())
+	if maxAge < 1 {
+		return 1
+	}
+	return maxAge
 }
 
 func (s *Server) clearSessionCookie(w http.ResponseWriter, r *http.Request) {

@@ -92,6 +92,23 @@ func TestLoadSessionAllowsInvalidSessionAsAnonymous(t *testing.T) {
 	}
 }
 
+func TestSetSessionCookieSetsPositiveMaxAge(t *testing.T) {
+	srv := newAuthMiddlewareTestServer(&fakeAuthLookup{})
+
+	req := httptest.NewRequest(http.MethodGet, "/private", nil)
+	rec := httptest.NewRecorder()
+
+	srv.setSessionCookie(rec, req, services.AuthSession{
+		Token:     "session-token",
+		ExpiresAt: time.Now().UTC().Add(5 * time.Minute),
+	})
+
+	session := cookieFromRecorder(t, rec, sessionCookieName)
+	if session.MaxAge <= 0 {
+		t.Fatalf("session MaxAge = %d, want positive value", session.MaxAge)
+	}
+}
+
 func TestLoadSessionHandlesLookupError(t *testing.T) {
 	srv := newAuthMiddlewareTestServer(&fakeAuthLookup{
 		err: errors.New("database unavailable"),
