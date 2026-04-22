@@ -18,6 +18,10 @@ import (
 	"github.com/inkyvoxel/go-spark/internal/services"
 )
 
+type cliCommand struct {
+	processOverride string
+}
+
 func main() {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 
@@ -32,12 +36,12 @@ func run(args []string, logger *slog.Logger) error {
 		return fmt.Errorf("load .env: %w", err)
 	}
 
-	processOverride, err := processArg(args)
+	command, err := parseCLIArgs(args)
 	if err != nil {
 		return err
 	}
 
-	cfg, err := config.FromEnvWithProcess(services.DefaultPasswordMinLength, processOverride)
+	cfg, err := config.FromEnvWithProcess(services.DefaultPasswordMinLength, command.processOverride)
 	if err != nil {
 		return fmt.Errorf("load config: %w", err)
 	}
@@ -63,19 +67,34 @@ func run(args []string, logger *slog.Logger) error {
 	}
 }
 
-func processArg(args []string) (string, error) {
+func parseCLIArgs(args []string) (cliCommand, error) {
 	if len(args) == 0 {
-		return "", nil
+		return cliCommand{}, nil
+	}
+
+	switch command := strings.ToLower(strings.TrimSpace(args[0])); command {
+	case "start":
+		return parseStartArgs(args[1:])
+	default:
+		return cliCommand{}, fmt.Errorf("unknown command %q; use %q", command, "start")
+	}
+}
+
+func parseStartArgs(args []string) (cliCommand, error) {
+	if len(args) == 0 {
+		return cliCommand{processOverride: config.ProcessAll}, nil
 	}
 	if len(args) > 1 {
-		return "", fmt.Errorf("expected at most one process mode argument (%q, %q, or %q)", config.ProcessAll, config.ProcessWeb, config.ProcessWorker)
+		return cliCommand{}, fmt.Errorf("start subcommand accepts at most one mode argument (%q, %q, or %q)", config.ProcessAll, config.ProcessWeb, config.ProcessWorker)
 	}
 
 	process := strings.ToLower(strings.TrimSpace(args[0]))
-	if !config.IsProcess(process) {
-		return "", fmt.Errorf("process mode must be %q, %q, or %q", config.ProcessAll, config.ProcessWeb, config.ProcessWorker)
+	switch process {
+	case config.ProcessAll, config.ProcessWeb, config.ProcessWorker:
+		return cliCommand{processOverride: process}, nil
+	default:
+		return cliCommand{}, fmt.Errorf("start mode must be %q, %q, or %q", config.ProcessAll, config.ProcessWeb, config.ProcessWorker)
 	}
-	return process, nil
 }
 
 func runAll(ctx context.Context, logger *slog.Logger, cfg config.Config, httpServer *http.Server, jobsRunner *jobs.Runner) error {

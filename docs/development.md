@@ -15,7 +15,7 @@ For auth email flows, see [email.md](email.md).
 ```sh
 cp .env.example .env
 make setup
-make run
+make start
 ```
 
 This starter assumes SQLite as the normal development and first-run path. The
@@ -26,9 +26,9 @@ The app loads `.env` when present. Existing shell environment variables still wi
 ## Common Commands
 
 ```sh
-make run
-make run-web
-make run-worker
+make start
+make start-web
+make start-worker
 make setup
 make migrate-up
 make migrate-down
@@ -40,10 +40,11 @@ make sqlc
 Notes:
 
 * `make setup` creates the local SQLite path and applies the baseline schema.
-* `make run` starts the HTTP server and background jobs worker together.
-* `make run-web` starts only the HTTP server.
-* `make run-worker` starts only the background jobs worker.
+* `make start` starts the HTTP server and background jobs worker together.
+* `make start-web` starts only the HTTP server.
+* `make start-worker` starts only the background jobs worker.
 * `make check` runs formatting, module tidy, sqlc generation, vulncheck, and tests.
+* The app CLI uses `start`, with optional `all`, `web`, or `worker` modes.
 
 ## Tooling
 

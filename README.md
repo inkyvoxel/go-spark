@@ -26,7 +26,7 @@ refactor rather than a built-in template feature.
 ```sh
 cp .env.example .env
 make setup
-make run
+make start
 ```
 
 Open `http://localhost:8080`.
@@ -41,12 +41,12 @@ The normal first-run path uses the SQLite database at `./data/app.db`.
 * `web`: HTTP server only
 * `worker`: background jobs worker only
 
-You can also pass the mode as the first CLI argument:
+The CLI uses explicit subcommands:
 
 ```sh
-./go-spark all
-./go-spark web
-./go-spark worker
+./go-spark start
+./go-spark start web
+./go-spark start worker
 ```
 
 ## What’s Included
@@ -64,9 +64,9 @@ Email delivery defaults to `EMAIL_PROVIDER=log` for safe local development.
 ## Commands
 
 ```sh
-make run
-make run-web
-make run-worker
+make start
+make start-web
+make start-worker
 make setup
 make migrate-up
 make test

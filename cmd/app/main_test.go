@@ -7,42 +7,102 @@ import (
 	"github.com/inkyvoxel/go-spark/internal/config"
 )
 
-func TestProcessArgReturnsEmptyWhenNoArg(t *testing.T) {
-	process, err := processArg(nil)
+func TestParseCLIArgsReturnsEmptyWhenNoArg(t *testing.T) {
+	command, err := parseCLIArgs(nil)
 	if err != nil {
-		t.Fatalf("processArg() error = %v", err)
+		t.Fatalf("parseCLIArgs() error = %v", err)
 	}
-	if process != "" {
-		t.Fatalf("processArg() = %q, want empty", process)
+	if command.processOverride != "" {
+		t.Fatalf("parseCLIArgs() processOverride = %q, want empty", command.processOverride)
 	}
 }
 
-func TestProcessArgReturnsValidMode(t *testing.T) {
-	process, err := processArg([]string{"web"})
+func TestParseCLIArgsSupportsStart(t *testing.T) {
+	command, err := parseCLIArgs([]string{"start"})
 	if err != nil {
-		t.Fatalf("processArg() error = %v", err)
+		t.Fatalf("parseCLIArgs() error = %v", err)
 	}
-	if process != config.ProcessWeb {
-		t.Fatalf("processArg() = %q, want %q", process, config.ProcessWeb)
-	}
-}
-
-func TestProcessArgRejectsInvalidMode(t *testing.T) {
-	_, err := processArg([]string{"jobs"})
-	if err == nil {
-		t.Fatal("processArg() error = nil, want error")
-	}
-	if !strings.Contains(err.Error(), "process mode") {
-		t.Fatalf("processArg() error = %v, want process mode context", err)
+	if command.processOverride != config.ProcessAll {
+		t.Fatalf("parseCLIArgs() processOverride = %q, want %q", command.processOverride, config.ProcessAll)
 	}
 }
 
-func TestProcessArgRejectsMultipleArgs(t *testing.T) {
-	_, err := processArg([]string{"web", "worker"})
-	if err == nil {
-		t.Fatal("processArg() error = nil, want error")
+func TestParseCLIArgsSupportsStartWeb(t *testing.T) {
+	command, err := parseCLIArgs([]string{"start", "web"})
+	if err != nil {
+		t.Fatalf("parseCLIArgs() error = %v", err)
 	}
-	if !strings.Contains(err.Error(), "at most one") {
-		t.Fatalf("processArg() error = %v, want argument count context", err)
+	if command.processOverride != config.ProcessWeb {
+		t.Fatalf("parseCLIArgs() processOverride = %q, want %q", command.processOverride, config.ProcessWeb)
+	}
+}
+
+func TestParseCLIArgsSupportsStartWorker(t *testing.T) {
+	command, err := parseCLIArgs([]string{"start", "worker"})
+	if err != nil {
+		t.Fatalf("parseCLIArgs() error = %v", err)
+	}
+	if command.processOverride != config.ProcessWorker {
+		t.Fatalf("parseCLIArgs() processOverride = %q, want %q", command.processOverride, config.ProcessWorker)
+	}
+}
+
+func TestParseCLIArgsRejectsInvalidCommand(t *testing.T) {
+	_, err := parseCLIArgs([]string{"jobs"})
+	if err == nil {
+		t.Fatal("parseCLIArgs() error = nil, want error")
+	}
+	if !strings.Contains(err.Error(), "unknown command") {
+		t.Fatalf("parseCLIArgs() error = %v, want unknown command context", err)
+	}
+}
+
+func TestParseCLIArgsRejectsLegacyServeCommand(t *testing.T) {
+	_, err := parseCLIArgs([]string{"serve"})
+	if err == nil {
+		t.Fatal("parseCLIArgs() error = nil, want error")
+	}
+	if !strings.Contains(err.Error(), "unknown command") {
+		t.Fatalf("parseCLIArgs() error = %v, want unknown command context", err)
+	}
+}
+
+func TestParseCLIArgsRejectsLegacyWorkerCommand(t *testing.T) {
+	_, err := parseCLIArgs([]string{"worker"})
+	if err == nil {
+		t.Fatal("parseCLIArgs() error = nil, want error")
+	}
+	if !strings.Contains(err.Error(), "unknown command") {
+		t.Fatalf("parseCLIArgs() error = %v, want unknown command context", err)
+	}
+}
+
+func TestParseCLIArgsRejectsLegacyRunCommand(t *testing.T) {
+	_, err := parseCLIArgs([]string{"run", "web"})
+	if err == nil {
+		t.Fatal("parseCLIArgs() error = nil, want error")
+	}
+	if !strings.Contains(err.Error(), "unknown command") {
+		t.Fatalf("parseCLIArgs() error = %v, want unknown command context", err)
+	}
+}
+
+func TestParseCLIArgsRejectsStartExtraArgs(t *testing.T) {
+	_, err := parseCLIArgs([]string{"start", "web", "extra"})
+	if err == nil {
+		t.Fatal("parseCLIArgs() error = nil, want error")
+	}
+	if !strings.Contains(err.Error(), "start subcommand accepts at most one") {
+		t.Fatalf("parseCLIArgs() error = %v, want start argument context", err)
+	}
+}
+
+func TestParseCLIArgsRejectsStartInvalidMode(t *testing.T) {
+	_, err := parseCLIArgs([]string{"start", "jobs"})
+	if err == nil {
+		t.Fatal("parseCLIArgs() error = nil, want error")
+	}
+	if !strings.Contains(err.Error(), "start mode must be") {
+		t.Fatalf("parseCLIArgs() error = %v, want start mode context", err)
 	}
 }
