@@ -5,6 +5,7 @@ import (
 	"html/template"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"path/filepath"
 	"strings"
 
@@ -27,6 +28,7 @@ type Server struct {
 	logger                  *slog.Logger
 	templates               map[string]*template.Template
 	cookieSecure            bool
+	appBaseOrigin           string
 	passwordMinLength       int
 	csrfSigningKey          []byte
 	rateLimiter             rateLimitStore
@@ -39,6 +41,7 @@ type Options struct {
 	EmailVerificationPolicy services.EmailVerificationPolicy
 	Logger                  *slog.Logger
 	CookieSecure            bool
+	AppBaseURL              string
 	CSRFSigningKey          string
 	PasswordMinLength       int
 	RateLimitPolicies       RateLimitPolicies
@@ -58,6 +61,7 @@ func New(opts Options) *Server {
 		passwordMinLength = services.DefaultPasswordMinLength
 	}
 	csrfSigningKey := []byte(strings.TrimSpace(opts.CSRFSigningKey))
+	appBaseOrigin := normalizeOrigin(opts.AppBaseURL)
 
 	return &Server{
 		db:                      opts.DB,
@@ -66,11 +70,30 @@ func New(opts Options) *Server {
 		logger:                  logger,
 		templates:               mustParseTemplates(),
 		cookieSecure:            opts.CookieSecure,
+		appBaseOrigin:           appBaseOrigin,
 		passwordMinLength:       passwordMinLength,
 		csrfSigningKey:          csrfSigningKey,
 		rateLimiter:             newInMemoryRateLimiter(),
 		rateLimitPolicies:       rateLimitPoliciesWithDefaults(opts.RateLimitPolicies),
 	}
+}
+
+func normalizeOrigin(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return ""
+	}
+	parsed, err := url.Parse(raw)
+	if err != nil {
+		return ""
+	}
+	if parsed.Scheme == "" || parsed.Host == "" {
+		return ""
+	}
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return ""
+	}
+	return strings.ToLower(parsed.Scheme) + "://" + strings.ToLower(parsed.Host)
 }
 
 func mustParseTemplates() map[string]*template.Template {

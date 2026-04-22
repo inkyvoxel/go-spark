@@ -17,9 +17,7 @@
   {{ if eq .LoginStatus "email-changed" }}<p role="status">Your email address has changed. Sign in again.</p>{{ end }}
   {{ if .Error }}<p role="alert">{{ .Error }}</p>{{ end }}
   <form method="post" action="{{ .Routes.Login }}" hx-post="{{ .Routes.Login }}" hx-target="#login-form-section"
-    hx-swap="outerHTML" hx-disabled-elt="button[type='submit']"
-    hx-on::before-request="this.querySelector('button[type=submit]').setAttribute('aria-busy','true')"
-    hx-on::after-request="this.querySelector('button[type=submit]').removeAttribute('aria-busy')">
+    hx-swap="outerHTML" hx-disabled-elt="button[type='submit']">
     <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
     {{ if .Next }}<input type="hidden" name="next" value="{{ .Next }}">{{ end }}
     <label>

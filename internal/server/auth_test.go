@@ -543,6 +543,7 @@ func newAuthMiddlewareTestServer(auth authService) *Server {
 		auth:                    auth,
 		emailVerificationPolicy: services.DefaultEmailVerificationPolicy(),
 		logger:                  slog.New(slog.NewTextHandler(io.Discard, nil)),
+		appBaseOrigin:           "http://localhost:8080",
 		csrfSigningKey:          []byte("test-csrf-signing-key"),
 	}
 }

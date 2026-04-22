@@ -18,9 +18,7 @@
   {{ else }}
   {{ if .Error }}<p role="alert">{{ .Error }}</p>{{ end }}
   <form method="post" action="{{ .Routes.ChangeEmail }}" hx-post="{{ .Routes.ChangeEmail }}"
-    hx-target="#account-change-email-section" hx-swap="outerHTML" hx-disabled-elt="button[type='submit']"
-    hx-on::before-request="this.querySelector('button[type=submit]').setAttribute('aria-busy','true')"
-    hx-on::after-request="this.querySelector('button[type=submit]').removeAttribute('aria-busy')">
+    hx-target="#account-change-email-section" hx-swap="outerHTML" hx-disabled-elt="button[type='submit']">
     <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
     <label>
       New email address

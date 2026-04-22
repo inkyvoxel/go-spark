@@ -25,9 +25,7 @@
 
   <form method="post" action="{{ .Routes.AccountSessionsRevokeOthers }}"
     hx-post="{{ .Routes.AccountSessionsRevokeOthers }}" hx-target="#account-sessions-section" hx-swap="outerHTML"
-    hx-disabled-elt="button[type='submit']"
-    hx-on::before-request="this.querySelector('button[type=submit]').setAttribute('aria-busy','true')"
-    hx-on::after-request="this.querySelector('button[type=submit]').removeAttribute('aria-busy')">
+    hx-disabled-elt="button[type='submit']">
     <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
     <button type="submit" class="secondary">Sign out other sessions</button>
   </form>
@@ -55,9 +53,7 @@
             <small>Current</small>
             {{ else }}
             <form method="post" action="{{ $.Routes.AccountSessionsRevoke }}" hx-post="{{ $.Routes.AccountSessionsRevoke }}"
-              hx-target="#account-sessions-section" hx-swap="outerHTML" hx-disabled-elt="button[type='submit']"
-              hx-on::before-request="this.querySelector('button[type=submit]').setAttribute('aria-busy','true')"
-              hx-on::after-request="this.querySelector('button[type=submit]').removeAttribute('aria-busy')">
+              hx-target="#account-sessions-section" hx-swap="outerHTML" hx-disabled-elt="button[type='submit']">
               <input type="hidden" name="csrf_token" value="{{ $.CSRFToken }}">
               <input type="hidden" name="session_id" value="{{ .ID }}">
               <button type="submit" class="secondary outline">Revoke</button>

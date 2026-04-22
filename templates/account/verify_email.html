@@ -17,9 +17,7 @@
   <p role="status">Check your email to confirm your account.</p>
   {{ end }}
   <form method="post" action="{{ .Routes.VerifyEmailResend }}" hx-post="{{ .Routes.VerifyEmailResend }}"
-    hx-target="#verify-email-resend-section" hx-swap="outerHTML" hx-disabled-elt="button[type='submit']"
-    hx-on::before-request="this.querySelector('button[type=submit]').setAttribute('aria-busy','true')"
-    hx-on::after-request="this.querySelector('button[type=submit]').removeAttribute('aria-busy')">
+    hx-target="#verify-email-resend-section" hx-swap="outerHTML" hx-disabled-elt="button[type='submit']">
     <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
     <button type="submit">Resend verification email</button>
   </form>

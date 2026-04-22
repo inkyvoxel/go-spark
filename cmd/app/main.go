@@ -91,6 +91,7 @@ func run(args []string, logger *slog.Logger) error {
 		DB:                      db,
 		Auth:                    auth,
 		CookieSecure:            cfg.CookieSecure,
+		AppBaseURL:              cfg.AppBaseURL,
 		CSRFSigningKey:          csrfSigningKey,
 		PasswordMinLength:       cfg.PasswordMinLength,
 		EmailVerificationPolicy: services.NewEmailVerificationPolicy(cfg.EmailVerificationRequired),

@@ -10,9 +10,7 @@
 <section id="register-form-section">
   {{ if .Error }}<p role="alert">{{ .Error }}</p>{{ end }}
   <form method="post" action="{{ .Routes.Register }}" hx-post="{{ .Routes.Register }}" hx-target="#register-form-section" hx-swap="outerHTML"
-    hx-disabled-elt="button[type='submit']"
-    hx-on::before-request="this.querySelector('button[type=submit]').setAttribute('aria-busy','true')"
-    hx-on::after-request="this.querySelector('button[type=submit]').removeAttribute('aria-busy')">
+    hx-disabled-elt="button[type='submit']">
     <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
     <label>
       Email

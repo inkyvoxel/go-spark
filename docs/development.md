@@ -117,7 +117,7 @@ For auth forms, the canonical HTMX pattern is:
 * Keep normal `method` and `action` attributes for non-HTMX fallback.
 * Add `hx-post`, `hx-target`, and `hx-swap="outerHTML"` so HTMX requests replace only the form/status section fragment.
 * Use `hx-disabled-elt="button[type='submit']"` to prevent duplicate submits during in-flight requests.
-* Use PicoCSS loading on submit buttons by toggling `aria-busy` from HTMX form lifecycle hooks (`hx-on::before-request` and `hx-on::after-request`).
+* Keep templates CSP-safe by avoiding `hx-on::*` inline handlers (they require eval). Prefer declarative HTMX attributes plus CSS-based indicators.
 * In handlers, return full-page render/PRG redirects for regular requests, and fragment responses for `HX-Request`.
 * For success navigation on HTMX requests, return `HX-Redirect` while preserving the same destination as the non-HTMX redirect flow.
 

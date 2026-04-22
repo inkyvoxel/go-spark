@@ -26,12 +26,16 @@ func TestHTMXFormTemplatesIncludeLoadingAffordances(t *testing.T) {
 		if !strings.Contains(content, `hx-disabled-elt="button[type='submit']"`) {
 			t.Fatalf("%s missing hx-disabled-elt submit binding", name)
 		}
-		if !strings.Contains(content, `hx-on::before-request="this.querySelector('button[type=submit]').setAttribute('aria-busy','true')"`) {
-			t.Fatalf("%s missing before-request aria-busy hook", name)
+		if strings.Contains(content, `hx-on::`) {
+			t.Fatalf("%s should not include hx-on inline handlers (CSP-safe templates only)", name)
 		}
-		if !strings.Contains(content, `hx-on::after-request="this.querySelector('button[type=submit]').removeAttribute('aria-busy')"`) {
-			t.Fatalf("%s missing after-request aria-busy hook", name)
-		}
+	}
+}
+
+func TestLayoutDisablesHTMXEval(t *testing.T) {
+	layout := readProjectFile(t, "templates", "layout.html")
+	if !strings.Contains(layout, `"allowEval":false`) {
+		t.Fatal(`layout missing htmx allowEval:false`)
 	}
 }
 

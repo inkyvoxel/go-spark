@@ -437,7 +437,8 @@ Current implementation in this starter:
   * submitted token exactly matches CSRF cookie value,
   * signature is valid,
   * token is not expired,
-  * session binding matches the current request context.
+  * session binding matches the current request context,
+  * when present, `Origin` (preferred) or `Referer` must match `APP_BASE_URL` origin.
 * CSRF tokens rotate on login/register and are cleared on logout or session invalidation.
 
 Configuration:

@@ -77,7 +77,8 @@ State-changing requests use signed CSRF tokens that are bound to the current ses
   * exact match between submitted token and CSRF cookie,
   * valid signature,
   * unexpired token,
-  * session binding match.
+  * session binding match,
+  * when present, `Origin` (preferred) or `Referer` must match `APP_BASE_URL` origin.
 
 Token rotation behavior:
 

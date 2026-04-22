@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 )
@@ -82,9 +83,68 @@ func (s *Server) csrf(next http.Handler) http.Handler {
 			http.Error(w, http.StatusText(http.StatusForbidden), http.StatusForbidden)
 			return
 		}
+		if !s.validRequestSourceOrigin(r) {
+			http.Error(w, http.StatusText(http.StatusForbidden), http.StatusForbidden)
+			return
+		}
 
 		next.ServeHTTP(w, r.WithContext(contextWithCSRFToken(r.Context(), token)))
 	})
+}
+
+func (s *Server) validRequestSourceOrigin(r *http.Request) bool {
+	origin := strings.TrimSpace(r.Header.Get("Origin"))
+	if origin != "" {
+		normalized, ok := normalizeHeaderOrigin(origin)
+		if !ok || s.appBaseOrigin == "" {
+			return false
+		}
+		return normalized == s.appBaseOrigin
+	}
+
+	referer := strings.TrimSpace(r.Header.Get("Referer"))
+	if referer == "" {
+		return true
+	}
+	normalized, ok := normalizeRefererOrigin(referer)
+	if !ok || s.appBaseOrigin == "" {
+		return false
+	}
+	return normalized == s.appBaseOrigin
+}
+
+func normalizeHeaderOrigin(raw string) (string, bool) {
+	parsed, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil {
+		return "", false
+	}
+	if parsed.Scheme == "" || parsed.Host == "" {
+		return "", false
+	}
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return "", false
+	}
+	if parsed.Path != "" && parsed.Path != "/" {
+		return "", false
+	}
+	if parsed.RawQuery != "" || parsed.Fragment != "" || parsed.User != nil {
+		return "", false
+	}
+	return strings.ToLower(parsed.Scheme) + "://" + strings.ToLower(parsed.Host), true
+}
+
+func normalizeRefererOrigin(raw string) (string, bool) {
+	parsed, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil {
+		return "", false
+	}
+	if parsed.Scheme == "" || parsed.Host == "" {
+		return "", false
+	}
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return "", false
+	}
+	return strings.ToLower(parsed.Scheme) + "://" + strings.ToLower(parsed.Host), true
 }
 
 func sessionTokenFromRequest(r *http.Request) string {
