@@ -199,7 +199,9 @@ The same modes can also be selected with the first CLI argument, such as `./go-s
 
 This worker is intentionally modest. It is enough for a starter app, keeps local development in one process, and still gives production deployments a simple web/worker split.
 
-If a project later needs multiple worker replicas or higher email throughput, strengthen stale-claim recovery first so rows left in `sending` after a crash can be retried safely. The outbox can also be replaced with an external queue if the app grows beyond the database-backed queue model.
+The outbox includes stale-claim recovery so rows left in `sending` after a crash can be reclaimed after lease expiry. Claims are ownership-guarded with a claim token so stale workers cannot overwrite newer claim outcomes.
+
+If a project later needs multiple worker replicas or higher email throughput, keep this lease/claim-token model (or a stronger equivalent) when scaling out workers. The outbox can also be replaced with an external queue if the app grows beyond the database-backed queue model.
 
 ## Configuration
 

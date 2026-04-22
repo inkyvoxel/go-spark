@@ -2,7 +2,9 @@ package database
 
 import (
 	"context"
+	"crypto/rand"
 	"database/sql"
+	"encoding/hex"
 	"fmt"
 	"time"
 
@@ -36,14 +38,24 @@ func (s *EmailOutboxStore) Enqueue(ctx context.Context, message email.Message, a
 	return row, nil
 }
 
-func (s *EmailOutboxStore) ClaimPending(ctx context.Context, now time.Time, limit int64) ([]email.OutboxEmail, error) {
+func (s *EmailOutboxStore) ClaimPending(ctx context.Context, now time.Time, claimTTL time.Duration, limit int64) ([]email.OutboxEmail, error) {
 	if limit <= 0 {
 		return nil, fmt.Errorf("claim pending emails limit must be greater than zero")
 	}
+	if claimTTL <= 0 {
+		return nil, fmt.Errorf("claim pending emails ttl must be greater than zero")
+	}
+
+	claimToken, err := generateClaimToken()
+	if err != nil {
+		return nil, fmt.Errorf("generate outbox claim token: %w", err)
+	}
 
 	rows, err := s.queries.ClaimPendingEmails(ctx, db.ClaimPendingEmailsParams{
-		AvailableAt: now,
-		Limit:       limit,
+		Now:            sql.NullTime{Time: now, Valid: true},
+		ClaimExpiresAt: sql.NullTime{Time: now.Add(claimTTL), Valid: true},
+		ClaimToken:     claimToken,
+		Limit:          limit,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("claim pending emails: %w", err)
@@ -60,17 +72,19 @@ func (s *EmailOutboxStore) ClaimPending(ctx context.Context, now time.Time, limi
 				TextBody: row.TextBody,
 				HTMLBody: row.HtmlBody,
 			},
-			Attempts: row.Attempts,
+			Attempts:   row.Attempts,
+			ClaimToken: row.ClaimToken,
 		})
 	}
 
 	return messages, nil
 }
 
-func (s *EmailOutboxStore) MarkSent(ctx context.Context, id int64, sentAt time.Time) error {
+func (s *EmailOutboxStore) MarkSent(ctx context.Context, id int64, claimToken string, sentAt time.Time) error {
 	if _, err := s.queries.MarkEmailSent(ctx, db.MarkEmailSentParams{
-		ID:     id,
-		SentAt: sql.NullTime{Time: sentAt, Valid: true},
+		ID:         id,
+		ClaimToken: claimToken,
+		SentAt:     sql.NullTime{Time: sentAt, Valid: true},
 	}); err != nil {
 		return fmt.Errorf("mark email sent: %w", err)
 	}
@@ -78,9 +92,10 @@ func (s *EmailOutboxStore) MarkSent(ctx context.Context, id int64, sentAt time.T
 	return nil
 }
 
-func (s *EmailOutboxStore) MarkFailed(ctx context.Context, id int64, lastError string, availableAt time.Time) error {
+func (s *EmailOutboxStore) MarkFailed(ctx context.Context, id int64, claimToken, lastError string, availableAt time.Time) error {
 	if _, err := s.queries.MarkEmailFailed(ctx, db.MarkEmailFailedParams{
 		ID:          id,
+		ClaimToken:  claimToken,
 		LastError:   lastError,
 		AvailableAt: availableAt,
 	}); err != nil {
@@ -90,9 +105,10 @@ func (s *EmailOutboxStore) MarkFailed(ctx context.Context, id int64, lastError s
 	return nil
 }
 
-func (s *EmailOutboxStore) MarkFailedPermanently(ctx context.Context, id int64, lastError string, failedAt time.Time) error {
+func (s *EmailOutboxStore) MarkFailedPermanently(ctx context.Context, id int64, claimToken, lastError string, failedAt time.Time) error {
 	if _, err := s.queries.MarkEmailFailedPermanently(ctx, db.MarkEmailFailedPermanentlyParams{
 		ID:          id,
+		ClaimToken:  claimToken,
 		LastError:   lastError,
 		AvailableAt: failedAt,
 	}); err != nil {
@@ -100,4 +116,12 @@ func (s *EmailOutboxStore) MarkFailedPermanently(ctx context.Context, id int64, 
 	}
 
 	return nil
+}
+
+func generateClaimToken() (string, error) {
+	var raw [16]byte
+	if _, err := rand.Read(raw[:]); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(raw[:]), nil
 }

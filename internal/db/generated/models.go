@@ -20,18 +20,21 @@ type EmailChangeToken struct {
 }
 
 type EmailOutbox struct {
-	ID          int64
-	Sender      string
-	Recipient   string
-	Subject     string
-	TextBody    string
-	HtmlBody    string
-	Status      string
-	Attempts    int64
-	LastError   string
-	AvailableAt time.Time
-	SentAt      sql.NullTime
-	CreatedAt   time.Time
+	ID             int64
+	Sender         string
+	Recipient      string
+	Subject        string
+	TextBody       string
+	HtmlBody       string
+	Status         string
+	Attempts       int64
+	LastError      string
+	AvailableAt    time.Time
+	ClaimedAt      sql.NullTime
+	ClaimExpiresAt sql.NullTime
+	ClaimToken     string
+	SentAt         sql.NullTime
+	CreatedAt      time.Time
 }
 
 type EmailVerificationToken struct {

@@ -247,7 +247,6 @@ func (s *Server) home(w http.ResponseWriter, r *http.Request) {
 	s.render(w, templateHome, s.newTemplateData(r, "Go Spark"))
 }
 
-
 func (s *Server) logRequests(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		s.logger.Info("request", "method", r.Method, "path", r.URL.Path)

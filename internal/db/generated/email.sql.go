@@ -13,25 +13,41 @@ import (
 
 const claimPendingEmails = `-- name: ClaimPendingEmails :many
 UPDATE email_outbox
-SET status = 'sending'
+SET status = 'sending',
+    claimed_at = ?1,
+    claim_expires_at = ?2,
+    claim_token = ?3
 WHERE id IN (
     SELECT id
-    FROM email_outbox AS pending_email
-    WHERE pending_email.status = 'pending'
-      AND pending_email.available_at <= ?
-    ORDER BY pending_email.available_at, pending_email.id
-    LIMIT ?
+    FROM email_outbox AS outbox
+    WHERE (
+        outbox.status = 'pending'
+        AND outbox.available_at <= ?1
+    ) OR (
+        outbox.status = 'sending'
+        AND outbox.claim_expires_at IS NOT NULL
+        AND outbox.claim_expires_at <= ?1
+    )
+    ORDER BY outbox.available_at, outbox.id
+    LIMIT ?4
 )
-RETURNING id, sender, recipient, subject, text_body, html_body, status, attempts, last_error, available_at, sent_at, created_at
+RETURNING id, sender, recipient, subject, text_body, html_body, status, attempts, last_error, available_at, claimed_at, claim_expires_at, claim_token, sent_at, created_at
 `
 
 type ClaimPendingEmailsParams struct {
-	AvailableAt time.Time
-	Limit       int64
+	Now            sql.NullTime
+	ClaimExpiresAt sql.NullTime
+	ClaimToken     string
+	Limit          int64
 }
 
 func (q *Queries) ClaimPendingEmails(ctx context.Context, arg ClaimPendingEmailsParams) ([]EmailOutbox, error) {
-	rows, err := q.db.QueryContext(ctx, claimPendingEmails, arg.AvailableAt, arg.Limit)
+	rows, err := q.db.QueryContext(ctx, claimPendingEmails,
+		arg.Now,
+		arg.ClaimExpiresAt,
+		arg.ClaimToken,
+		arg.Limit,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -50,6 +66,9 @@ func (q *Queries) ClaimPendingEmails(ctx context.Context, arg ClaimPendingEmails
 			&i.Attempts,
 			&i.LastError,
 			&i.AvailableAt,
+			&i.ClaimedAt,
+			&i.ClaimExpiresAt,
+			&i.ClaimToken,
 			&i.SentAt,
 			&i.CreatedAt,
 		); err != nil {
@@ -82,7 +101,7 @@ INSERT INTO email_outbox (
     ?,
     ?
 )
-RETURNING id, sender, recipient, subject, text_body, html_body, status, attempts, last_error, available_at, sent_at, created_at
+RETURNING id, sender, recipient, subject, text_body, html_body, status, attempts, last_error, available_at, claimed_at, claim_expires_at, claim_token, sent_at, created_at
 `
 
 type EnqueueEmailParams struct {
@@ -115,6 +134,9 @@ func (q *Queries) EnqueueEmail(ctx context.Context, arg EnqueueEmailParams) (Ema
 		&i.Attempts,
 		&i.LastError,
 		&i.AvailableAt,
+		&i.ClaimedAt,
+		&i.ClaimExpiresAt,
+		&i.ClaimToken,
 		&i.SentAt,
 		&i.CreatedAt,
 	)
@@ -122,7 +144,7 @@ func (q *Queries) EnqueueEmail(ctx context.Context, arg EnqueueEmailParams) (Ema
 }
 
 const getEmailOutboxRow = `-- name: GetEmailOutboxRow :one
-SELECT id, sender, recipient, subject, text_body, html_body, status, attempts, last_error, available_at, sent_at, created_at
+SELECT id, sender, recipient, subject, text_body, html_body, status, attempts, last_error, available_at, claimed_at, claim_expires_at, claim_token, sent_at, created_at
 FROM email_outbox
 WHERE id = ?
 LIMIT 1
@@ -142,6 +164,9 @@ func (q *Queries) GetEmailOutboxRow(ctx context.Context, id int64) (EmailOutbox,
 		&i.Attempts,
 		&i.LastError,
 		&i.AvailableAt,
+		&i.ClaimedAt,
+		&i.ClaimExpiresAt,
+		&i.ClaimToken,
 		&i.SentAt,
 		&i.CreatedAt,
 	)
@@ -152,20 +177,30 @@ const markEmailFailed = `-- name: MarkEmailFailed :one
 UPDATE email_outbox
 SET status = 'pending',
     attempts = attempts + 1,
-    last_error = ?,
-    available_at = ?
-WHERE id = ?
-RETURNING id, sender, recipient, subject, text_body, html_body, status, attempts, last_error, available_at, sent_at, created_at
+    last_error = ?1,
+    available_at = ?2,
+    claimed_at = NULL,
+    claim_expires_at = NULL,
+    claim_token = ''
+WHERE id = ?3
+  AND claim_token = ?4
+RETURNING id, sender, recipient, subject, text_body, html_body, status, attempts, last_error, available_at, claimed_at, claim_expires_at, claim_token, sent_at, created_at
 `
 
 type MarkEmailFailedParams struct {
 	LastError   string
 	AvailableAt time.Time
 	ID          int64
+	ClaimToken  string
 }
 
 func (q *Queries) MarkEmailFailed(ctx context.Context, arg MarkEmailFailedParams) (EmailOutbox, error) {
-	row := q.db.QueryRowContext(ctx, markEmailFailed, arg.LastError, arg.AvailableAt, arg.ID)
+	row := q.db.QueryRowContext(ctx, markEmailFailed,
+		arg.LastError,
+		arg.AvailableAt,
+		arg.ID,
+		arg.ClaimToken,
+	)
 	var i EmailOutbox
 	err := row.Scan(
 		&i.ID,
@@ -178,6 +213,9 @@ func (q *Queries) MarkEmailFailed(ctx context.Context, arg MarkEmailFailedParams
 		&i.Attempts,
 		&i.LastError,
 		&i.AvailableAt,
+		&i.ClaimedAt,
+		&i.ClaimExpiresAt,
+		&i.ClaimToken,
 		&i.SentAt,
 		&i.CreatedAt,
 	)
@@ -188,20 +226,30 @@ const markEmailFailedPermanently = `-- name: MarkEmailFailedPermanently :one
 UPDATE email_outbox
 SET status = 'failed',
     attempts = attempts + 1,
-    last_error = ?,
-    available_at = ?
-WHERE id = ?
-RETURNING id, sender, recipient, subject, text_body, html_body, status, attempts, last_error, available_at, sent_at, created_at
+    last_error = ?1,
+    available_at = ?2,
+    claimed_at = NULL,
+    claim_expires_at = NULL,
+    claim_token = ''
+WHERE id = ?3
+  AND claim_token = ?4
+RETURNING id, sender, recipient, subject, text_body, html_body, status, attempts, last_error, available_at, claimed_at, claim_expires_at, claim_token, sent_at, created_at
 `
 
 type MarkEmailFailedPermanentlyParams struct {
 	LastError   string
 	AvailableAt time.Time
 	ID          int64
+	ClaimToken  string
 }
 
 func (q *Queries) MarkEmailFailedPermanently(ctx context.Context, arg MarkEmailFailedPermanentlyParams) (EmailOutbox, error) {
-	row := q.db.QueryRowContext(ctx, markEmailFailedPermanently, arg.LastError, arg.AvailableAt, arg.ID)
+	row := q.db.QueryRowContext(ctx, markEmailFailedPermanently,
+		arg.LastError,
+		arg.AvailableAt,
+		arg.ID,
+		arg.ClaimToken,
+	)
 	var i EmailOutbox
 	err := row.Scan(
 		&i.ID,
@@ -214,6 +262,9 @@ func (q *Queries) MarkEmailFailedPermanently(ctx context.Context, arg MarkEmailF
 		&i.Attempts,
 		&i.LastError,
 		&i.AvailableAt,
+		&i.ClaimedAt,
+		&i.ClaimExpiresAt,
+		&i.ClaimToken,
 		&i.SentAt,
 		&i.CreatedAt,
 	)
@@ -223,18 +274,23 @@ func (q *Queries) MarkEmailFailedPermanently(ctx context.Context, arg MarkEmailF
 const markEmailSent = `-- name: MarkEmailSent :one
 UPDATE email_outbox
 SET status = 'sent',
-    sent_at = ?
-WHERE id = ?
-RETURNING id, sender, recipient, subject, text_body, html_body, status, attempts, last_error, available_at, sent_at, created_at
+    sent_at = ?1,
+    claimed_at = NULL,
+    claim_expires_at = NULL,
+    claim_token = ''
+WHERE id = ?2
+  AND claim_token = ?3
+RETURNING id, sender, recipient, subject, text_body, html_body, status, attempts, last_error, available_at, claimed_at, claim_expires_at, claim_token, sent_at, created_at
 `
 
 type MarkEmailSentParams struct {
-	SentAt sql.NullTime
-	ID     int64
+	SentAt     sql.NullTime
+	ID         int64
+	ClaimToken string
 }
 
 func (q *Queries) MarkEmailSent(ctx context.Context, arg MarkEmailSentParams) (EmailOutbox, error) {
-	row := q.db.QueryRowContext(ctx, markEmailSent, arg.SentAt, arg.ID)
+	row := q.db.QueryRowContext(ctx, markEmailSent, arg.SentAt, arg.ID, arg.ClaimToken)
 	var i EmailOutbox
 	err := row.Scan(
 		&i.ID,
@@ -247,6 +303,9 @@ func (q *Queries) MarkEmailSent(ctx context.Context, arg MarkEmailSentParams) (E
 		&i.Attempts,
 		&i.LastError,
 		&i.AvailableAt,
+		&i.ClaimedAt,
+		&i.ClaimExpiresAt,
+		&i.ClaimToken,
 		&i.SentAt,
 		&i.CreatedAt,
 	)

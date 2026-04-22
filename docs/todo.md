@@ -21,12 +21,6 @@
   - Risk: sensitive metadata and operational data accumulate indefinitely, increasing breach impact and storage growth.
   - Recommendation: add periodic cleanup with conservative retention windows and tests.
 
-- [ ] Improve email outbox crash recovery.
-  - Evidence: `ClaimPendingEmails` moves rows to `sending`; if the process crashes after claiming but before marking sent/failed, those rows can remain stuck.
-  - Risk: password reset and verification emails may silently stop for affected rows.
-  - Recommendation: add `claimed_at`/lease fields, retry stale `sending` rows, and cap/trim `last_error` to avoid unbounded database growth.
-
-
 ### Positive findings to preserve
 
 - Passwords use Argon2id with OWASP-minimum parameters, unique salts, constant-time hash comparison, optional peppering, and a 12-character default minimum.

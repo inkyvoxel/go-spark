@@ -87,11 +87,15 @@ CREATE TABLE email_outbox (
     attempts INTEGER NOT NULL DEFAULT 0,
     last_error TEXT NOT NULL DEFAULT '',
     available_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    claimed_at TIMESTAMP,
+    claim_expires_at TIMESTAMP,
+    claim_token TEXT NOT NULL DEFAULT '',
     sent_at TIMESTAMP,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE INDEX email_outbox_pending_idx ON email_outbox(status, available_at);
+CREATE INDEX email_outbox_claim_expiry_idx ON email_outbox(status, claim_expires_at);
 `
 
 func TestAuthStoreCreateUserTranslatesDuplicateEmail(t *testing.T) {
@@ -447,8 +451,10 @@ func TestAuthStoreCreateUserWithEmailVerification(t *testing.T) {
 	}
 
 	claimed, err := store.queries.ClaimPendingEmails(context.Background(), db.ClaimPendingEmailsParams{
-		AvailableAt: now.Add(time.Second),
-		Limit:       1,
+		Now:            sql.NullTime{Time: now.Add(time.Second), Valid: true},
+		ClaimExpiresAt: sql.NullTime{Time: now.Add(3 * time.Minute), Valid: true},
+		ClaimToken:     "test-claim",
+		Limit:          1,
 	})
 	if err != nil {
 		t.Fatalf("ClaimPendingEmails() error = %v", err)
@@ -644,8 +650,10 @@ func TestAuthStoreRequestPasswordReset(t *testing.T) {
 	}
 
 	claimed, err := store.queries.ClaimPendingEmails(context.Background(), db.ClaimPendingEmailsParams{
-		AvailableAt: now.Add(time.Second),
-		Limit:       1,
+		Now:            sql.NullTime{Time: now.Add(time.Second), Valid: true},
+		ClaimExpiresAt: sql.NullTime{Time: now.Add(3 * time.Minute), Valid: true},
+		ClaimToken:     "test-claim",
+		Limit:          1,
 	})
 	if err != nil {
 		t.Fatalf("ClaimPendingEmails() error = %v", err)
@@ -697,8 +705,10 @@ func TestAuthStoreResendEmailVerification(t *testing.T) {
 	}
 
 	claimed, err := store.queries.ClaimPendingEmails(context.Background(), db.ClaimPendingEmailsParams{
-		AvailableAt: now.Add(time.Second),
-		Limit:       1,
+		Now:            sql.NullTime{Time: now.Add(time.Second), Valid: true},
+		ClaimExpiresAt: sql.NullTime{Time: now.Add(3 * time.Minute), Valid: true},
+		ClaimToken:     "test-claim",
+		Limit:          1,
 	})
 	if err != nil {
 		t.Fatalf("ClaimPendingEmails() error = %v", err)
@@ -784,8 +794,10 @@ func TestAuthStoreRequestEmailChange(t *testing.T) {
 	}
 
 	claimed, err := store.queries.ClaimPendingEmails(context.Background(), db.ClaimPendingEmailsParams{
-		AvailableAt: now.Add(time.Second),
-		Limit:       1,
+		Now:            sql.NullTime{Time: now.Add(time.Second), Valid: true},
+		ClaimExpiresAt: sql.NullTime{Time: now.Add(3 * time.Minute), Valid: true},
+		ClaimToken:     "test-claim",
+		Limit:          1,
 	})
 	if err != nil {
 		t.Fatalf("ClaimPendingEmails() error = %v", err)
@@ -841,8 +853,10 @@ func TestAuthStoreChangeEmailImmediately(t *testing.T) {
 	}
 
 	claimed, err := store.queries.ClaimPendingEmails(context.Background(), db.ClaimPendingEmailsParams{
-		AvailableAt: now.Add(time.Second),
-		Limit:       10,
+		Now:            sql.NullTime{Time: now.Add(time.Second), Valid: true},
+		ClaimExpiresAt: sql.NullTime{Time: now.Add(3 * time.Minute), Valid: true},
+		ClaimToken:     "test-claim",
+		Limit:          10,
 	})
 	if err != nil {
 		t.Fatalf("ClaimPendingEmails() error = %v", err)
@@ -880,8 +894,10 @@ func TestAuthStoreChangeEmailImmediatelySkipsOldEmailNoticeWhenDisabled(t *testi
 	}
 
 	claimed, err := store.queries.ClaimPendingEmails(context.Background(), db.ClaimPendingEmailsParams{
-		AvailableAt: now.Add(time.Second),
-		Limit:       10,
+		Now:            sql.NullTime{Time: now.Add(time.Second), Valid: true},
+		ClaimExpiresAt: sql.NullTime{Time: now.Add(3 * time.Minute), Valid: true},
+		ClaimToken:     "test-claim",
+		Limit:          10,
 	})
 	if err != nil {
 		t.Fatalf("ClaimPendingEmails() error = %v", err)
@@ -948,8 +964,10 @@ func TestAuthStoreConfirmEmailChange(t *testing.T) {
 	}
 
 	claimed, err := store.queries.ClaimPendingEmails(context.Background(), db.ClaimPendingEmailsParams{
-		AvailableAt: now.Add(time.Second),
-		Limit:       10,
+		Now:            sql.NullTime{Time: now.Add(time.Second), Valid: true},
+		ClaimExpiresAt: sql.NullTime{Time: now.Add(3 * time.Minute), Valid: true},
+		ClaimToken:     "test-claim",
+		Limit:          10,
 	})
 	if err != nil {
 		t.Fatalf("ClaimPendingEmails() error = %v", err)
