@@ -18,6 +18,9 @@ make migrate-up
 make run
 ```
 
+This starter assumes SQLite as the normal development and first-run path. The
+default database file is `./data/app.db`.
+
 The app loads `.env` when present. Existing shell environment variables still win.
 
 ## Common Commands
@@ -73,6 +76,8 @@ If you add a new route, update `internal/paths` first and use those constants fr
 
 ### Database changes
 
+The template is SQLite-first today.
+
 * Migrations live in `migrations`.
 * SQL queries live in `internal/db/queries`.
 * Generated code lives in `internal/db/generated`.
@@ -88,7 +93,7 @@ make sqlc
 The `worker` process hosts all background jobs. Today that includes:
 
 * email outbox delivery
-* database cleanup
+* SQLite-backed data cleanup
 
 When adding new background behavior, follow [jobs.md](jobs.md) instead of inventing a new pattern.
 

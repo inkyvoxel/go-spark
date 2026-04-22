@@ -1,6 +1,7 @@
 # Go Spark
 
-A small starter template for server-rendered Go web applications.
+A small SQLite-first starter template for server-rendered Go web
+applications.
 
 Go Spark keeps the default shape intentionally simple:
 
@@ -11,7 +12,14 @@ Go Spark keeps the default shape intentionally simple:
 * SQL migrations with `goose`
 * structured logging with `log/slog`
 
-It includes a runnable app, basic auth flows, transactional email, and a small background jobs worker.
+It includes a runnable app, basic auth flows, transactional email, and a
+small background jobs worker.
+
+The template is designed for new projects that want a solid SQLite
+foundation, minimal infrastructure, and an easy path to running as a single
+binary. It does not currently promise plug-and-play support for multiple
+database engines. If a future fork outgrows SQLite, treat that as an explicit
+refactor rather than a built-in template feature.
 
 ## Quick Start
 
@@ -23,7 +31,7 @@ make run
 
 Open `http://localhost:8080`.
 
-The default SQLite database path is `./data/app.db`.
+The normal first-run path uses the SQLite database at `./data/app.db`.
 
 ## Process Modes
 
@@ -49,7 +57,7 @@ You can also pass the mode as the first CLI argument:
 * account email verification
 * password reset
 * email outbox delivery
-* periodic database cleanup jobs
+* periodic SQLite-backed cleanup jobs
 
 Email delivery defaults to `EMAIL_PROVIDER=log` for safe local development.
 
@@ -79,6 +87,7 @@ Reference docs:
 
 * [CONTRIBUTING.md](CONTRIBUTING.md)
 * [SECURITY.md](SECURITY.md)
+* [docs/adr/0001-sqlite-first.md](docs/adr/0001-sqlite-first.md)
 * [docs/todo.md](docs/todo.md)
 
 ## Project Layout
@@ -86,7 +95,7 @@ Reference docs:
 ```text
 /cmd/app            application entrypoint
 /internal/config    environment config
-/internal/database  SQLite connection setup and stores
+/internal/database  current SQLite setup and SQLite-backed stores
 /internal/db        SQL queries and generated sqlc package
 /internal/email     email messages, senders, and outbox processor
 /internal/jobs      background jobs runner and jobs
@@ -105,7 +114,9 @@ If you use this as a template for a new project:
 
 * rename the module in `go.mod`
 * copy `.env.example` to `.env`
-* run migrations
+* initialize the local SQLite database with `make migrate-up`
 * replace example routes, templates, and branding
 * keep new public paths in `internal/paths`
+* assume SQLite is the intended foundation unless you are deliberately
+  refactoring the persistence layer
 * review production settings before deployment

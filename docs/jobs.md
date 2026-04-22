@@ -20,7 +20,7 @@ This is intentional. The starter does not use a generic persisted jobs framework
 The `worker` process hosts all background jobs. Today that means:
 
 * email outbox delivery
-* database cleanup
+* SQLite-backed data cleanup
 
 `APP_PROCESS=all` runs the web server and the worker together.  
 `APP_PROCESS=worker` runs only the background jobs worker.
@@ -37,7 +37,7 @@ Use a periodic job when the work is recurring and safe to recompute from current
 
 Current example:
 
-* database cleanup removes expired sessions, old tokens, and old outbox rows
+* cleanup removes expired SQLite sessions, old tokens, and old outbox rows
 
 ## Durable Processors
 
@@ -71,7 +71,7 @@ Choose a durable processor when:
 Keep the pattern small:
 
 1. add a focused job type in `internal/jobs`
-2. keep persistence in `internal/database` if the job needs DB access
+2. keep persistence in `internal/database` if the job needs SQLite access
 3. register it from `cmd/app`
 4. add tests for scheduling behavior and job-specific behavior
 
