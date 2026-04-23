@@ -85,10 +85,16 @@ make init
 make start
 make start-web
 make start-worker
+make check
+make test
+make fmt
+make tidy
+make sqlc
+make vulncheck
 make setup
 make migrate-up
-make test
-make check
+make migrate-down
+make tools
 ```
 
 Use `make check` before opening a pull request.
