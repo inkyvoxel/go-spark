@@ -50,6 +50,58 @@ func TestParseCLIArgsSupportsStartWorker(t *testing.T) {
 	}
 }
 
+func TestParseCLIArgsSupportsServe(t *testing.T) {
+	command, err := parseCLIArgs([]string{"serve"})
+	if err != nil {
+		t.Fatalf("parseCLIArgs() error = %v", err)
+	}
+	if command.name != "serve" {
+		t.Fatalf("parseCLIArgs() name = %q, want serve", command.name)
+	}
+	if command.processOverride != config.ProcessWeb {
+		t.Fatalf("parseCLIArgs() processOverride = %q, want %q", command.processOverride, config.ProcessWeb)
+	}
+}
+
+func TestParseCLIArgsSupportsWorkerSubcommand(t *testing.T) {
+	command, err := parseCLIArgs([]string{"worker"})
+	if err != nil {
+		t.Fatalf("parseCLIArgs() error = %v", err)
+	}
+	if command.name != "worker" {
+		t.Fatalf("parseCLIArgs() name = %q, want worker", command.name)
+	}
+	if command.processOverride != config.ProcessWorker {
+		t.Fatalf("parseCLIArgs() processOverride = %q, want %q", command.processOverride, config.ProcessWorker)
+	}
+}
+
+func TestParseCLIArgsSupportsAll(t *testing.T) {
+	command, err := parseCLIArgs([]string{"all"})
+	if err != nil {
+		t.Fatalf("parseCLIArgs() error = %v", err)
+	}
+	if command.name != "all" {
+		t.Fatalf("parseCLIArgs() name = %q, want all", command.name)
+	}
+	if command.processOverride != config.ProcessAll {
+		t.Fatalf("parseCLIArgs() processOverride = %q, want %q", command.processOverride, config.ProcessAll)
+	}
+}
+
+func TestParseCLIArgsSupportsMigrate(t *testing.T) {
+	command, err := parseCLIArgs([]string{"migrate", "status"})
+	if err != nil {
+		t.Fatalf("parseCLIArgs() error = %v", err)
+	}
+	if command.name != "migrate" {
+		t.Fatalf("parseCLIArgs() name = %q, want migrate", command.name)
+	}
+	if command.migrateAction != "status" {
+		t.Fatalf("parseCLIArgs() migrateAction = %q, want status", command.migrateAction)
+	}
+}
+
 func TestParseCLIArgsSupportsInit(t *testing.T) {
 	command, err := parseCLIArgs([]string{"init", "-project-name", "Acme", "-module-path", "github.com/acme/app", "-database-path", "./data/acme.db", "-email-verification", "false"})
 	if err != nil {
@@ -96,17 +148,7 @@ func TestParseCLIArgsRejectsInvalidCommand(t *testing.T) {
 }
 
 func TestParseCLIArgsRejectsLegacyServeCommand(t *testing.T) {
-	_, err := parseCLIArgs([]string{"serve"})
-	if err == nil {
-		t.Fatal("parseCLIArgs() error = nil, want error")
-	}
-	if !strings.Contains(err.Error(), "unknown command") {
-		t.Fatalf("parseCLIArgs() error = %v, want unknown command context", err)
-	}
-}
-
-func TestParseCLIArgsRejectsLegacyWorkerCommand(t *testing.T) {
-	_, err := parseCLIArgs([]string{"worker"})
+	_, err := parseCLIArgs([]string{"jobs"})
 	if err == nil {
 		t.Fatal("parseCLIArgs() error = nil, want error")
 	}
@@ -122,6 +164,26 @@ func TestParseCLIArgsRejectsLegacyRunCommand(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "unknown command") {
 		t.Fatalf("parseCLIArgs() error = %v, want unknown command context", err)
+	}
+}
+
+func TestParseCLIArgsRejectsInvalidMigrateArgs(t *testing.T) {
+	_, err := parseCLIArgs([]string{"migrate"})
+	if err == nil {
+		t.Fatal("parseCLIArgs() error = nil, want error")
+	}
+	if !strings.Contains(err.Error(), "migrate subcommand requires exactly one action") {
+		t.Fatalf("parseCLIArgs() error = %v, want migrate argument context", err)
+	}
+}
+
+func TestParseCLIArgsRejectsInvalidMigrateAction(t *testing.T) {
+	_, err := parseCLIArgs([]string{"migrate", "redo"})
+	if err == nil {
+		t.Fatal("parseCLIArgs() error = nil, want error")
+	}
+	if !strings.Contains(err.Error(), "migrate action must be") {
+		t.Fatalf("parseCLIArgs() error = %v, want migrate action context", err)
 	}
 }
 

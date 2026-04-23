@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
@@ -19,13 +20,17 @@ import (
 	"github.com/inkyvoxel/go-spark/internal/jobs"
 	"github.com/inkyvoxel/go-spark/internal/projectinit"
 	"github.com/inkyvoxel/go-spark/internal/services"
+	"github.com/pressly/goose/v3"
 )
 
 type cliCommand struct {
 	name            string
 	processOverride string
 	initOptions     *projectinit.Options
+	migrateAction   string
 }
+
+const migrationsDir = "migrations"
 
 func main() {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
@@ -49,6 +54,10 @@ func run(args []string, logger *slog.Logger) error {
 		}
 
 		return projectinit.Run(repoRoot, *command.initOptions, os.Stdin, os.Stdout)
+	}
+
+	if command.name == "migrate" {
+		return runMigrate(command.migrateAction)
 	}
 
 	if err := config.LoadDotEnv(".env"); err != nil {
@@ -87,12 +96,20 @@ func parseCLIArgs(args []string) (cliCommand, error) {
 	}
 
 	switch command := strings.ToLower(strings.TrimSpace(args[0])); command {
+	case "all":
+		return cliCommand{name: "all", processOverride: config.ProcessAll}, nil
+	case "serve":
+		return cliCommand{name: "serve", processOverride: config.ProcessWeb}, nil
+	case "worker":
+		return cliCommand{name: "worker", processOverride: config.ProcessWorker}, nil
+	case "migrate":
+		return parseMigrateArgs(args[1:])
 	case "start":
 		return parseStartArgs(args[1:])
 	case "init":
 		return parseInitArgs(args[1:])
 	default:
-		return cliCommand{}, fmt.Errorf("unknown command %q; use %q or %q", command, "start", "init")
+		return cliCommand{}, fmt.Errorf("unknown command %q; use %q, %q, %q, %q, or %q", command, "serve", "worker", "all", "migrate", "init")
 	}
 }
 
@@ -146,6 +163,20 @@ func parseInitArgs(args []string) (cliCommand, error) {
 	return cliCommand{name: "init", initOptions: &options}, nil
 }
 
+func parseMigrateArgs(args []string) (cliCommand, error) {
+	if len(args) != 1 {
+		return cliCommand{}, fmt.Errorf("migrate subcommand requires exactly one action (%q, %q, or %q)", "up", "down", "status")
+	}
+
+	action := strings.ToLower(strings.TrimSpace(args[0]))
+	switch action {
+	case "up", "down", "status":
+		return cliCommand{name: "migrate", migrateAction: action}, nil
+	default:
+		return cliCommand{}, fmt.Errorf("migrate action must be %q, %q, or %q", "up", "down", "status")
+	}
+}
+
 func parseCLIOptionalBool(value string) (bool, error) {
 	switch strings.ToLower(strings.TrimSpace(value)) {
 	case "1", "true", "t", "yes", "y":
@@ -155,6 +186,33 @@ func parseCLIOptionalBool(value string) (bool, error) {
 	default:
 		return false, fmt.Errorf("expected true or false")
 	}
+}
+
+func runMigrate(action string) error {
+	if err := config.LoadDotEnv(".env"); err != nil {
+		return fmt.Errorf("load .env: %w", err)
+	}
+
+	cfg, err := config.FromEnvWithProcess(services.DefaultPasswordMinLength, config.ProcessAll)
+	if err != nil {
+		return fmt.Errorf("load config: %w", err)
+	}
+
+	if err := os.MkdirAll(filepath.Dir(cfg.DatabasePath), 0o755); err != nil {
+		return fmt.Errorf("create database directory: %w", err)
+	}
+
+	db, err := goose.OpenDBWithDriver("sqlite3", cfg.DatabasePath)
+	if err != nil {
+		return fmt.Errorf("open migration database: %w", err)
+	}
+	defer db.Close()
+
+	if err := goose.RunContext(context.Background(), action, db, migrationsDir); err != nil {
+		return fmt.Errorf("run migrations %s: %w", action, err)
+	}
+
+	return nil
 }
 
 func runAll(ctx context.Context, logger *slog.Logger, cfg config.Config, httpServer *http.Server, jobsRunner *jobs.Runner) error {

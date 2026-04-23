@@ -1,21 +1,18 @@
 .PHONY: init start start-web start-worker check test fmt tidy sqlc vulncheck setup migrate-up migrate-down migrate-status tools
 
 DB_PATH ?= ./data/app.db
-GOOSE_DRIVER ?= sqlite3
-GOOSE_DBSTRING ?= $(DB_PATH)
-GOOSE_MIGRATION_DIR ?= ./migrations
 
 init:
 	go run ./cmd/app init
 
 start:
-	go run ./cmd/app start
+	go run ./cmd/app all
 
 start-web:
-	go run ./cmd/app start web
+	go run ./cmd/app serve
 
 start-worker:
-	go run ./cmd/app start worker
+	go run ./cmd/app worker
 
 check:
 	$(MAKE) fmt
@@ -42,16 +39,13 @@ vulncheck:
 setup: migrate-up
 
 migrate-up:
-	mkdir -p $(dir $(DB_PATH))
-	go tool goose -dir $(GOOSE_MIGRATION_DIR) $(GOOSE_DRIVER) "$(GOOSE_DBSTRING)" up
+	DATABASE_PATH=$(DB_PATH) go run ./cmd/app migrate up
 
 migrate-down:
-	mkdir -p $(dir $(DB_PATH))
-	go tool goose -dir $(GOOSE_MIGRATION_DIR) $(GOOSE_DRIVER) "$(GOOSE_DBSTRING)" down
+	DATABASE_PATH=$(DB_PATH) go run ./cmd/app migrate down
 
 migrate-status:
-	mkdir -p $(dir $(DB_PATH))
-	go tool goose -dir $(GOOSE_MIGRATION_DIR) $(GOOSE_DRIVER) "$(GOOSE_DBSTRING)" status
+	DATABASE_PATH=$(DB_PATH) go run ./cmd/app migrate status
 
 tools:
 	go tool sqlc version

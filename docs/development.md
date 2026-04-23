@@ -35,6 +35,7 @@ make start
 make start-web
 make start-worker
 make setup
+make migrate-status
 make migrate-up
 make migrate-down
 make test
@@ -48,8 +49,9 @@ Notes:
 * `make start` starts the HTTP server and background jobs worker together.
 * `make start-web` starts only the HTTP server.
 * `make start-worker` starts only the background jobs worker.
+* `make migrate-up`, `make migrate-down`, and `make migrate-status` run through the app CLI so initialization and migrations share one command surface.
 * `make check` runs formatting, module tidy, sqlc generation, vulncheck, and tests.
-* The app CLI uses `start`, with optional `all`, `web`, or `worker` modes.
+* The app CLI now prefers explicit commands: `all`, `serve`, `worker`, `migrate`, and `init`.
 * `make init` personalizes the starter branding and rewrites the home page to a simple welcome screen for the new app.
 
 ## Tooling

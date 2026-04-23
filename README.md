@@ -54,21 +54,19 @@ go run ./cmd/app init \
   -database-path ./var/acme.db
 ```
 
-## Process Modes
-
-`APP_PROCESS` selects which long-running process to run:
-
-* `all`: HTTP server plus background jobs worker
-* `web`: HTTP server only
-* `worker`: background jobs worker only
+## Process Commands
 
 The CLI uses explicit subcommands:
 
 ```sh
-./go-spark start
-./go-spark start web
-./go-spark start worker
+./go-spark all
+./go-spark serve
+./go-spark worker
+./go-spark migrate status
 ```
+
+`APP_PROCESS` still exists as an environment-level override, but the preferred
+entrypoints are the explicit CLI commands.
 
 ## What’s Included
 

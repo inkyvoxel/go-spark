@@ -22,8 +22,9 @@ The `worker` process hosts all background jobs. Today that means:
 * email outbox delivery
 * SQLite-backed data cleanup
 
-`APP_PROCESS=all` runs the web server and the worker together.  
-`APP_PROCESS=worker` runs only the background jobs worker.
+`./go-spark all` runs the web server and the worker together.  
+`./go-spark worker` runs only the background jobs worker.  
+`APP_PROCESS` still works as a lower-level environment override when needed.
 
 ## Periodic Jobs
 
