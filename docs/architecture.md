@@ -5,8 +5,6 @@ This document explains the shape of the codebase at a high level.
 For day-to-day commands, see [development.md](development.md).  
 For background work, see [jobs.md](jobs.md).  
 For auth email flows, see [email.md](email.md).
-For the database stance behind this starter, see
-[adr/0001-sqlite-first.md](adr/0001-sqlite-first.md).
 
 ## Principles
 

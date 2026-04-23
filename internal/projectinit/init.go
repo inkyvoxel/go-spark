@@ -386,12 +386,6 @@ func applyOperations(repoRoot string, current, target state) ([]string, error) {
 			},
 		},
 		{
-			path: "docs/adr/0001-sqlite-first.md",
-			transform: func(content string, current, target state) (string, error) {
-				return strings.ReplaceAll(content, current.ProjectName, target.ProjectName), nil
-			},
-		},
-		{
 			path: "templates/layout.html",
 			transform: func(content string, current, target state) (string, error) {
 				return strings.ReplaceAll(content, current.AppName, target.AppName), nil

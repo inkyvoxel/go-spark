@@ -108,7 +108,6 @@ Reference docs:
 
 * [CONTRIBUTING.md](CONTRIBUTING.md)
 * [SECURITY.md](SECURITY.md)
-* [docs/adr/0001-sqlite-first.md](docs/adr/0001-sqlite-first.md)
 * [docs/todo.md](docs/todo.md)
 
 ## Project Layout
