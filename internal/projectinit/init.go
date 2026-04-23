@@ -409,7 +409,9 @@ func applyOperations(repoRoot string, current, target state) ([]string, error) {
 		{
 			path: "internal/email/smtp.go",
 			transform: func(content string, current, target state) (string, error) {
-				return strings.ReplaceAll(content, current.BinaryName+"-boundary", target.BinaryName+"-boundary"), nil
+				content = strings.ReplaceAll(content, current.BinaryName+"-boundary", target.BinaryName+"-boundary")
+				content = strings.ReplaceAll(content, "go-spark-boundary", target.BinaryName+"-boundary")
+				return content, nil
 			},
 		},
 		{
@@ -421,6 +423,28 @@ func applyOperations(repoRoot string, current, target state) ([]string, error) {
 				content = strings.ReplaceAll(content, "./"+current.BinaryName+" worker", "./"+target.BinaryName+" worker")
 				content = strings.ReplaceAll(content, "./"+current.BinaryName+" migrate status", "./"+target.BinaryName+" migrate status")
 				content = strings.ReplaceAll(content, current.BinaryName+"-contrib.db", target.BinaryName+"-contrib.db")
+				content = strings.ReplaceAll(content, current.BinaryName+"-boundary", target.BinaryName+"-boundary")
+				content = strings.ReplaceAll(content, "go-spark-boundary", target.BinaryName+"-boundary")
+				return content, nil
+			},
+		},
+		{
+			path: "internal/config/config_test.go",
+			transform: func(content string, current, target state) (string, error) {
+				content = strings.ReplaceAll(content, formatAddress(current.EmailFromName, current.EmailFromAddress), formatAddress(target.EmailFromName, target.EmailFromAddress))
+				content = strings.ReplaceAll(content, quotedAddress(current.EmailFromName, current.EmailFromAddress), quotedAddress(target.EmailFromName, target.EmailFromAddress))
+				content = strings.ReplaceAll(
+					content,
+					strings.ReplaceAll(quotedAddress(current.EmailFromName, current.EmailFromAddress), "\"", "\\\""),
+					strings.ReplaceAll(quotedAddress(target.EmailFromName, target.EmailFromAddress), "\"", "\\\""),
+				)
+				return content, nil
+			},
+		},
+		{
+			path: "internal/server/server_test.go",
+			transform: func(content string, current, target state) (string, error) {
+				content = strings.ReplaceAll(content, current.ProjectName, target.ProjectName)
 				return content, nil
 			},
 		},
@@ -558,6 +582,10 @@ func replaceHeading(content, currentHeading, targetHeading string) string {
 
 func formatAddress(name, address string) string {
 	return fmt.Sprintf("%s <%s>", name, address)
+}
+
+func quotedAddress(name, address string) string {
+	return (&mail.Address{Name: name, Address: address}).String()
 }
 
 func homeTemplate(appName string) string {

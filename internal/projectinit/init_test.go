@@ -28,6 +28,15 @@ func TestRunUpdatesStarterDefaults(t *testing.T) {
 	writeFixtureFile(t, repoRoot, "internal/server/server.go", "package server\n\nfunc title() string {\n\treturn \"Go Spark\"\n}\n")
 	writeFixtureFile(t, repoRoot, "internal/config/config.go", "package config\n\nconst from = \"Go Spark <hello@example.com>\"\n")
 	writeFixtureFile(t, repoRoot, "internal/app/build.go", "package app\n\nconst from = \"Go Spark <hello@example.com>\"\n")
+	writeFixtureFile(t, repoRoot, "internal/config/config_test.go", strings.Join([]string{
+		"package config",
+		"",
+		"func values() (string, string) {",
+		"\treturn \"Go Spark <hello@example.com>\", \"\\\"Go Spark\\\" <hello@example.com>\"",
+		"}",
+		"",
+	}, "\n"))
+	writeFixtureFile(t, repoRoot, "internal/server/server_test.go", "package server\n\nconst expected = \"Go Spark\"\n")
 	writeFixtureFile(t, repoRoot, "internal/email/smtp.go", "package email\n\nfunc boundary() string {\n\treturn \"go-spark-boundary\"\n}\n")
 	writeFixtureFile(t, repoRoot, "internal/projectinit/init_test.go", strings.Join([]string{
 		"package projectinit",
@@ -70,6 +79,9 @@ func TestRunUpdatesStarterDefaults(t *testing.T) {
 	assertFileContains(t, repoRoot, "internal/server/server.go", "\"Acme Starter\"")
 	assertFileContains(t, repoRoot, "internal/config/config.go", "Acme Portal <team@acme.test>")
 	assertFileContains(t, repoRoot, "internal/app/build.go", "Acme Portal <team@acme.test>")
+	assertFileContains(t, repoRoot, "internal/config/config_test.go", "Acme Portal <team@acme.test>")
+	assertFileContains(t, repoRoot, "internal/config/config_test.go", "\\\"Acme Portal\\\" <team@acme.test>")
+	assertFileContains(t, repoRoot, "internal/server/server_test.go", "Acme Starter")
 	assertFileContains(t, repoRoot, "internal/email/smtp.go", "acme-starter-boundary")
 	assertFileContains(t, repoRoot, "internal/projectinit/init_test.go", "Run `./acme-starter all` or `./acme-starter serve` or `./acme-starter migrate status`.")
 	assertFileContains(t, repoRoot, "internal/projectinit/init_test.go", "Thanks for taking an interest in Acme Starter.")
@@ -102,6 +114,8 @@ func TestRunPromptsForMissingValues(t *testing.T) {
 	writeFixtureFile(t, repoRoot, "internal/server/server.go", "\"Go Spark\"\n")
 	writeFixtureFile(t, repoRoot, "internal/config/config.go", "\"Go Spark <hello@example.com>\"\n")
 	writeFixtureFile(t, repoRoot, "internal/app/build.go", "\"Go Spark <hello@example.com>\"\n")
+	writeFixtureFile(t, repoRoot, "internal/config/config_test.go", "\"Go Spark <hello@example.com>\"\n\"\\\"Go Spark\\\" <hello@example.com>\"\n")
+	writeFixtureFile(t, repoRoot, "internal/server/server_test.go", "\"Go Spark\"\n")
 	writeFixtureFile(t, repoRoot, "internal/email/smtp.go", "\"go-spark-boundary\"\n")
 	writeFixtureFile(t, repoRoot, "internal/projectinit/init_test.go", "Go Spark\n./go-spark all\n./go-spark worker\n./go-spark migrate status\n/tmp/go-spark-contrib.db\n")
 
