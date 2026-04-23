@@ -85,6 +85,7 @@ make init
 make start
 make start-web
 make start-worker
+make build-prod
 make check
 make test
 make fmt
@@ -104,6 +105,7 @@ Use `make check` before opening a pull request.
 Start here if you are new to the project:
 
 * [docs/development.md](docs/development.md) for setup and day-to-day workflow
+* [docs/production.md](docs/production.md) for production build and deployment guidance
 * [docs/architecture.md](docs/architecture.md) for the codebase shape and conventions
 * [docs/jobs.md](docs/jobs.md) for background work patterns
 * [docs/email.md](docs/email.md) for auth email flows and outbox design

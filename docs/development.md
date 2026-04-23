@@ -5,6 +5,7 @@ This is the best place to start when onboarding to the codebase.
 For system design and package boundaries, see [architecture.md](architecture.md).  
 For background work patterns, see [jobs.md](jobs.md).  
 For auth email flows, see [email.md](email.md).
+For production deployment guidance, see [production.md](production.md).
 
 ## Requirements
 
@@ -34,6 +35,7 @@ The app loads `.env` when present. Existing shell environment variables still wi
 make start
 make start-web
 make start-worker
+make build-prod
 make migrate-status
 make migrate-up
 make migrate-down
@@ -48,6 +50,7 @@ Notes:
 * `make start` starts the HTTP server and background jobs worker together.
 * `make start-web` starts only the HTTP server.
 * `make start-worker` starts only the background jobs worker.
+* `make build-prod` builds a release-style binary for deployment targets.
 * `make migrate-up`, `make migrate-down`, and `make migrate-status` run through the app CLI so initialization and migrations share one command surface.
 * `make check` runs formatting, module tidy, sqlc generation, vulncheck, and tests.
 * The app CLI now prefers explicit commands: `all`, `serve`, `worker`, `migrate`, and `init`.

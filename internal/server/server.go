@@ -6,9 +6,10 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
-	"path/filepath"
+	"path"
 	"strings"
 
+	appassets "github.com/inkyvoxel/go-spark"
 	"github.com/inkyvoxel/go-spark/internal/paths"
 	"github.com/inkyvoxel/go-spark/internal/services"
 )
@@ -108,29 +109,29 @@ func mustParseTemplates() map[string]*template.Template {
 func parseTemplates() (map[string]*template.Template, error) {
 	pages := map[string]string{
 		templateNotFound:           "404.html",
-		templateAccount:            filepath.Join("account", "account.html"),
-		templateChangeEmail:        filepath.Join("account", "change_email.html"),
-		templateChangePassword:     filepath.Join("account", "change_password.html"),
-		templateConfirmEmail:       filepath.Join("account", "confirm_email.html"),
-		templateConfirmEmailChange: filepath.Join("account", "confirm_email_change.html"),
-		templateForgotPassword:     filepath.Join("account", "forgot_password.html"),
+		templateAccount:            path.Join("account", "account.html"),
+		templateChangeEmail:        path.Join("account", "change_email.html"),
+		templateChangePassword:     path.Join("account", "change_password.html"),
+		templateConfirmEmail:       path.Join("account", "confirm_email.html"),
+		templateConfirmEmailChange: path.Join("account", "confirm_email_change.html"),
+		templateForgotPassword:     path.Join("account", "forgot_password.html"),
 		templateHome:               "home.html",
-		templateLogin:              filepath.Join("account", "login.html"),
-		templateResetPassword:      filepath.Join("account", "reset_password.html"),
-		templateRegister:           filepath.Join("account", "register.html"),
-		templateResendVerification: filepath.Join("account", "resend_verification.html"),
-		templateVerifyEmail:        filepath.Join("account", "verify_email.html"),
+		templateLogin:              path.Join("account", "login.html"),
+		templateResetPassword:      path.Join("account", "reset_password.html"),
+		templateRegister:           path.Join("account", "register.html"),
+		templateResendVerification: path.Join("account", "resend_verification.html"),
+		templateVerifyEmail:        path.Join("account", "verify_email.html"),
 	}
 	templates := make(map[string]*template.Template, len(pages))
-	layout := filepath.Join("templates", templateLayout)
+	layout := path.Join("templates", templateLayout)
 	partials := []string{
-		filepath.Join("templates", templateBreadcrumb),
+		path.Join("templates", templateBreadcrumb),
 	}
 
 	for name, filePath := range pages {
 		files := append([]string{layout}, partials...)
-		files = append(files, filepath.Join("templates", filePath))
-		parsed, err := template.ParseFiles(files...)
+		files = append(files, path.Join("templates", filePath))
+		parsed, err := template.ParseFS(appassets.FS, files...)
 		if err != nil {
 			return nil, err
 		}
@@ -234,7 +235,7 @@ func route(method, path string) string {
 }
 
 func staticFileHandler() http.Handler {
-	fileServer := http.StripPrefix(paths.StaticPrefix, http.FileServer(http.Dir("static")))
+	fileServer := http.StripPrefix(paths.StaticPrefix, http.FileServerFS(staticFS))
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Prevent directory listing from exposing static tree contents.
 		if strings.HasSuffix(r.URL.Path, "/") {

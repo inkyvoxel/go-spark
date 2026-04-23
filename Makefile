@@ -1,6 +1,10 @@
-.PHONY: init start start-web start-worker check test fmt tidy sqlc vulncheck migrate-up migrate-down migrate-status tools
+.PHONY: init start start-web start-worker build-prod check test fmt tidy sqlc vulncheck migrate-up migrate-down migrate-status tools
 
 DB_PATH ?= ./data/app.db
+PROD_GOOS ?= linux
+PROD_GOARCH ?= amd64
+PROD_CGO_ENABLED ?= 0
+PROD_BIN ?= ./bin/app
 
 init:
 	go run ./cmd/app init
@@ -13,6 +17,10 @@ start-web:
 
 start-worker:
 	go run ./cmd/app worker
+
+build-prod:
+	mkdir -p $(dir $(PROD_BIN))
+	CGO_ENABLED=$(PROD_CGO_ENABLED) GOOS=$(PROD_GOOS) GOARCH=$(PROD_GOARCH) go build -trimpath -ldflags="-s -w" -o $(PROD_BIN) ./cmd/app
 
 check:
 	$(MAKE) fmt

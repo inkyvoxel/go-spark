@@ -15,6 +15,7 @@ import (
 	"syscall"
 	"time"
 
+	appassets "github.com/inkyvoxel/go-spark"
 	bootstrap "github.com/inkyvoxel/go-spark/internal/app"
 	"github.com/inkyvoxel/go-spark/internal/config"
 	"github.com/inkyvoxel/go-spark/internal/jobs"
@@ -188,6 +189,7 @@ func runMigrate(action string) error {
 	}
 	defer db.Close()
 
+	goose.SetBaseFS(appassets.FS)
 	if err := goose.RunContext(context.Background(), action, db, migrationsDir); err != nil {
 		return fmt.Errorf("run migrations %s: %w", action, err)
 	}

@@ -9,8 +9,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 
@@ -104,7 +102,6 @@ func TestRoutesKnownPathWrongMethodReturnsMethodNotAllowed(t *testing.T) {
 }
 
 func TestRoutesStaticDirectoryListingIsNotServed(t *testing.T) {
-	chdirProjectRoot(t)
 	srv := testServer(t)
 
 	req := httptest.NewRequest(http.MethodGet, paths.StaticPrefix, nil)
@@ -118,7 +115,6 @@ func TestRoutesStaticDirectoryListingIsNotServed(t *testing.T) {
 }
 
 func TestRoutesStaticFileIsServed(t *testing.T) {
-	chdirProjectRoot(t)
 	srv := testServer(t)
 
 	req := httptest.NewRequest(http.MethodGet, paths.StaticStyles, nil)
@@ -238,8 +234,6 @@ func TestRenderReturnsInternalServerErrorForTemplateError(t *testing.T) {
 }
 
 func TestParseTemplatesIncludesBreadcrumbPartial(t *testing.T) {
-	chdirProjectRoot(t)
-
 	templates, err := parseTemplates()
 	if err != nil {
 		t.Fatalf("parseTemplates() error = %v", err)
@@ -266,25 +260,28 @@ func TestParseTemplatesIncludesBreadcrumbPartial(t *testing.T) {
 	}
 }
 
-func chdirProjectRoot(t *testing.T) {
+func TestParseTemplatesWorksOutsideProjectRoot(t *testing.T) {
 	t.Helper()
-
-	_, currentFile, _, ok := runtime.Caller(0)
-	if !ok {
-		t.Fatal("runtime.Caller failed")
-	}
 
 	originalWD, err := os.Getwd()
 	if err != nil {
 		t.Fatalf("get working directory: %v", err)
 	}
-	projectRoot := filepath.Clean(filepath.Join(filepath.Dir(currentFile), "..", ".."))
-	if err := os.Chdir(projectRoot); err != nil {
-		t.Fatalf("chdir project root: %v", err)
+	if err := os.Chdir(t.TempDir()); err != nil {
+		t.Fatalf("chdir temp dir: %v", err)
 	}
 	t.Cleanup(func() {
 		_ = os.Chdir(originalWD)
 	})
+
+	templates, err := parseTemplates()
+	if err != nil {
+		t.Fatalf("parseTemplates() error = %v", err)
+	}
+
+	if _, ok := templates[templateHome]; !ok {
+		t.Fatalf("expected template %q to be parsed", templateHome)
+	}
 }
 
 func testServer(t *testing.T) *Server {
