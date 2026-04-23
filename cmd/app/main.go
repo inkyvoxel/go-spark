@@ -104,29 +104,10 @@ func parseCLIArgs(args []string) (cliCommand, error) {
 		return cliCommand{name: "worker", processOverride: config.ProcessWorker}, nil
 	case "migrate":
 		return parseMigrateArgs(args[1:])
-	case "start":
-		return parseStartArgs(args[1:])
 	case "init":
 		return parseInitArgs(args[1:])
 	default:
 		return cliCommand{}, fmt.Errorf("unknown command %q; use %q, %q, %q, %q, or %q", command, "serve", "worker", "all", "migrate", "init")
-	}
-}
-
-func parseStartArgs(args []string) (cliCommand, error) {
-	if len(args) == 0 {
-		return cliCommand{name: "start", processOverride: config.ProcessAll}, nil
-	}
-	if len(args) > 1 {
-		return cliCommand{}, fmt.Errorf("start subcommand accepts at most one mode argument (%q, %q, or %q)", config.ProcessAll, config.ProcessWeb, config.ProcessWorker)
-	}
-
-	process := strings.ToLower(strings.TrimSpace(args[0]))
-	switch process {
-	case config.ProcessAll, config.ProcessWeb, config.ProcessWorker:
-		return cliCommand{name: "start", processOverride: process}, nil
-	default:
-		return cliCommand{}, fmt.Errorf("start mode must be %q, %q, or %q", config.ProcessAll, config.ProcessWeb, config.ProcessWorker)
 	}
 }
 

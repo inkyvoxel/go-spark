@@ -358,9 +358,9 @@ func applyOperations(repoRoot string, current, target state) ([]string, error) {
 				content = replaceHeading(content, current.ProjectName, target.ProjectName)
 				content = strings.ReplaceAll(content, current.ProjectName, target.ProjectName)
 				content = strings.ReplaceAll(content, current.DatabasePath, target.DatabasePath)
-				content = strings.ReplaceAll(content, "./"+current.BinaryName+" start", "./"+target.BinaryName+" start")
-				content = strings.ReplaceAll(content, "./"+current.BinaryName+" start web", "./"+target.BinaryName+" start web")
-				content = strings.ReplaceAll(content, "./"+current.BinaryName+" start worker", "./"+target.BinaryName+" start worker")
+				content = strings.ReplaceAll(content, "./"+current.BinaryName+" all", "./"+target.BinaryName+" all")
+				content = strings.ReplaceAll(content, "./"+current.BinaryName+" serve", "./"+target.BinaryName+" serve")
+				content = strings.ReplaceAll(content, "./"+current.BinaryName+" worker", "./"+target.BinaryName+" worker")
 				return content, nil
 			},
 		},

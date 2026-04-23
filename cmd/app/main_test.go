@@ -17,39 +17,6 @@ func TestParseCLIArgsReturnsEmptyWhenNoArg(t *testing.T) {
 	}
 }
 
-func TestParseCLIArgsSupportsStart(t *testing.T) {
-	command, err := parseCLIArgs([]string{"start"})
-	if err != nil {
-		t.Fatalf("parseCLIArgs() error = %v", err)
-	}
-	if command.name != "start" {
-		t.Fatalf("parseCLIArgs() name = %q, want start", command.name)
-	}
-	if command.processOverride != config.ProcessAll {
-		t.Fatalf("parseCLIArgs() processOverride = %q, want %q", command.processOverride, config.ProcessAll)
-	}
-}
-
-func TestParseCLIArgsSupportsStartWeb(t *testing.T) {
-	command, err := parseCLIArgs([]string{"start", "web"})
-	if err != nil {
-		t.Fatalf("parseCLIArgs() error = %v", err)
-	}
-	if command.processOverride != config.ProcessWeb {
-		t.Fatalf("parseCLIArgs() processOverride = %q, want %q", command.processOverride, config.ProcessWeb)
-	}
-}
-
-func TestParseCLIArgsSupportsStartWorker(t *testing.T) {
-	command, err := parseCLIArgs([]string{"start", "worker"})
-	if err != nil {
-		t.Fatalf("parseCLIArgs() error = %v", err)
-	}
-	if command.processOverride != config.ProcessWorker {
-		t.Fatalf("parseCLIArgs() processOverride = %q, want %q", command.processOverride, config.ProcessWorker)
-	}
-}
-
 func TestParseCLIArgsSupportsServe(t *testing.T) {
 	command, err := parseCLIArgs([]string{"serve"})
 	if err != nil {
@@ -147,16 +114,6 @@ func TestParseCLIArgsRejectsInvalidCommand(t *testing.T) {
 	}
 }
 
-func TestParseCLIArgsRejectsLegacyServeCommand(t *testing.T) {
-	_, err := parseCLIArgs([]string{"jobs"})
-	if err == nil {
-		t.Fatal("parseCLIArgs() error = nil, want error")
-	}
-	if !strings.Contains(err.Error(), "unknown command") {
-		t.Fatalf("parseCLIArgs() error = %v, want unknown command context", err)
-	}
-}
-
 func TestParseCLIArgsRejectsLegacyRunCommand(t *testing.T) {
 	_, err := parseCLIArgs([]string{"run", "web"})
 	if err == nil {
@@ -187,26 +144,6 @@ func TestParseCLIArgsRejectsInvalidMigrateAction(t *testing.T) {
 	}
 }
 
-func TestParseCLIArgsRejectsStartExtraArgs(t *testing.T) {
-	_, err := parseCLIArgs([]string{"start", "web", "extra"})
-	if err == nil {
-		t.Fatal("parseCLIArgs() error = nil, want error")
-	}
-	if !strings.Contains(err.Error(), "start subcommand accepts at most one") {
-		t.Fatalf("parseCLIArgs() error = %v, want start argument context", err)
-	}
-}
-
-func TestParseCLIArgsRejectsStartInvalidMode(t *testing.T) {
-	_, err := parseCLIArgs([]string{"start", "jobs"})
-	if err == nil {
-		t.Fatal("parseCLIArgs() error = nil, want error")
-	}
-	if !strings.Contains(err.Error(), "start mode must be") {
-		t.Fatalf("parseCLIArgs() error = %v, want start mode context", err)
-	}
-}
-
 func TestParseCLIArgsRejectsInitPositionalArgs(t *testing.T) {
 	_, err := parseCLIArgs([]string{"init", "extra"})
 	if err == nil {
@@ -214,5 +151,23 @@ func TestParseCLIArgsRejectsInitPositionalArgs(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "init subcommand does not accept positional arguments") {
 		t.Fatalf("parseCLIArgs() error = %v, want init positional argument context", err)
+	}
+}
+
+func TestParseCLIArgsRejectsLegacyStartCommand(t *testing.T) {
+	tests := [][]string{
+		{"start"},
+		{"start", "web"},
+		{"start", "worker"},
+	}
+
+	for _, args := range tests {
+		_, err := parseCLIArgs(args)
+		if err == nil {
+			t.Fatalf("parseCLIArgs(%v) error = nil, want error", args)
+		}
+		if !strings.Contains(err.Error(), "unknown command") {
+			t.Fatalf("parseCLIArgs(%v) error = %v, want unknown command context", args, err)
+		}
 	}
 }

@@ -11,7 +11,7 @@ import (
 func TestRunUpdatesStarterDefaults(t *testing.T) {
 	repoRoot := t.TempDir()
 	writeFixtureFile(t, repoRoot, "go.mod", "module github.com/inkyvoxel/go-spark\n\ngo 1.24.0\n")
-	writeFixtureFile(t, repoRoot, "README.md", "# Go Spark\n\nRun `./go-spark start`.\n")
+	writeFixtureFile(t, repoRoot, "README.md", "# Go Spark\n\nRun `./go-spark all` or `./go-spark serve`.\n")
 	writeFixtureFile(t, repoRoot, ".env.example", strings.Join([]string{
 		"DATABASE_PATH=./data/app.db",
 		"AUTH_EMAIL_VERIFICATION_REQUIRED=true",
@@ -47,7 +47,8 @@ func TestRunUpdatesStarterDefaults(t *testing.T) {
 
 	assertFileContains(t, repoRoot, "go.mod", "module github.com/acme/acme-starter")
 	assertFileContains(t, repoRoot, "README.md", "# Acme Starter")
-	assertFileContains(t, repoRoot, "README.md", "./acme-starter start")
+	assertFileContains(t, repoRoot, "README.md", "./acme-starter all")
+	assertFileContains(t, repoRoot, "README.md", "./acme-starter serve")
 	assertFileContains(t, repoRoot, ".env.example", "DATABASE_PATH=./data/acme.db")
 	assertFileContains(t, repoRoot, ".env.example", "AUTH_EMAIL_VERIFICATION_REQUIRED=false")
 	assertFileContains(t, repoRoot, ".env.example", "EMAIL_FROM=\"Acme Portal <team@acme.test>\"")
