@@ -17,7 +17,6 @@ const stateFileName = ".gospark-init-state"
 type Options struct {
 	ProjectName               string
 	ModulePath                string
-	AppName                   string
 	EmailFromName             string
 	EmailFromAddress          string
 	DatabasePath              string
@@ -27,7 +26,6 @@ type Options struct {
 type state struct {
 	ProjectName               string
 	ModulePath                string
-	AppName                   string
 	BinaryName                string
 	EmailFromName             string
 	EmailFromAddress          string
@@ -63,7 +61,7 @@ func Run(repoRoot string, opts Options, stdin io.Reader, stdout io.Writer) error
 
 	if stdout != nil {
 		fmt.Fprintln(stdout, "Project initialization complete.")
-		fmt.Fprintf(stdout, "Updated module path to %s and app branding to %s.\n", target.ModulePath, target.AppName)
+		fmt.Fprintf(stdout, "Updated module path to %s and app branding to %s.\n", target.ModulePath, target.ProjectName)
 		fmt.Fprintf(stdout, "Updated files: %s\n", strings.Join(applied, ", "))
 	}
 
@@ -82,18 +80,12 @@ func detectState(repoRoot string) (state, error) {
 		emailFromName = projectName
 	}
 
-	appName := emailFromName
-	if appName == "" {
-		appName = projectName
-	}
-
 	emailVerificationRequired := detectEnvBool(filepath.Join(repoRoot, ".env.example"), "AUTH_EMAIL_VERIFICATION_REQUIRED", true)
 	databasePath := detectEnvValue(filepath.Join(repoRoot, ".env.example"), "DATABASE_PATH", "./data/app.db")
 
 	return state{
 		ProjectName:               defaultString(projectName, "Go Spark"),
 		ModulePath:                modulePath,
-		AppName:                   defaultString(appName, "Go Spark"),
 		BinaryName:                path.Base(modulePath),
 		EmailFromName:             defaultString(emailFromName, "Go Spark"),
 		EmailFromAddress:          defaultString(emailFromAddress, "hello@example.com"),
@@ -199,18 +191,9 @@ func resolveOptions(current state, opts Options, stdin io.Reader, stdout io.Writ
 		return state{}, err
 	}
 
-	appNameDefault := current.AppName
-	if strings.TrimSpace(opts.ProjectName) != "" {
-		appNameDefault = projectName
-	}
-	appName, err := resolveStringOption(reader, stdout, "App display name", opts.AppName, appNameDefault)
-	if err != nil {
-		return state{}, err
-	}
-
 	emailFromNameDefault := current.EmailFromName
-	if strings.TrimSpace(opts.AppName) != "" {
-		emailFromNameDefault = appName
+	if strings.TrimSpace(opts.ProjectName) != "" {
+		emailFromNameDefault = projectName
 	}
 	emailFromName, err := resolveStringOption(reader, stdout, "Default email sender name", opts.EmailFromName, emailFromNameDefault)
 	if err != nil {
@@ -241,13 +224,12 @@ func resolveOptions(current state, opts Options, stdin io.Reader, stdout io.Writ
 	}
 
 	projectName = strings.TrimSpace(projectName)
-	appName = strings.TrimSpace(appName)
 	emailFromName = strings.TrimSpace(emailFromName)
 	emailFromAddress = strings.TrimSpace(emailFromAddress)
 	databasePath = strings.TrimSpace(databasePath)
 
-	if projectName == "" || appName == "" || emailFromName == "" || emailFromAddress == "" || databasePath == "" {
-		return state{}, fmt.Errorf("project name, app name, email sender, and database path are required")
+	if projectName == "" || emailFromName == "" || emailFromAddress == "" || databasePath == "" {
+		return state{}, fmt.Errorf("project name, email sender, and database path are required")
 	}
 
 	if _, err := mail.ParseAddress(formatAddress(emailFromName, emailFromAddress)); err != nil {
@@ -257,7 +239,6 @@ func resolveOptions(current state, opts Options, stdin io.Reader, stdout io.Writ
 	return state{
 		ProjectName:               projectName,
 		ModulePath:                modulePath,
-		AppName:                   appName,
 		BinaryName:                path.Base(modulePath),
 		EmailFromName:             emailFromName,
 		EmailFromAddress:          emailFromAddress,
@@ -388,13 +369,13 @@ func applyOperations(repoRoot string, current, target state) ([]string, error) {
 		{
 			path: "templates/layout.html",
 			transform: func(content string, current, target state) (string, error) {
-				return strings.ReplaceAll(content, current.AppName, target.AppName), nil
+				return strings.ReplaceAll(content, current.ProjectName, target.ProjectName), nil
 			},
 		},
 		{
 			path: "templates/home.html",
 			transform: func(_ string, _ state, target state) (string, error) {
-				return homeTemplate(target.AppName), nil
+				return homeTemplate(target.ProjectName), nil
 			},
 		},
 		{
@@ -406,7 +387,7 @@ func applyOperations(repoRoot string, current, target state) ([]string, error) {
 		{
 			path: "internal/server/server.go",
 			transform: func(content string, current, target state) (string, error) {
-				return strings.ReplaceAll(content, fmt.Sprintf("%q", current.AppName), fmt.Sprintf("%q", target.AppName)), nil
+				return strings.ReplaceAll(content, fmt.Sprintf("%q", current.ProjectName), fmt.Sprintf("%q", target.ProjectName)), nil
 			},
 		},
 		{
@@ -573,7 +554,6 @@ func writeStateFile(repoRoot string, target state) error {
 	content := strings.Join([]string{
 		"PROJECT_NAME=" + target.ProjectName,
 		"MODULE_PATH=" + target.ModulePath,
-		"APP_NAME=" + target.AppName,
 		"EMAIL_FROM_NAME=" + target.EmailFromName,
 		"EMAIL_FROM_ADDRESS=" + target.EmailFromAddress,
 		"DATABASE_PATH=" + target.DatabasePath,

@@ -35,7 +35,6 @@ func TestRunUpdatesStarterDefaults(t *testing.T) {
 	err := Run(repoRoot, Options{
 		ProjectName:               "Acme Starter",
 		ModulePath:                "github.com/acme/acme-starter",
-		AppName:                   "Acme Portal",
 		EmailFromName:             "Acme Portal",
 		EmailFromAddress:          "team@acme.test",
 		DatabasePath:              "./data/acme.db",
@@ -54,15 +53,16 @@ func TestRunUpdatesStarterDefaults(t *testing.T) {
 	assertFileContains(t, repoRoot, ".env.example", "EMAIL_FROM=\"Acme Portal <team@acme.test>\"")
 	assertFileContains(t, repoRoot, "Makefile", "DB_PATH ?= ./data/acme.db")
 	assertFileContains(t, repoRoot, "CONTRIBUTING.md", "/tmp/acme-starter-contrib.db")
-	assertFileContains(t, repoRoot, "templates/layout.html", "Acme Portal")
-	assertFileContains(t, repoRoot, "templates/home.html", "Welcome to Acme Portal.")
-	assertFileContains(t, repoRoot, "internal/server/server.go", "\"Acme Portal\"")
+	assertFileContains(t, repoRoot, "templates/layout.html", "Acme Starter")
+	assertFileContains(t, repoRoot, "templates/home.html", "Welcome to Acme Starter.")
+	assertFileContains(t, repoRoot, "internal/server/server.go", "\"Acme Starter\"")
 	assertFileContains(t, repoRoot, "internal/config/config.go", "Acme Portal <team@acme.test>")
 	assertFileContains(t, repoRoot, "internal/app/build.go", "Acme Portal <team@acme.test>")
 	assertFileContains(t, repoRoot, "cmd/app/main.go", "github.com/acme/acme-starter/internal/app")
 	assertFileContains(t, repoRoot, "docs/todo.md", "starter todo")
 	assertFileContains(t, repoRoot, stateFileName, "DATABASE_PATH=./data/acme.db")
 	assertFileContains(t, repoRoot, stateFileName, "AUTH_EMAIL_VERIFICATION_REQUIRED=false")
+	assertFileNotContains(t, repoRoot, stateFileName, "APP_NAME=")
 	assertFileNotContains(t, repoRoot, stateFileName, "TRIM_STARTER_CONTENT=")
 }
 
@@ -91,7 +91,6 @@ func TestRunPromptsForMissingValues(t *testing.T) {
 		"My App",
 		"github.com/example/my-app",
 		"My App",
-		"My App",
 		"hello@example.com",
 		"./data/my-app.db",
 		"yes",
@@ -112,6 +111,9 @@ func TestRunPromptsForMissingValues(t *testing.T) {
 	}
 	if !strings.Contains(stdout.String(), "Default database path [./data/app.db]: ") {
 		t.Fatalf("stdout = %q, want database prompt", stdout.String())
+	}
+	if strings.Contains(stdout.String(), "App display name") {
+		t.Fatalf("stdout = %q, do not want app display name prompt", stdout.String())
 	}
 	if strings.Contains(stdout.String(), "Trim starter docs and example content") {
 		t.Fatalf("stdout = %q, do not want cleanup prompt", stdout.String())

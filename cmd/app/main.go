@@ -120,7 +120,6 @@ func parseInitArgs(args []string) (cliCommand, error) {
 
 	fs.StringVar(&options.ProjectName, "project-name", "", "project name for docs and README")
 	fs.StringVar(&options.ModulePath, "module-path", "", "Go module path")
-	fs.StringVar(&options.AppName, "app-name", "", "app display name")
 	fs.StringVar(&options.EmailFromName, "email-from-name", "", "default email sender display name")
 	fs.StringVar(&options.EmailFromAddress, "email-from-address", "", "default email sender address")
 	fs.StringVar(&options.DatabasePath, "database-path", "", "default SQLite database path")

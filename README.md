@@ -39,7 +39,6 @@ The `init` command prompts for:
 
 * project name
 * Go module path
-* app display name
 * default email sender name and address
 * default SQLite database path
 * whether email verification should be enabled by default
@@ -50,7 +49,6 @@ If you want a non-interactive setup, pass flags such as:
 go run ./cmd/app init \
   -project-name "Acme Starter" \
   -module-path github.com/acme/acme-starter \
-  -app-name "Acme Portal" \
   -database-path ./var/acme.db
 ```
 
