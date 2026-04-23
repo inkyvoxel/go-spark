@@ -20,7 +20,9 @@ type Options struct {
 	AppName                   string
 	EmailFromName             string
 	EmailFromAddress          string
+	DatabasePath              string
 	EmailVerificationRequired *bool
+	TrimStarterContent        *bool
 }
 
 type state struct {
@@ -32,6 +34,7 @@ type state struct {
 	EmailFromAddress          string
 	DatabasePath              string
 	EmailVerificationRequired bool
+	TrimStarterContent        bool
 }
 
 type operation struct {
@@ -87,6 +90,7 @@ func detectState(repoRoot string) (state, error) {
 	}
 
 	emailVerificationRequired := detectEnvBool(filepath.Join(repoRoot, ".env.example"), "AUTH_EMAIL_VERIFICATION_REQUIRED", true)
+	databasePath := detectEnvValue(filepath.Join(repoRoot, ".env.example"), "DATABASE_PATH", "./data/app.db")
 
 	return state{
 		ProjectName:               defaultString(projectName, "Go Spark"),
@@ -95,8 +99,9 @@ func detectState(repoRoot string) (state, error) {
 		BinaryName:                path.Base(modulePath),
 		EmailFromName:             defaultString(emailFromName, "Go Spark"),
 		EmailFromAddress:          defaultString(emailFromAddress, "hello@example.com"),
-		DatabasePath:              "./data/app.db",
+		DatabasePath:              defaultString(databasePath, "./data/app.db"),
 		EmailVerificationRequired: emailVerificationRequired,
+		TrimStarterContent:        false,
 	}, nil
 }
 
@@ -220,7 +225,17 @@ func resolveOptions(current state, opts Options, stdin io.Reader, stdout io.Writ
 		return state{}, err
 	}
 
+	databasePath, err := resolveStringOption(reader, stdout, "Default database path", opts.DatabasePath, current.DatabasePath)
+	if err != nil {
+		return state{}, err
+	}
+
 	emailVerificationRequired, err := resolveBoolOption(reader, stdout, "Require email verification by default", opts.EmailVerificationRequired, current.EmailVerificationRequired)
+	if err != nil {
+		return state{}, err
+	}
+
+	trimStarterContent, err := resolveBoolOption(reader, stdout, "Trim starter docs and example content", opts.TrimStarterContent, current.TrimStarterContent)
 	if err != nil {
 		return state{}, err
 	}
@@ -237,9 +252,10 @@ func resolveOptions(current state, opts Options, stdin io.Reader, stdout io.Writ
 	appName = strings.TrimSpace(appName)
 	emailFromName = strings.TrimSpace(emailFromName)
 	emailFromAddress = strings.TrimSpace(emailFromAddress)
+	databasePath = strings.TrimSpace(databasePath)
 
-	if projectName == "" || appName == "" || emailFromName == "" || emailFromAddress == "" {
-		return state{}, fmt.Errorf("project name, app name, and email sender are required")
+	if projectName == "" || appName == "" || emailFromName == "" || emailFromAddress == "" || databasePath == "" {
+		return state{}, fmt.Errorf("project name, app name, email sender, and database path are required")
 	}
 
 	if _, err := mail.ParseAddress(formatAddress(emailFromName, emailFromAddress)); err != nil {
@@ -253,8 +269,9 @@ func resolveOptions(current state, opts Options, stdin io.Reader, stdout io.Writ
 		BinaryName:                path.Base(modulePath),
 		EmailFromName:             emailFromName,
 		EmailFromAddress:          emailFromAddress,
-		DatabasePath:              "./data/app.db",
+		DatabasePath:              databasePath,
 		EmailVerificationRequired: emailVerificationRequired,
+		TrimStarterContent:        trimStarterContent,
 	}, nil
 }
 
@@ -349,9 +366,13 @@ func applyOperations(repoRoot string, current, target state) ([]string, error) {
 			transform: func(content string, current, target state) (string, error) {
 				content = replaceHeading(content, current.ProjectName, target.ProjectName)
 				content = strings.ReplaceAll(content, current.ProjectName, target.ProjectName)
+				content = strings.ReplaceAll(content, current.DatabasePath, target.DatabasePath)
 				content = strings.ReplaceAll(content, "./"+current.BinaryName+" start", "./"+target.BinaryName+" start")
 				content = strings.ReplaceAll(content, "./"+current.BinaryName+" start web", "./"+target.BinaryName+" start web")
 				content = strings.ReplaceAll(content, "./"+current.BinaryName+" start worker", "./"+target.BinaryName+" start worker")
+				if target.TrimStarterContent {
+					content = strings.ReplaceAll(content, "* [docs/todo.md](docs/todo.md)\n", "")
+				}
 				return content, nil
 			},
 		},
@@ -360,6 +381,7 @@ func applyOperations(repoRoot string, current, target state) ([]string, error) {
 			transform: func(content string, current, target state) (string, error) {
 				content = strings.ReplaceAll(content, current.ProjectName, target.ProjectName)
 				content = strings.ReplaceAll(content, current.BinaryName+"-contrib.db", target.BinaryName+"-contrib.db")
+				content = strings.ReplaceAll(content, current.DatabasePath, target.DatabasePath)
 				return content, nil
 			},
 		},
@@ -384,13 +406,26 @@ func applyOperations(repoRoot string, current, target state) ([]string, error) {
 		{
 			path: "templates/layout.html",
 			transform: func(content string, current, target state) (string, error) {
-				return strings.ReplaceAll(content, current.AppName, target.AppName), nil
+				content = strings.ReplaceAll(content, current.AppName, target.AppName)
+				if target.TrimStarterContent {
+					content = strings.ReplaceAll(content, " ⚡", "")
+				}
+				return content, nil
 			},
 		},
 		{
 			path: "templates/home.html",
 			transform: func(content string, current, target state) (string, error) {
+				if target.TrimStarterContent {
+					return trimmedHomeTemplate(target.AppName), nil
+				}
 				return strings.ReplaceAll(content, current.AppName, target.AppName), nil
+			},
+		},
+		{
+			path: "Makefile",
+			transform: func(content string, current, target state) (string, error) {
+				return strings.ReplaceAll(content, "DB_PATH ?= "+current.DatabasePath, "DB_PATH ?= "+target.DatabasePath), nil
 			},
 		},
 		{
@@ -429,6 +464,12 @@ func applyOperations(repoRoot string, current, target state) ([]string, error) {
 		return nil, err
 	}
 	applied = append(applied, goFiles...)
+
+	cleanupFiles, err := applyCleanup(repoRoot, target)
+	if err != nil {
+		return nil, err
+	}
+	applied = append(applied, cleanupFiles...)
 
 	return uniqueStrings(applied), nil
 }
@@ -547,6 +588,42 @@ func formatAddress(name, address string) string {
 	return fmt.Sprintf("%s <%s>", name, address)
 }
 
+func trimmedHomeTemplate(appName string) string {
+	return fmt.Sprintf(`{{ define "content" }}
+<section>
+  <h1>Welcome to %s.</h1>
+  <p>
+    The starter setup is ready. Replace this page with your product's first real screen and remove any remaining example routes you do not plan to keep.
+  </p>
+</section>
+{{ end }}
+`, appName)
+}
+
+func applyCleanup(repoRoot string, target state) ([]string, error) {
+	if !target.TrimStarterContent {
+		return nil, nil
+	}
+
+	paths := []string{
+		"docs/todo.md",
+	}
+
+	removed := make([]string, 0, len(paths))
+	for _, relativePath := range paths {
+		fullPath := filepath.Join(repoRoot, relativePath)
+		if err := os.Remove(fullPath); err != nil {
+			if os.IsNotExist(err) {
+				continue
+			}
+			return nil, fmt.Errorf("remove %s: %w", relativePath, err)
+		}
+		removed = append(removed, relativePath)
+	}
+
+	return removed, nil
+}
+
 func writeStateFile(repoRoot string, target state) error {
 	content := strings.Join([]string{
 		"PROJECT_NAME=" + target.ProjectName,
@@ -556,6 +633,7 @@ func writeStateFile(repoRoot string, target state) error {
 		"EMAIL_FROM_ADDRESS=" + target.EmailFromAddress,
 		"DATABASE_PATH=" + target.DatabasePath,
 		"AUTH_EMAIL_VERIFICATION_REQUIRED=" + strconv.FormatBool(target.EmailVerificationRequired),
+		"TRIM_STARTER_CONTENT=" + strconv.FormatBool(target.TrimStarterContent),
 		"",
 	}, "\n")
 

@@ -33,7 +33,28 @@ make start
 Open `http://localhost:8080`.
 
 The normal first-run path uses the SQLite database at `./data/app.db`.
-If you are using this repo as a template, run `go run ./cmd/app init` first to rename the module, app branding, and starter defaults.
+If you are using this repo as a template, run `go run ./cmd/app init` first to rename the module, app branding, default database path, and other starter defaults.
+
+The `init` command prompts for:
+
+* project name
+* Go module path
+* app display name
+* default email sender name and address
+* default SQLite database path
+* whether email verification should be enabled by default
+* whether starter docs and example content should be trimmed
+
+If you want a non-interactive setup, pass flags such as:
+
+```sh
+go run ./cmd/app init \
+  -project-name "Acme Starter" \
+  -module-path github.com/acme/acme-starter \
+  -app-name "Acme Portal" \
+  -database-path ./var/acme.db \
+  -trim-starter true
+```
 
 ## Process Modes
 
@@ -120,7 +141,7 @@ If you use this as a template for a new project:
 * rename the module in `go.mod`
 * copy `.env.example` to `.env`
 * initialize the local SQLite database with `make setup`
-* replace example routes, templates, and branding
+* replace or remove example routes, templates, and branding
 * keep new public paths in `internal/paths`
 * assume SQLite is the intended foundation unless you are deliberately
   refactoring the persistence layer

@@ -51,7 +51,7 @@ func TestParseCLIArgsSupportsStartWorker(t *testing.T) {
 }
 
 func TestParseCLIArgsSupportsInit(t *testing.T) {
-	command, err := parseCLIArgs([]string{"init", "-project-name", "Acme", "-module-path", "github.com/acme/app", "-email-verification", "false"})
+	command, err := parseCLIArgs([]string{"init", "-project-name", "Acme", "-module-path", "github.com/acme/app", "-database-path", "./data/acme.db", "-email-verification", "false", "-trim-starter", "true"})
 	if err != nil {
 		t.Fatalf("parseCLIArgs() error = %v", err)
 	}
@@ -67,8 +67,14 @@ func TestParseCLIArgsSupportsInit(t *testing.T) {
 	if command.initOptions.ModulePath != "github.com/acme/app" {
 		t.Fatalf("parseCLIArgs() init module path = %q, want github.com/acme/app", command.initOptions.ModulePath)
 	}
+	if command.initOptions.DatabasePath != "./data/acme.db" {
+		t.Fatalf("parseCLIArgs() database path = %q, want ./data/acme.db", command.initOptions.DatabasePath)
+	}
 	if command.initOptions.EmailVerificationRequired == nil || *command.initOptions.EmailVerificationRequired {
 		t.Fatalf("parseCLIArgs() email verification = %v, want false", command.initOptions.EmailVerificationRequired)
+	}
+	if command.initOptions.TrimStarterContent == nil || !*command.initOptions.TrimStarterContent {
+		t.Fatalf("parseCLIArgs() trim starter = %v, want true", command.initOptions.TrimStarterContent)
 	}
 }
 
