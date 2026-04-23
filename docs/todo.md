@@ -1,16 +1,7 @@
 # TODO
 
-This file is now a short active backlog for Go Spark. The larger starter
-cleanup and initialization roadmap has mostly landed, so only genuinely
-unfinished work stays here.
-
-## Lower Priority
-
-These are still reasonable future improvements, but they are intentionally
-deferred:
-
 * embed templates and static assets into the binary for simpler deployment
 * introduce database-backed rate limiting only if the in-memory limiter stops being sufficient for the starter's deploymentmodel
 * split auth into a reusable module only if a real second bounded context appears
-* add richer observability hooks only after there is a concrete operational
-  need
+* add richer observability hooks only after there is a concrete operational need
+* add a 404 page
