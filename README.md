@@ -93,6 +93,7 @@ make sqlc
 make vulncheck
 make migrate-up
 make migrate-down
+make migrate-status
 make tools
 ```
 
@@ -117,6 +118,7 @@ Reference docs:
 
 ```text
 /cmd/app            application entrypoint
+/internal/app       application bootstrap and runtime assembly
 /internal/config    environment config
 /internal/database  SQLite-backed domain stores
 /internal/db        SQL queries and generated sqlc package
@@ -124,6 +126,7 @@ Reference docs:
 /internal/jobs      background jobs runner and jobs
 /internal/platform  engine-specific platform code such as SQLite setup
 /internal/paths     canonical public URL paths
+/internal/projectinit template initialization workflow
 /internal/server    HTTP routes and handlers
 /internal/services  business logic
 /migrations         goose SQL migrations
@@ -136,7 +139,8 @@ Reference docs:
 
 If you use this as a template for a new project:
 
-* rename the module in `go.mod`
+* run `make init` first to set project name, Go module path, default sender,
+  and default database path across starter files
 * copy `.env.example` to `.env`
 * initialize the local SQLite database with `make migrate-up`
 * replace or remove example routes, templates, and branding
