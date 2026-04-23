@@ -11,7 +11,7 @@ import (
 func TestRunUpdatesStarterDefaults(t *testing.T) {
 	repoRoot := t.TempDir()
 	writeFixtureFile(t, repoRoot, "go.mod", "module github.com/inkyvoxel/go-spark\n\ngo 1.24.0\n")
-	writeFixtureFile(t, repoRoot, "README.md", "# Go Spark\n\nRun `./go-spark all` or `./go-spark serve`.\n")
+	writeFixtureFile(t, repoRoot, "README.md", "# Go Spark\n\nRun `./go-spark all`, `./go-spark serve`, or `./go-spark migrate status`.\n")
 	writeFixtureFile(t, repoRoot, ".env.example", strings.Join([]string{
 		"DATABASE_PATH=./data/app.db",
 		"AUTH_EMAIL_VERIFICATION_REQUIRED=true",
@@ -21,13 +21,22 @@ func TestRunUpdatesStarterDefaults(t *testing.T) {
 	writeFixtureFile(t, repoRoot, "Makefile", "DB_PATH ?= ./data/app.db\n")
 	writeFixtureFile(t, repoRoot, "CONTRIBUTING.md", "Thanks for taking an interest in Go Spark.\nmake migrate-up DB_PATH=/tmp/go-spark-contrib.db\n")
 	writeFixtureFile(t, repoRoot, "docs/architecture.md", "Go Spark prefers SQLite.\n")
-	writeFixtureFile(t, repoRoot, "docs/jobs.md", "Go Spark uses jobs.\n")
+	writeFixtureFile(t, repoRoot, "docs/jobs.md", "Go Spark uses jobs.\n`./go-spark all`\n`./go-spark worker`\n")
 	writeFixtureFile(t, repoRoot, "docs/todo.md", "starter todo\n")
 	writeFixtureFile(t, repoRoot, "templates/layout.html", "<a>Go Spark</a>\n")
 	writeFixtureFile(t, repoRoot, "templates/home.html", "Go Spark gives you a starter.\n")
 	writeFixtureFile(t, repoRoot, "internal/server/server.go", "package server\n\nfunc title() string {\n\treturn \"Go Spark\"\n}\n")
 	writeFixtureFile(t, repoRoot, "internal/config/config.go", "package config\n\nconst from = \"Go Spark <hello@example.com>\"\n")
 	writeFixtureFile(t, repoRoot, "internal/app/build.go", "package app\n\nconst from = \"Go Spark <hello@example.com>\"\n")
+	writeFixtureFile(t, repoRoot, "internal/email/smtp.go", "package email\n\nfunc boundary() string {\n\treturn \"go-spark-boundary\"\n}\n")
+	writeFixtureFile(t, repoRoot, "internal/projectinit/init_test.go", strings.Join([]string{
+		"package projectinit",
+		"",
+		"func fixtureText() string {",
+		"\treturn \"# Go Spark\\n\\nRun `./go-spark all` or `./go-spark serve` or `./go-spark migrate status`.\\nThanks for taking an interest in Go Spark.\\nmake migrate-up DB_PATH=/tmp/go-spark-contrib.db\\n\"",
+		"}",
+		"",
+	}, "\n"))
 	writeFixtureFile(t, repoRoot, "cmd/app/main.go", "package main\n\nimport _ \"github.com/inkyvoxel/go-spark/internal/app\"\n")
 
 	var stdout bytes.Buffer
@@ -48,16 +57,23 @@ func TestRunUpdatesStarterDefaults(t *testing.T) {
 	assertFileContains(t, repoRoot, "README.md", "# Acme Starter")
 	assertFileContains(t, repoRoot, "README.md", "./acme-starter all")
 	assertFileContains(t, repoRoot, "README.md", "./acme-starter serve")
+	assertFileContains(t, repoRoot, "README.md", "./acme-starter migrate status")
 	assertFileContains(t, repoRoot, ".env.example", "DATABASE_PATH=./data/acme.db")
 	assertFileContains(t, repoRoot, ".env.example", "AUTH_EMAIL_VERIFICATION_REQUIRED=false")
 	assertFileContains(t, repoRoot, ".env.example", "EMAIL_FROM=\"Acme Portal <team@acme.test>\"")
 	assertFileContains(t, repoRoot, "Makefile", "DB_PATH ?= ./data/acme.db")
 	assertFileContains(t, repoRoot, "CONTRIBUTING.md", "/tmp/acme-starter-contrib.db")
+	assertFileContains(t, repoRoot, "docs/jobs.md", "./acme-starter all")
+	assertFileContains(t, repoRoot, "docs/jobs.md", "./acme-starter worker")
 	assertFileContains(t, repoRoot, "templates/layout.html", "Acme Starter")
 	assertFileContains(t, repoRoot, "templates/home.html", "Welcome to Acme Starter.")
 	assertFileContains(t, repoRoot, "internal/server/server.go", "\"Acme Starter\"")
 	assertFileContains(t, repoRoot, "internal/config/config.go", "Acme Portal <team@acme.test>")
 	assertFileContains(t, repoRoot, "internal/app/build.go", "Acme Portal <team@acme.test>")
+	assertFileContains(t, repoRoot, "internal/email/smtp.go", "acme-starter-boundary")
+	assertFileContains(t, repoRoot, "internal/projectinit/init_test.go", "Run `./acme-starter all` or `./acme-starter serve` or `./acme-starter migrate status`.")
+	assertFileContains(t, repoRoot, "internal/projectinit/init_test.go", "Thanks for taking an interest in Acme Starter.")
+	assertFileContains(t, repoRoot, "internal/projectinit/init_test.go", "make migrate-up DB_PATH=/tmp/acme-starter-contrib.db")
 	assertFileContains(t, repoRoot, "cmd/app/main.go", "github.com/acme/acme-starter/internal/app")
 	assertFileContains(t, repoRoot, "docs/todo.md", "starter todo")
 	assertFileContains(t, repoRoot, stateFileName, "DATABASE_PATH=./data/acme.db")
@@ -86,6 +102,8 @@ func TestRunPromptsForMissingValues(t *testing.T) {
 	writeFixtureFile(t, repoRoot, "internal/server/server.go", "\"Go Spark\"\n")
 	writeFixtureFile(t, repoRoot, "internal/config/config.go", "\"Go Spark <hello@example.com>\"\n")
 	writeFixtureFile(t, repoRoot, "internal/app/build.go", "\"Go Spark <hello@example.com>\"\n")
+	writeFixtureFile(t, repoRoot, "internal/email/smtp.go", "\"go-spark-boundary\"\n")
+	writeFixtureFile(t, repoRoot, "internal/projectinit/init_test.go", "Go Spark\n./go-spark all\n./go-spark worker\n./go-spark migrate status\n/tmp/go-spark-contrib.db\n")
 
 	input := strings.Join([]string{
 		"My App",

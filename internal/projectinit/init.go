@@ -342,6 +342,7 @@ func applyOperations(repoRoot string, current, target state) ([]string, error) {
 				content = strings.ReplaceAll(content, "./"+current.BinaryName+" all", "./"+target.BinaryName+" all")
 				content = strings.ReplaceAll(content, "./"+current.BinaryName+" serve", "./"+target.BinaryName+" serve")
 				content = strings.ReplaceAll(content, "./"+current.BinaryName+" worker", "./"+target.BinaryName+" worker")
+				content = strings.ReplaceAll(content, "./"+current.BinaryName+" migrate status", "./"+target.BinaryName+" migrate status")
 				return content, nil
 			},
 		},
@@ -363,7 +364,10 @@ func applyOperations(repoRoot string, current, target state) ([]string, error) {
 		{
 			path: "docs/jobs.md",
 			transform: func(content string, current, target state) (string, error) {
-				return strings.ReplaceAll(content, current.ProjectName, target.ProjectName), nil
+				content = strings.ReplaceAll(content, current.ProjectName, target.ProjectName)
+				content = strings.ReplaceAll(content, "./"+current.BinaryName+" all", "./"+target.BinaryName+" all")
+				content = strings.ReplaceAll(content, "./"+current.BinaryName+" worker", "./"+target.BinaryName+" worker")
+				return content, nil
 			},
 		},
 		{
@@ -400,6 +404,24 @@ func applyOperations(repoRoot string, current, target state) ([]string, error) {
 			path: "internal/app/build.go",
 			transform: func(content string, current, target state) (string, error) {
 				return strings.ReplaceAll(content, formatAddress(current.EmailFromName, current.EmailFromAddress), formatAddress(target.EmailFromName, target.EmailFromAddress)), nil
+			},
+		},
+		{
+			path: "internal/email/smtp.go",
+			transform: func(content string, current, target state) (string, error) {
+				return strings.ReplaceAll(content, current.BinaryName+"-boundary", target.BinaryName+"-boundary"), nil
+			},
+		},
+		{
+			path: "internal/projectinit/init_test.go",
+			transform: func(content string, current, target state) (string, error) {
+				content = strings.ReplaceAll(content, current.ProjectName, target.ProjectName)
+				content = strings.ReplaceAll(content, "./"+current.BinaryName+" all", "./"+target.BinaryName+" all")
+				content = strings.ReplaceAll(content, "./"+current.BinaryName+" serve", "./"+target.BinaryName+" serve")
+				content = strings.ReplaceAll(content, "./"+current.BinaryName+" worker", "./"+target.BinaryName+" worker")
+				content = strings.ReplaceAll(content, "./"+current.BinaryName+" migrate status", "./"+target.BinaryName+" migrate status")
+				content = strings.ReplaceAll(content, current.BinaryName+"-contrib.db", target.BinaryName+"-contrib.db")
+				return content, nil
 			},
 		},
 	}
