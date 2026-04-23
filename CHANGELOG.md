@@ -20,6 +20,12 @@ This project follows a simple, human-written changelog format. Versioning will b
 * Session middleware and current-user request context helpers.
 * CSRF token cookie, request validation middleware, and tests.
 * Register, login, logout, and authenticated account routes.
+* Account verification, resend verification, password reset, and account credential update flows.
+* Session management routes for revoking current or other active sessions.
+* Durable email delivery via a SQLite-backed outbox processor and worker process.
+* Periodic SQLite cleanup jobs for expired sessions, tokens, and outbox records.
+* CLI subcommands for `all`, `serve`, `worker`, `migrate`, and interactive `init`.
+* Project-pinned `govulncheck` tooling and `make check` integration.
 * Custom 404 page template for unmatched `GET`/`HEAD` routes.
 * GitHub Actions test workflow.
 * Template README, architecture notes, and development guide.
