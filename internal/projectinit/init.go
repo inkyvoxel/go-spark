@@ -378,7 +378,10 @@ func applyOperations(repoRoot string, current, target state) ([]string, error) {
 		},
 		{
 			path: "templates/home.html",
-			transform: func(_ string, _ state, target state) (string, error) {
+			transform: func(content string, current, target state) (string, error) {
+				if current.ProjectName == target.ProjectName {
+					return content, nil
+				}
 				return homeTemplate(target.ProjectName), nil
 			},
 		},

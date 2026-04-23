@@ -94,6 +94,63 @@ func TestRunUpdatesStarterDefaults(t *testing.T) {
 	assertFileNotContains(t, repoRoot, stateFileName, "TRIM_STARTER_CONTENT=")
 }
 
+func TestRunKeepsStarterHomeWhenProjectNameUnchanged(t *testing.T) {
+	repoRoot := t.TempDir()
+	writeFixtureFile(t, repoRoot, "go.mod", "module github.com/inkyvoxel/go-spark\n\ngo 1.24.0\n")
+	writeFixtureFile(t, repoRoot, "README.md", "# Go Spark\n\nRun `./go-spark all`, `./go-spark serve`, or `./go-spark migrate status`.\n")
+	writeFixtureFile(t, repoRoot, ".env.example", strings.Join([]string{
+		"DATABASE_PATH=./data/app.db",
+		"AUTH_EMAIL_VERIFICATION_REQUIRED=true",
+		"EMAIL_FROM=\"Go Spark <hello@example.com>\"",
+		"",
+	}, "\n"))
+	writeFixtureFile(t, repoRoot, "Makefile", "DB_PATH ?= ./data/app.db\n")
+	writeFixtureFile(t, repoRoot, "CONTRIBUTING.md", "Thanks for taking an interest in Go Spark.\nmake migrate-up DB_PATH=/tmp/go-spark-contrib.db\n")
+	writeFixtureFile(t, repoRoot, "docs/architecture.md", "Go Spark prefers SQLite.\n")
+	writeFixtureFile(t, repoRoot, "docs/jobs.md", "Go Spark uses jobs.\n`./go-spark all`\n`./go-spark worker`\n")
+	writeFixtureFile(t, repoRoot, "docs/todo.md", "starter todo\n")
+	writeFixtureFile(t, repoRoot, "templates/layout.html", "<a>Go Spark</a>\n")
+	writeFixtureFile(t, repoRoot, "templates/home.html", strings.Join([]string{
+		"{{ define \"content\" }}",
+		"<section>",
+		"  <h1>Go from idea to app faster.</h1>",
+		"  <p>",
+		"    Go Spark gives you a small, practical foundation: Go, SQLite, templates, sessions, CSRF protection, and auth already",
+		"    wired in, plus basic email support for account confirmation. If you are starting a new project from this template, run",
+		"    <code>make init</code> first.",
+		"  </p>",
+		"</section>",
+		"{{ end }}",
+		"",
+	}, "\n"))
+	writeFixtureFile(t, repoRoot, "internal/server/server.go", "package server\n\nfunc title() string {\n\treturn \"Go Spark\"\n}\n")
+	writeFixtureFile(t, repoRoot, "internal/config/config.go", "package config\n\nconst from = \"Go Spark <hello@example.com>\"\n")
+	writeFixtureFile(t, repoRoot, "internal/app/build.go", "package app\n\nconst from = \"Go Spark <hello@example.com>\"\n")
+	writeFixtureFile(t, repoRoot, "internal/config/config_test.go", "\"Go Spark <hello@example.com>\"\n\"\\\"Go Spark\\\" <hello@example.com>\"\n")
+	writeFixtureFile(t, repoRoot, "internal/server/server_test.go", "\"Go Spark\"\n")
+	writeFixtureFile(t, repoRoot, "internal/email/smtp.go", "\"go-spark-boundary\"\n")
+	writeFixtureFile(t, repoRoot, "internal/projectinit/init_test.go", "Go Spark\n./go-spark all\n./go-spark worker\n./go-spark migrate status\n/tmp/go-spark-contrib.db\n")
+	writeFixtureFile(t, repoRoot, "cmd/app/main.go", "package main\n\nimport _ \"github.com/inkyvoxel/go-spark/internal/app\"\n")
+
+	var stdout bytes.Buffer
+	emailVerificationRequired := false
+	err := Run(repoRoot, Options{
+		ProjectName:               "Go Spark",
+		ModulePath:                "github.com/acme/go-spark",
+		EmailFromName:             "Acme Portal",
+		EmailFromAddress:          "team@acme.test",
+		DatabasePath:              "./data/acme.db",
+		EmailVerificationRequired: &emailVerificationRequired,
+	}, strings.NewReader(""), &stdout)
+	if err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+
+	assertFileContains(t, repoRoot, "templates/home.html", "Go from idea to app faster.")
+	assertFileContains(t, repoRoot, "templates/home.html", "<code>make init</code> first.")
+	assertFileNotContains(t, repoRoot, "templates/home.html", "Welcome to Go Spark.")
+}
+
 func TestRunPromptsForMissingValues(t *testing.T) {
 	repoRoot := t.TempDir()
 	writeFixtureFile(t, repoRoot, "go.mod", "module github.com/inkyvoxel/go-spark\n")
