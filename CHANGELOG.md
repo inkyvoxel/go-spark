@@ -20,5 +20,6 @@ This project follows a simple, human-written changelog format. Versioning will b
 * Session middleware and current-user request context helpers.
 * CSRF token cookie, request validation middleware, and tests.
 * Register, login, logout, and authenticated account routes.
+* Custom 404 page template for unmatched `GET`/`HEAD` routes.
 * GitHub Actions test workflow.
 * Template README, architecture notes, and development guide.

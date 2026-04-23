@@ -2,6 +2,7 @@ package server
 
 const (
 	templateLayout             = "layout.html"
+	templateNotFound           = "404.html"
 	templateAccount            = "account.html"
 	templateBreadcrumb         = "breadcrumb.html"
 	templateChangeEmail        = "change_email.html"

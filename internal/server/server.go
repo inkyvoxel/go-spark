@@ -107,6 +107,7 @@ func mustParseTemplates() map[string]*template.Template {
 
 func parseTemplates() (map[string]*template.Template, error) {
 	pages := map[string]string{
+		templateNotFound:           "404.html",
 		templateAccount:            filepath.Join("account", "account.html"),
 		templateChangeEmail:        filepath.Join("account", "change_email.html"),
 		templateChangePassword:     filepath.Join("account", "change_password.html"),
@@ -220,7 +221,8 @@ func (s *Server) Routes() http.Handler {
 			s.withRateLimit("revoke-other-sessions", s.rateLimitPolicies.RevokeOtherSessions, rateLimitKeyByIPAndUser(), http.HandlerFunc(s.revokeOtherSessions)),
 		),
 	)
-	dynamic.HandleFunc(route(http.MethodGet, paths.Home), s.home)
+	dynamic.HandleFunc(route(http.MethodGet, "/{$}"), s.home)
+	dynamic.HandleFunc(route(http.MethodGet, "/{path...}"), s.notFoundPage)
 
 	mux.Handle(paths.Home, s.cacheControlHeaders(s.securityHeaders(s.limitRequestBody(s.csrf(s.loadSession(dynamic))))))
 
@@ -245,6 +247,30 @@ func staticFileHandler() http.Handler {
 
 func (s *Server) home(w http.ResponseWriter, r *http.Request) {
 	s.render(w, templateHome, s.newTemplateData(r, "Go Spark"))
+}
+
+func (s *Server) notFoundPage(w http.ResponseWriter, r *http.Request) {
+	if allow, ok := postOnlyAllowForPath(r.URL.Path); ok {
+		w.Header().Set("Allow", allow)
+		http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
+		return
+	}
+
+	s.renderStatus(w, http.StatusNotFound, templateNotFound, s.newTemplateData(r, "Page Not Found"))
+}
+
+func postOnlyAllowForPath(path string) (string, bool) {
+	switch path {
+	case paths.Logout,
+		paths.VerifyEmailResend,
+		paths.ChangePassword,
+		paths.ChangeEmail,
+		paths.AccountSessionsRevoke,
+		paths.AccountSessionsRevokeOthers:
+		return http.MethodPost, true
+	default:
+		return "", false
+	}
 }
 
 func (s *Server) logRequests(next http.Handler) http.Handler {

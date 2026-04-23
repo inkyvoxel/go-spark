@@ -46,6 +46,63 @@ func TestRoutesHome(t *testing.T) {
 	}
 }
 
+func TestRoutesUnknownGetRendersCustomNotFound(t *testing.T) {
+	srv := testServer(t)
+
+	req := httptest.NewRequest(http.MethodGet, "/does-not-exist", nil)
+	rec := httptest.NewRecorder()
+
+	srv.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusNotFound)
+	}
+	if !strings.Contains(rec.Body.String(), "Page not found") {
+		t.Fatalf("body = %q, want custom 404 content", rec.Body.String())
+	}
+	if strings.EqualFold(strings.TrimSpace(rec.Body.String()), http.StatusText(http.StatusNotFound)) {
+		t.Fatalf("body = %q, want custom html response instead of default text", rec.Body.String())
+	}
+	if got := rec.Header().Get("Content-Security-Policy"); got != cspHeaderValue {
+		t.Fatalf("Content-Security-Policy = %q, want %q", got, cspHeaderValue)
+	}
+}
+
+func TestRoutesUnknownHeadReturnsNotFound(t *testing.T) {
+	srv := testServer(t)
+
+	req := httptest.NewRequest(http.MethodHead, "/does-not-exist", nil)
+	rec := httptest.NewRecorder()
+
+	srv.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusNotFound)
+	}
+	if got := rec.Header().Get("Content-Security-Policy"); got != cspHeaderValue {
+		t.Fatalf("Content-Security-Policy = %q, want %q", got, cspHeaderValue)
+	}
+	if got := rec.Header().Get("Content-Type"); got != "text/html; charset=utf-8" {
+		t.Fatalf("Content-Type = %q, want %q", got, "text/html; charset=utf-8")
+	}
+}
+
+func TestRoutesKnownPathWrongMethodReturnsMethodNotAllowed(t *testing.T) {
+	srv := testServer(t)
+
+	req := httptest.NewRequest(http.MethodGet, paths.Logout, nil)
+	rec := httptest.NewRecorder()
+
+	srv.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusMethodNotAllowed)
+	}
+	if allow := rec.Header().Get("Allow"); allow != http.MethodPost {
+		t.Fatalf("Allow = %q, want %q", allow, http.MethodPost)
+	}
+}
+
 func TestRoutesStaticDirectoryListingIsNotServed(t *testing.T) {
 	chdirProjectRoot(t)
 	srv := testServer(t)
@@ -239,7 +296,8 @@ func testServer(t *testing.T) *Server {
 		logger:                  slog.New(slog.NewTextHandler(io.Discard, nil)),
 		csrfSigningKey:          []byte("test-csrf-signing-key"),
 		templates: testTemplates(t, map[string]string{
-			templateHome: `<h1>{{ .Title }}</h1>`,
+			templateHome:     `<h1>{{ .Title }}</h1>`,
+			templateNotFound: `<h1>Page not found</h1>`,
 		}),
 	}
 }

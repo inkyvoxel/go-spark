@@ -81,6 +81,7 @@ Typical change flow:
 * Public URL paths live in `internal/paths`.
 * Templates receive route helpers through `.Routes`.
 * Template keys and fragment names live in `internal/server/template_constants.go`.
+* Unmatched `GET` and `HEAD` requests render `templates/404.html`.
 
 If you add a new route, update `internal/paths` first and use those constants from handlers, templates, emails, and tests.
 
