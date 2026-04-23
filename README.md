@@ -24,6 +24,7 @@ refactor rather than a built-in template feature.
 ## Quick Start
 
 ```sh
+go run ./cmd/app init
 cp .env.example .env
 make setup
 make start
@@ -32,6 +33,7 @@ make start
 Open `http://localhost:8080`.
 
 The normal first-run path uses the SQLite database at `./data/app.db`.
+If you are using this repo as a template, run `go run ./cmd/app init` first to rename the module, app branding, and starter defaults.
 
 ## Process Modes
 
@@ -64,6 +66,7 @@ Email delivery defaults to `EMAIL_PROVIDER=log` for safe local development.
 ## Commands
 
 ```sh
+make init
 make start
 make start-web
 make start-worker

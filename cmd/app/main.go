@@ -3,7 +3,9 @@ package main
 import (
 	"context"
 	"errors"
+	"flag"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"os"
@@ -15,11 +17,14 @@ import (
 	bootstrap "github.com/inkyvoxel/go-spark/internal/app"
 	"github.com/inkyvoxel/go-spark/internal/config"
 	"github.com/inkyvoxel/go-spark/internal/jobs"
+	"github.com/inkyvoxel/go-spark/internal/projectinit"
 	"github.com/inkyvoxel/go-spark/internal/services"
 )
 
 type cliCommand struct {
+	name            string
 	processOverride string
+	initOptions     *projectinit.Options
 }
 
 func main() {
@@ -32,13 +37,22 @@ func main() {
 }
 
 func run(args []string, logger *slog.Logger) error {
-	if err := config.LoadDotEnv(".env"); err != nil {
-		return fmt.Errorf("load .env: %w", err)
-	}
-
 	command, err := parseCLIArgs(args)
 	if err != nil {
 		return err
+	}
+
+	if command.name == "init" {
+		repoRoot, err := os.Getwd()
+		if err != nil {
+			return fmt.Errorf("get working directory: %w", err)
+		}
+
+		return projectinit.Run(repoRoot, *command.initOptions, os.Stdin, os.Stdout)
+	}
+
+	if err := config.LoadDotEnv(".env"); err != nil {
+		return fmt.Errorf("load .env: %w", err)
 	}
 
 	cfg, err := config.FromEnvWithProcess(services.DefaultPasswordMinLength, command.processOverride)
@@ -75,14 +89,16 @@ func parseCLIArgs(args []string) (cliCommand, error) {
 	switch command := strings.ToLower(strings.TrimSpace(args[0])); command {
 	case "start":
 		return parseStartArgs(args[1:])
+	case "init":
+		return parseInitArgs(args[1:])
 	default:
-		return cliCommand{}, fmt.Errorf("unknown command %q; use %q", command, "start")
+		return cliCommand{}, fmt.Errorf("unknown command %q; use %q or %q", command, "start", "init")
 	}
 }
 
 func parseStartArgs(args []string) (cliCommand, error) {
 	if len(args) == 0 {
-		return cliCommand{processOverride: config.ProcessAll}, nil
+		return cliCommand{name: "start", processOverride: config.ProcessAll}, nil
 	}
 	if len(args) > 1 {
 		return cliCommand{}, fmt.Errorf("start subcommand accepts at most one mode argument (%q, %q, or %q)", config.ProcessAll, config.ProcessWeb, config.ProcessWorker)
@@ -91,9 +107,52 @@ func parseStartArgs(args []string) (cliCommand, error) {
 	process := strings.ToLower(strings.TrimSpace(args[0]))
 	switch process {
 	case config.ProcessAll, config.ProcessWeb, config.ProcessWorker:
-		return cliCommand{processOverride: process}, nil
+		return cliCommand{name: "start", processOverride: process}, nil
 	default:
 		return cliCommand{}, fmt.Errorf("start mode must be %q, %q, or %q", config.ProcessAll, config.ProcessWeb, config.ProcessWorker)
+	}
+}
+
+func parseInitArgs(args []string) (cliCommand, error) {
+	fs := flag.NewFlagSet("init", flag.ContinueOnError)
+	fs.SetOutput(io.Discard)
+
+	var options projectinit.Options
+	var emailVerification string
+
+	fs.StringVar(&options.ProjectName, "project-name", "", "project name for docs and README")
+	fs.StringVar(&options.ModulePath, "module-path", "", "Go module path")
+	fs.StringVar(&options.AppName, "app-name", "", "app display name")
+	fs.StringVar(&options.EmailFromName, "email-from-name", "", "default email sender display name")
+	fs.StringVar(&options.EmailFromAddress, "email-from-address", "", "default email sender address")
+	fs.StringVar(&emailVerification, "email-verification", "", "default email verification setting (true/false)")
+
+	if err := fs.Parse(args); err != nil {
+		return cliCommand{}, err
+	}
+	if fs.NArg() != 0 {
+		return cliCommand{}, fmt.Errorf("init subcommand does not accept positional arguments")
+	}
+
+	if emailVerification != "" {
+		value, err := parseCLIOptionalBool(emailVerification)
+		if err != nil {
+			return cliCommand{}, fmt.Errorf("parse -email-verification: %w", err)
+		}
+		options.EmailVerificationRequired = &value
+	}
+
+	return cliCommand{name: "init", initOptions: &options}, nil
+}
+
+func parseCLIOptionalBool(value string) (bool, error) {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "1", "true", "t", "yes", "y":
+		return true, nil
+	case "0", "false", "f", "no", "n":
+		return false, nil
+	default:
+		return false, fmt.Errorf("expected true or false")
 	}
 }
 

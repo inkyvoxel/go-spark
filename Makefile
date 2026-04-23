@@ -1,9 +1,12 @@
-.PHONY: start start-web start-worker check test fmt tidy sqlc vulncheck setup migrate-up migrate-down migrate-status tools
+.PHONY: init start start-web start-worker check test fmt tidy sqlc vulncheck setup migrate-up migrate-down migrate-status tools
 
 DB_PATH ?= ./data/app.db
 GOOSE_DRIVER ?= sqlite3
 GOOSE_DBSTRING ?= $(DB_PATH)
 GOOSE_MIGRATION_DIR ?= ./migrations
+
+init:
+	go run ./cmd/app init
 
 start:
 	go run ./cmd/app start

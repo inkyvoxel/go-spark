@@ -22,6 +22,9 @@ func TestParseCLIArgsSupportsStart(t *testing.T) {
 	if err != nil {
 		t.Fatalf("parseCLIArgs() error = %v", err)
 	}
+	if command.name != "start" {
+		t.Fatalf("parseCLIArgs() name = %q, want start", command.name)
+	}
 	if command.processOverride != config.ProcessAll {
 		t.Fatalf("parseCLIArgs() processOverride = %q, want %q", command.processOverride, config.ProcessAll)
 	}
@@ -44,6 +47,28 @@ func TestParseCLIArgsSupportsStartWorker(t *testing.T) {
 	}
 	if command.processOverride != config.ProcessWorker {
 		t.Fatalf("parseCLIArgs() processOverride = %q, want %q", command.processOverride, config.ProcessWorker)
+	}
+}
+
+func TestParseCLIArgsSupportsInit(t *testing.T) {
+	command, err := parseCLIArgs([]string{"init", "-project-name", "Acme", "-module-path", "github.com/acme/app", "-email-verification", "false"})
+	if err != nil {
+		t.Fatalf("parseCLIArgs() error = %v", err)
+	}
+	if command.name != "init" {
+		t.Fatalf("parseCLIArgs() name = %q, want init", command.name)
+	}
+	if command.initOptions == nil {
+		t.Fatal("parseCLIArgs() initOptions = nil, want options")
+	}
+	if command.initOptions.ProjectName != "Acme" {
+		t.Fatalf("parseCLIArgs() init project name = %q, want Acme", command.initOptions.ProjectName)
+	}
+	if command.initOptions.ModulePath != "github.com/acme/app" {
+		t.Fatalf("parseCLIArgs() init module path = %q, want github.com/acme/app", command.initOptions.ModulePath)
+	}
+	if command.initOptions.EmailVerificationRequired == nil || *command.initOptions.EmailVerificationRequired {
+		t.Fatalf("parseCLIArgs() email verification = %v, want false", command.initOptions.EmailVerificationRequired)
 	}
 }
 
@@ -104,5 +129,15 @@ func TestParseCLIArgsRejectsStartInvalidMode(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "start mode must be") {
 		t.Fatalf("parseCLIArgs() error = %v, want start mode context", err)
+	}
+}
+
+func TestParseCLIArgsRejectsInitPositionalArgs(t *testing.T) {
+	_, err := parseCLIArgs([]string{"init", "extra"})
+	if err == nil {
+		t.Fatal("parseCLIArgs() error = nil, want error")
+	}
+	if !strings.Contains(err.Error(), "init subcommand does not accept positional arguments") {
+		t.Fatalf("parseCLIArgs() error = %v, want init positional argument context", err)
 	}
 }
