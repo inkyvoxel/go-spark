@@ -26,7 +26,7 @@ refactor rather than a built-in template feature.
 ```sh
 make init
 cp .env.example .env
-make setup
+make migrate-up
 make start
 ```
 
@@ -91,7 +91,6 @@ make fmt
 make tidy
 make sqlc
 make vulncheck
-make setup
 make migrate-up
 make migrate-down
 make tools
@@ -139,7 +138,7 @@ If you use this as a template for a new project:
 
 * rename the module in `go.mod`
 * copy `.env.example` to `.env`
-* initialize the local SQLite database with `make setup`
+* initialize the local SQLite database with `make migrate-up`
 * replace or remove example routes, templates, and branding
 * keep new public paths in `internal/paths`
 * assume SQLite is the intended foundation unless you are deliberately

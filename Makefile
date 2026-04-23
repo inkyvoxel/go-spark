@@ -1,4 +1,4 @@
-.PHONY: init start start-web start-worker check test fmt tidy sqlc vulncheck setup migrate-up migrate-down migrate-status tools
+.PHONY: init start start-web start-worker check test fmt tidy sqlc vulncheck migrate-up migrate-down migrate-status tools
 
 DB_PATH ?= ./data/app.db
 
@@ -35,8 +35,6 @@ sqlc:
 
 vulncheck:
 	go tool govulncheck ./...
-
-setup: migrate-up
 
 migrate-up:
 	DATABASE_PATH=$(DB_PATH) go run ./cmd/app migrate up

@@ -15,7 +15,7 @@ For auth email flows, see [email.md](email.md).
 ```sh
 make init
 cp .env.example .env
-make setup
+make migrate-up
 make start
 ```
 
@@ -34,7 +34,6 @@ The app loads `.env` when present. Existing shell environment variables still wi
 make start
 make start-web
 make start-worker
-make setup
 make migrate-status
 make migrate-up
 make migrate-down
@@ -45,7 +44,7 @@ make sqlc
 
 Notes:
 
-* `make setup` creates the local SQLite path and applies the baseline schema.
+* `make migrate-up` creates the local SQLite path and applies the baseline schema.
 * `make start` starts the HTTP server and background jobs worker together.
 * `make start-web` starts only the HTTP server.
 * `make start-worker` starts only the background jobs worker.
