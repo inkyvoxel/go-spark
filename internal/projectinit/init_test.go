@@ -55,14 +55,15 @@ func TestRunUpdatesStarterDefaults(t *testing.T) {
 	assertFileContains(t, repoRoot, "Makefile", "DB_PATH ?= ./data/acme.db")
 	assertFileContains(t, repoRoot, "CONTRIBUTING.md", "/tmp/acme-starter-contrib.db")
 	assertFileContains(t, repoRoot, "templates/layout.html", "Acme Portal")
-	assertFileContains(t, repoRoot, "templates/home.html", "Acme Portal")
+	assertFileContains(t, repoRoot, "templates/home.html", "Welcome to Acme Portal.")
 	assertFileContains(t, repoRoot, "internal/server/server.go", "\"Acme Portal\"")
 	assertFileContains(t, repoRoot, "internal/config/config.go", "Acme Portal <team@acme.test>")
 	assertFileContains(t, repoRoot, "internal/app/build.go", "Acme Portal <team@acme.test>")
 	assertFileContains(t, repoRoot, "cmd/app/main.go", "github.com/acme/acme-starter/internal/app")
+	assertFileContains(t, repoRoot, "docs/todo.md", "starter todo")
 	assertFileContains(t, repoRoot, stateFileName, "DATABASE_PATH=./data/acme.db")
 	assertFileContains(t, repoRoot, stateFileName, "AUTH_EMAIL_VERIFICATION_REQUIRED=false")
-	assertFileContains(t, repoRoot, stateFileName, "TRIM_STARTER_CONTENT=false")
+	assertFileNotContains(t, repoRoot, stateFileName, "TRIM_STARTER_CONTENT=")
 }
 
 func TestRunPromptsForMissingValues(t *testing.T) {
@@ -95,7 +96,6 @@ func TestRunPromptsForMissingValues(t *testing.T) {
 		"hello@example.com",
 		"./data/my-app.db",
 		"yes",
-		"no",
 		"",
 	}, "\n")
 
@@ -114,51 +114,9 @@ func TestRunPromptsForMissingValues(t *testing.T) {
 	if !strings.Contains(stdout.String(), "Default database path [./data/app.db]: ") {
 		t.Fatalf("stdout = %q, want database prompt", stdout.String())
 	}
-}
-
-func TestRunTrimStarterContent(t *testing.T) {
-	repoRoot := t.TempDir()
-	writeFixtureFile(t, repoRoot, "go.mod", "module github.com/inkyvoxel/go-spark\n")
-	writeFixtureFile(t, repoRoot, "README.md", "# Go Spark\n\n* [docs/todo.md](docs/todo.md)\n\nThe normal first-run path uses the SQLite database at `./data/app.db`.\n")
-	writeFixtureFile(t, repoRoot, ".env.example", strings.Join([]string{
-		"DATABASE_PATH=./data/app.db",
-		"AUTH_EMAIL_VERIFICATION_REQUIRED=true",
-		"EMAIL_FROM=\"Go Spark <hello@example.com>\"",
-		"",
-	}, "\n"))
-	writeFixtureFile(t, repoRoot, "Makefile", "DB_PATH ?= ./data/app.db\n")
-	writeFixtureFile(t, repoRoot, "CONTRIBUTING.md", "Go Spark\n")
-	writeFixtureFile(t, repoRoot, "docs/architecture.md", "Go Spark\n")
-	writeFixtureFile(t, repoRoot, "docs/jobs.md", "Go Spark\n")
-	writeFixtureFile(t, repoRoot, "docs/adr/0001-sqlite-first.md", "Go Spark\n")
-	writeFixtureFile(t, repoRoot, "docs/todo.md", "starter todo\n")
-	writeFixtureFile(t, repoRoot, "templates/layout.html", "<a>Go Spark ⚡</a>\n")
-	writeFixtureFile(t, repoRoot, "templates/home.html", "Go Spark gives you a starter.\n")
-	writeFixtureFile(t, repoRoot, "internal/server/server.go", "\"Go Spark\"\n")
-	writeFixtureFile(t, repoRoot, "internal/config/config.go", "\"Go Spark <hello@example.com>\"\n")
-	writeFixtureFile(t, repoRoot, "internal/app/build.go", "\"Go Spark <hello@example.com>\"\n")
-
-	trimStarterContent := true
-	if err := Run(repoRoot, Options{
-		ProjectName:        "Acme Starter",
-		ModulePath:         "github.com/acme/acme-starter",
-		AppName:            "Acme Portal",
-		EmailFromName:      "Acme Portal",
-		EmailFromAddress:   "team@acme.test",
-		DatabasePath:       "./var/acme.db",
-		TrimStarterContent: &trimStarterContent,
-	}, strings.NewReader(""), nil); err != nil {
-		t.Fatalf("Run() error = %v", err)
+	if strings.Contains(stdout.String(), "Trim starter docs and example content") {
+		t.Fatalf("stdout = %q, do not want cleanup prompt", stdout.String())
 	}
-
-	assertFileContains(t, repoRoot, "templates/layout.html", "Acme Portal")
-	assertFileNotContains(t, repoRoot, "templates/layout.html", "⚡")
-	assertFileContains(t, repoRoot, "templates/home.html", "Welcome to Acme Portal.")
-	assertFileNotContains(t, repoRoot, "README.md", "docs/todo.md")
-	if _, err := os.Stat(filepath.Join(repoRoot, "docs/todo.md")); !os.IsNotExist(err) {
-		t.Fatalf("docs/todo.md still exists, err = %v", err)
-	}
-	assertFileContains(t, repoRoot, stateFileName, "TRIM_STARTER_CONTENT=true")
 }
 
 func writeFixtureFile(t *testing.T, root, relativePath, content string) {

@@ -22,7 +22,6 @@ type Options struct {
 	EmailFromAddress          string
 	DatabasePath              string
 	EmailVerificationRequired *bool
-	TrimStarterContent        *bool
 }
 
 type state struct {
@@ -34,7 +33,6 @@ type state struct {
 	EmailFromAddress          string
 	DatabasePath              string
 	EmailVerificationRequired bool
-	TrimStarterContent        bool
 }
 
 type operation struct {
@@ -101,7 +99,6 @@ func detectState(repoRoot string) (state, error) {
 		EmailFromAddress:          defaultString(emailFromAddress, "hello@example.com"),
 		DatabasePath:              defaultString(databasePath, "./data/app.db"),
 		EmailVerificationRequired: emailVerificationRequired,
-		TrimStarterContent:        false,
 	}, nil
 }
 
@@ -235,11 +232,6 @@ func resolveOptions(current state, opts Options, stdin io.Reader, stdout io.Writ
 		return state{}, err
 	}
 
-	trimStarterContent, err := resolveBoolOption(reader, stdout, "Trim starter docs and example content", opts.TrimStarterContent, current.TrimStarterContent)
-	if err != nil {
-		return state{}, err
-	}
-
 	modulePath = strings.TrimSpace(modulePath)
 	if modulePath == "" {
 		return state{}, fmt.Errorf("module path cannot be empty")
@@ -271,7 +263,6 @@ func resolveOptions(current state, opts Options, stdin io.Reader, stdout io.Writ
 		EmailFromAddress:          emailFromAddress,
 		DatabasePath:              databasePath,
 		EmailVerificationRequired: emailVerificationRequired,
-		TrimStarterContent:        trimStarterContent,
 	}, nil
 }
 
@@ -370,9 +361,6 @@ func applyOperations(repoRoot string, current, target state) ([]string, error) {
 				content = strings.ReplaceAll(content, "./"+current.BinaryName+" start", "./"+target.BinaryName+" start")
 				content = strings.ReplaceAll(content, "./"+current.BinaryName+" start web", "./"+target.BinaryName+" start web")
 				content = strings.ReplaceAll(content, "./"+current.BinaryName+" start worker", "./"+target.BinaryName+" start worker")
-				if target.TrimStarterContent {
-					content = strings.ReplaceAll(content, "* [docs/todo.md](docs/todo.md)\n", "")
-				}
 				return content, nil
 			},
 		},
@@ -406,20 +394,13 @@ func applyOperations(repoRoot string, current, target state) ([]string, error) {
 		{
 			path: "templates/layout.html",
 			transform: func(content string, current, target state) (string, error) {
-				content = strings.ReplaceAll(content, current.AppName, target.AppName)
-				if target.TrimStarterContent {
-					content = strings.ReplaceAll(content, " ⚡", "")
-				}
-				return content, nil
+				return strings.ReplaceAll(content, current.AppName, target.AppName), nil
 			},
 		},
 		{
 			path: "templates/home.html",
-			transform: func(content string, current, target state) (string, error) {
-				if target.TrimStarterContent {
-					return trimmedHomeTemplate(target.AppName), nil
-				}
-				return strings.ReplaceAll(content, current.AppName, target.AppName), nil
+			transform: func(_ string, _ state, target state) (string, error) {
+				return homeTemplate(target.AppName), nil
 			},
 		},
 		{
@@ -464,12 +445,6 @@ func applyOperations(repoRoot string, current, target state) ([]string, error) {
 		return nil, err
 	}
 	applied = append(applied, goFiles...)
-
-	cleanupFiles, err := applyCleanup(repoRoot, target)
-	if err != nil {
-		return nil, err
-	}
-	applied = append(applied, cleanupFiles...)
 
 	return uniqueStrings(applied), nil
 }
@@ -588,40 +563,16 @@ func formatAddress(name, address string) string {
 	return fmt.Sprintf("%s <%s>", name, address)
 }
 
-func trimmedHomeTemplate(appName string) string {
+func homeTemplate(appName string) string {
 	return fmt.Sprintf(`{{ define "content" }}
 <section>
   <h1>Welcome to %s.</h1>
   <p>
-    The starter setup is ready. Replace this page with your product's first real screen and remove any remaining example routes you do not plan to keep.
+    The starter setup is ready. Replace this page with your product's first real screen when you're ready to start building.
   </p>
 </section>
 {{ end }}
 `, appName)
-}
-
-func applyCleanup(repoRoot string, target state) ([]string, error) {
-	if !target.TrimStarterContent {
-		return nil, nil
-	}
-
-	paths := []string{
-		"docs/todo.md",
-	}
-
-	removed := make([]string, 0, len(paths))
-	for _, relativePath := range paths {
-		fullPath := filepath.Join(repoRoot, relativePath)
-		if err := os.Remove(fullPath); err != nil {
-			if os.IsNotExist(err) {
-				continue
-			}
-			return nil, fmt.Errorf("remove %s: %w", relativePath, err)
-		}
-		removed = append(removed, relativePath)
-	}
-
-	return removed, nil
 }
 
 func writeStateFile(repoRoot string, target state) error {
@@ -633,7 +584,6 @@ func writeStateFile(repoRoot string, target state) error {
 		"EMAIL_FROM_ADDRESS=" + target.EmailFromAddress,
 		"DATABASE_PATH=" + target.DatabasePath,
 		"AUTH_EMAIL_VERIFICATION_REQUIRED=" + strconv.FormatBool(target.EmailVerificationRequired),
-		"TRIM_STARTER_CONTENT=" + strconv.FormatBool(target.TrimStarterContent),
 		"",
 	}, "\n")
 

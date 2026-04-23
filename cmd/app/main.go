@@ -128,9 +128,6 @@ func parseInitArgs(args []string) (cliCommand, error) {
 	fs.StringVar(&options.DatabasePath, "database-path", "", "default SQLite database path")
 	fs.StringVar(&emailVerification, "email-verification", "", "default email verification setting (true/false)")
 
-	var trimStarter string
-	fs.StringVar(&trimStarter, "trim-starter", "", "trim starter docs and example content (true/false)")
-
 	if err := fs.Parse(args); err != nil {
 		return cliCommand{}, err
 	}
@@ -144,14 +141,6 @@ func parseInitArgs(args []string) (cliCommand, error) {
 			return cliCommand{}, fmt.Errorf("parse -email-verification: %w", err)
 		}
 		options.EmailVerificationRequired = &value
-	}
-
-	if trimStarter != "" {
-		value, err := parseCLIOptionalBool(trimStarter)
-		if err != nil {
-			return cliCommand{}, fmt.Errorf("parse -trim-starter: %w", err)
-		}
-		options.TrimStarterContent = &value
 	}
 
 	return cliCommand{name: "init", initOptions: &options}, nil

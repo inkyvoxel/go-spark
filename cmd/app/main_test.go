@@ -51,7 +51,7 @@ func TestParseCLIArgsSupportsStartWorker(t *testing.T) {
 }
 
 func TestParseCLIArgsSupportsInit(t *testing.T) {
-	command, err := parseCLIArgs([]string{"init", "-project-name", "Acme", "-module-path", "github.com/acme/app", "-database-path", "./data/acme.db", "-email-verification", "false", "-trim-starter", "true"})
+	command, err := parseCLIArgs([]string{"init", "-project-name", "Acme", "-module-path", "github.com/acme/app", "-database-path", "./data/acme.db", "-email-verification", "false"})
 	if err != nil {
 		t.Fatalf("parseCLIArgs() error = %v", err)
 	}
@@ -73,8 +73,15 @@ func TestParseCLIArgsSupportsInit(t *testing.T) {
 	if command.initOptions.EmailVerificationRequired == nil || *command.initOptions.EmailVerificationRequired {
 		t.Fatalf("parseCLIArgs() email verification = %v, want false", command.initOptions.EmailVerificationRequired)
 	}
-	if command.initOptions.TrimStarterContent == nil || !*command.initOptions.TrimStarterContent {
-		t.Fatalf("parseCLIArgs() trim starter = %v, want true", command.initOptions.TrimStarterContent)
+}
+
+func TestParseCLIArgsRejectsRemovedTrimStarterFlag(t *testing.T) {
+	_, err := parseCLIArgs([]string{"init", "-trim-starter", "true"})
+	if err == nil {
+		t.Fatal("parseCLIArgs() error = nil, want error")
+	}
+	if !strings.Contains(err.Error(), "flag provided but not defined") {
+		t.Fatalf("parseCLIArgs() error = %v, want unknown flag context", err)
 	}
 }
 

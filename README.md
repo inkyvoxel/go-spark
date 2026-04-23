@@ -24,7 +24,7 @@ refactor rather than a built-in template feature.
 ## Quick Start
 
 ```sh
-go run ./cmd/app init
+make init
 cp .env.example .env
 make setup
 make start
@@ -33,7 +33,7 @@ make start
 Open `http://localhost:8080`.
 
 The normal first-run path uses the SQLite database at `./data/app.db`.
-If you are using this repo as a template, run `go run ./cmd/app init` first to rename the module, app branding, default database path, and other starter defaults.
+If you are using this repo as a template, run `make init` first to rename the module, app branding, default database path, and other starter defaults.
 
 The `init` command prompts for:
 
@@ -43,7 +43,6 @@ The `init` command prompts for:
 * default email sender name and address
 * default SQLite database path
 * whether email verification should be enabled by default
-* whether starter docs and example content should be trimmed
 
 If you want a non-interactive setup, pass flags such as:
 
@@ -52,8 +51,7 @@ go run ./cmd/app init \
   -project-name "Acme Starter" \
   -module-path github.com/acme/acme-starter \
   -app-name "Acme Portal" \
-  -database-path ./var/acme.db \
-  -trim-starter true
+  -database-path ./var/acme.db
 ```
 
 ## Process Modes

@@ -255,7 +255,10 @@ Questions to support:
 * default email sender name/address
 * default database path
 * whether email verification should start enabled
-* whether starter auth pages/examples should be kept
+
+The init command should personalize branding and first-run copy, not remove
+core template features. Auth is one of the main reasons this starter exists,
+so starter cleanup/removal is not a goal for this template.
 
 The command should update at least:
 
@@ -276,18 +279,18 @@ Design rule:
 * prefer a small declarative manifest of replacement targets over scattered
   string replacement logic
 
-### 11. Add a "starter cleanup" mode
+### 11. Make homepage branding part of initialization
 
-Many template users want auth, email, and jobs as examples, but not
-necessarily every example artifact.
+The starter homepage should become neutral project scaffolding as part of
+initialization, without removing any functional template features.
 
 Consider:
 
-* an optional init prompt to remove demo branding and starter-specific docs
-* a documented list of safe-to-delete starter surfaces
-* maybe a flag that trims example content while preserving the core platform
+* update the header brand and starter homepage copy from the chosen app name
+* replace the default home page with a minimal welcome screen after init
+* keep auth, email, jobs, and the rest of the starter intact
 
-This should come after the main init command exists.
+This should stay focused on branding and copy, not feature removal.
 
 ## Phase 6: Documentation And Maintenance Pass
 

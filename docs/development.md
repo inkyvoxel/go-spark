@@ -13,7 +13,7 @@ For auth email flows, see [email.md](email.md).
 ## First Run
 
 ```sh
-go run ./cmd/app init
+make init
 cp .env.example .env
 make setup
 make start
@@ -22,7 +22,7 @@ make start
 This starter assumes SQLite as the normal development and first-run path. The
 default database file is `./data/app.db`.
 
-`go run ./cmd/app init` is the intended first step for a new fork. It updates
+`make init` is the intended first step for a new fork. It updates
 the module path, app branding, default email sender, default SQLite path, and
 other starter defaults before you copy `.env.example` to `.env`.
 
@@ -50,7 +50,7 @@ Notes:
 * `make start-worker` starts only the background jobs worker.
 * `make check` runs formatting, module tidy, sqlc generation, vulncheck, and tests.
 * The app CLI uses `start`, with optional `all`, `web`, or `worker` modes.
-* `go run ./cmd/app init -trim-starter true` removes the repo todo doc and swaps the default home page for a more neutral placeholder.
+* `make init` personalizes the starter branding and rewrites the home page to a simple welcome screen for the new app.
 
 ## Tooling
 
