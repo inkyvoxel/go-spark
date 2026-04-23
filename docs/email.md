@@ -13,7 +13,7 @@ The starter includes:
 * resend verification flows
 * password reset emails
 * SMTP and log senders
-* a database-backed outbox processor for durable delivery
+* a SQLite-backed outbox processor for durable delivery
 
 ## Design
 
@@ -21,7 +21,8 @@ Email is split into a few clear responsibilities:
 
 * `internal/services` decides when email should be sent
 * `internal/email` builds messages and sends them
-* `internal/database` stores tokens and outbox rows
+* `internal/database` stores SQLite-backed tokens and outbox rows
+* `internal/platform/sqlite` owns SQLite connection setup
 * `internal/jobs` runs the outbox processor in the worker process
 
 The request path never calls SMTP directly. It creates the domain record, enqueues an outbox row, and returns. Delivery happens later in the worker.
@@ -33,7 +34,7 @@ The outbox gives the starter a durable default:
 * requests do not block on provider calls
 * delivery survives restarts
 * retries are explicit and testable
-* local development stays simple because the queue is just a database table
+* local development stays simple because the queue is just a SQLite table
 
 This is the preferred pattern for durable, delayed, retryable work in this project.
 

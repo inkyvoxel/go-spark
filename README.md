@@ -1,6 +1,7 @@
 # Go Spark
 
-A small starter template for server-rendered Go web applications.
+A small SQLite-first starter template for server-rendered Go web
+applications.
 
 Go Spark keeps the default shape intentionally simple:
 
@@ -11,35 +12,61 @@ Go Spark keeps the default shape intentionally simple:
 * SQL migrations with `goose`
 * structured logging with `log/slog`
 
-It includes a runnable app, basic auth flows, transactional email, and a small background jobs worker.
+It includes a runnable app, basic auth flows, transactional email, and a
+small background jobs worker.
+
+The template is designed for new projects that want a solid SQLite
+foundation, minimal infrastructure, and an easy path to running as a single
+binary. It does not currently promise plug-and-play support for multiple
+database engines. If a future fork outgrows SQLite, treat that as an explicit
+refactor rather than a built-in template feature.
 
 ## Quick Start
 
 ```sh
+make init
 cp .env.example .env
-make migrate-up
-make run
+make setup
+make start
 ```
 
 Open `http://localhost:8080`.
 
-The default SQLite database path is `./data/app.db`.
+The normal first-run path uses the SQLite database at `./data/app.db`.
+If you are using this repo as a template, run `make init` first to rename the module, app branding, default database path, and other starter defaults.
 
-## Process Modes
+The `init` command prompts for:
 
-`APP_PROCESS` selects which long-running process to run:
+* project name
+* Go module path
+* app display name
+* default email sender name and address
+* default SQLite database path
+* whether email verification should be enabled by default
 
-* `all`: HTTP server plus background jobs worker
-* `web`: HTTP server only
-* `worker`: background jobs worker only
+If you want a non-interactive setup, pass flags such as:
 
-You can also pass the mode as the first CLI argument:
+```sh
+go run ./cmd/app init \
+  -project-name "Acme Starter" \
+  -module-path github.com/acme/acme-starter \
+  -app-name "Acme Portal" \
+  -database-path ./var/acme.db
+```
+
+## Process Commands
+
+The CLI uses explicit subcommands:
 
 ```sh
 ./go-spark all
-./go-spark web
+./go-spark serve
 ./go-spark worker
+./go-spark migrate status
 ```
+
+`APP_PROCESS` still exists as an environment-level override, but the preferred
+entrypoints are the explicit CLI commands.
 
 ## What’s Included
 
@@ -49,16 +76,18 @@ You can also pass the mode as the first CLI argument:
 * account email verification
 * password reset
 * email outbox delivery
-* periodic database cleanup jobs
+* periodic SQLite-backed cleanup jobs
 
 Email delivery defaults to `EMAIL_PROVIDER=log` for safe local development.
 
 ## Commands
 
 ```sh
-make run
-make run-web
-make run-worker
+make init
+make start
+make start-web
+make start-worker
+make setup
 make migrate-up
 make test
 make check
@@ -86,10 +115,11 @@ Reference docs:
 ```text
 /cmd/app            application entrypoint
 /internal/config    environment config
-/internal/database  SQLite connection setup and stores
+/internal/database  SQLite-backed domain stores
 /internal/db        SQL queries and generated sqlc package
 /internal/email     email messages, senders, and outbox processor
 /internal/jobs      background jobs runner and jobs
+/internal/platform  engine-specific platform code such as SQLite setup
 /internal/paths     canonical public URL paths
 /internal/server    HTTP routes and handlers
 /internal/services  business logic
@@ -105,7 +135,9 @@ If you use this as a template for a new project:
 
 * rename the module in `go.mod`
 * copy `.env.example` to `.env`
-* run migrations
-* replace example routes, templates, and branding
+* initialize the local SQLite database with `make setup`
+* replace or remove example routes, templates, and branding
 * keep new public paths in `internal/paths`
+* assume SQLite is the intended foundation unless you are deliberately
+  refactoring the persistence layer
 * review production settings before deployment

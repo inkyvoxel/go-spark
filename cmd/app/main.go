@@ -2,28 +2,35 @@ package main
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/base64"
 	"errors"
+	"flag"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
-	"net/url"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
 
+	bootstrap "github.com/inkyvoxel/go-spark/internal/app"
 	"github.com/inkyvoxel/go-spark/internal/config"
-	"github.com/inkyvoxel/go-spark/internal/database"
-	"github.com/inkyvoxel/go-spark/internal/email"
 	"github.com/inkyvoxel/go-spark/internal/jobs"
-	"github.com/inkyvoxel/go-spark/internal/server"
+	"github.com/inkyvoxel/go-spark/internal/projectinit"
 	"github.com/inkyvoxel/go-spark/internal/services"
+	"github.com/pressly/goose/v3"
 )
 
-const defaultStarterEmailFrom = `"Go Spark" <hello@example.com>`
+type cliCommand struct {
+	name            string
+	processOverride string
+	initOptions     *projectinit.Options
+	migrateAction   string
+}
+
+const migrationsDir = "migrations"
 
 func main() {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
@@ -35,128 +42,158 @@ func main() {
 }
 
 func run(args []string, logger *slog.Logger) error {
-	if err := config.LoadDotEnv(".env"); err != nil {
-		return fmt.Errorf("load .env: %w", err)
-	}
-
-	processOverride, err := processArg(args)
+	command, err := parseCLIArgs(args)
 	if err != nil {
 		return err
 	}
 
-	cfg, err := config.FromEnvWithProcess(services.DefaultPasswordMinLength, processOverride)
+	if command.name == "init" {
+		repoRoot, err := os.Getwd()
+		if err != nil {
+			return fmt.Errorf("get working directory: %w", err)
+		}
+
+		return projectinit.Run(repoRoot, *command.initOptions, os.Stdin, os.Stdout)
+	}
+
+	if command.name == "migrate" {
+		return runMigrate(command.migrateAction)
+	}
+
+	if err := config.LoadDotEnv(".env"); err != nil {
+		return fmt.Errorf("load .env: %w", err)
+	}
+
+	cfg, err := config.FromEnvWithProcess(services.DefaultPasswordMinLength, command.processOverride)
 	if err != nil {
 		return fmt.Errorf("load config: %w", err)
 	}
-	if err := validateSecurityConfig(cfg); err != nil {
-		return fmt.Errorf("invalid security configuration: %w", err)
-	}
-	logSecurityConfigWarnings(cfg, logger)
-	csrfSigningKey, err := resolveCSRFSigningKey(cfg, logger)
+
+	runtime, err := bootstrap.Build(cfg, logger)
 	if err != nil {
-		return fmt.Errorf("resolve CSRF signing key: %w", err)
+		return err
 	}
-
-	db, err := database.Open(cfg.DatabasePath)
-	if err != nil {
-		return fmt.Errorf("open database: %w", err)
-	}
-	defer db.Close()
-
-	auth := services.NewAuthService(database.NewAuthStore(db), services.AuthOptions{
-		PasswordMinLen:           cfg.PasswordMinLength,
-		PasswordPepper:           cfg.PasswordPepper,
-		EmailVerificationPolicy:  services.NewEmailVerificationPolicy(cfg.EmailVerificationRequired),
-		EmailChangeNoticeEnabled: boolPtr(cfg.EmailChangeNoticeEnabled),
-		ConfirmationEmail: email.AccountConfirmationOptions{
-			AppBaseURL: cfg.AppBaseURL,
-			From:       authSenderFrom(cfg),
-		},
-		PasswordResetEmail: email.PasswordResetOptions{
-			AppBaseURL: cfg.AppBaseURL,
-			From:       authSenderFrom(cfg),
-		},
-	})
-
-	emailSender, err := newEmailSender(cfg, logger)
-	if err != nil {
-		return fmt.Errorf("configure email sender: %w", err)
-	}
-
-	emailProcessor := email.NewProcessor(database.NewEmailOutboxStore(db), emailSender, email.ProcessorOptions{
-		Logger: logger,
-	})
-	cleanupJob, err := jobs.NewCleanupJob(database.NewCleanupStore(db), jobs.CleanupOptions{
-		Logger:               logger,
-		TokenRetention:       cfg.CleanupTokenRetention,
-		SentEmailRetention:   cfg.CleanupSentEmailRetention,
-		FailedEmailRetention: cfg.CleanupFailedEmailRetention,
-	})
-	if err != nil {
-		return fmt.Errorf("configure cleanup job: %w", err)
-	}
-	jobsRunner, err := jobs.NewRunner(
-		logger,
-		jobs.NewEmailJob(emailProcessor, jobs.DefaultEmailInterval),
-		cleanupJob.Job(cfg.CleanupInterval),
-	)
-	if err != nil {
-		return fmt.Errorf("configure background jobs runner: %w", err)
-	}
-
-	app := server.New(server.Options{
-		Logger:                  logger,
-		DB:                      db,
-		Auth:                    auth,
-		CookieSecure:            cfg.CookieSecure,
-		AppBaseURL:              cfg.AppBaseURL,
-		CSRFSigningKey:          csrfSigningKey,
-		PasswordMinLength:       cfg.PasswordMinLength,
-		EmailVerificationPolicy: services.NewEmailVerificationPolicy(cfg.EmailVerificationRequired),
-		RateLimitPolicies:       toServerRateLimitPolicies(cfg.RateLimitPolicies),
-	})
-
-	httpServer := &http.Server{
-		Addr:              cfg.Addr,
-		Handler:           app.Routes(),
-		ReadHeaderTimeout: 5 * time.Second,
-		ReadTimeout:       10 * time.Second,
-		WriteTimeout:      30 * time.Second,
-		IdleTimeout:       120 * time.Second,
-	}
+	defer runtime.Close()
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
 	switch cfg.Process {
 	case config.ProcessAll:
-		return runAll(ctx, logger, cfg, httpServer, jobsRunner)
+		return runAll(ctx, logger, cfg, runtime.HTTPServer, runtime.JobsRunner)
 	case config.ProcessWeb:
-		return runWeb(ctx, logger, cfg, httpServer)
+		return runWeb(ctx, logger, cfg, runtime.HTTPServer)
 	case config.ProcessWorker:
-		return runWorker(ctx, logger, cfg, jobsRunner)
+		return runWorker(ctx, logger, cfg, runtime.JobsRunner)
 	default:
 		return fmt.Errorf("APP_PROCESS must be %q, %q, or %q", config.ProcessAll, config.ProcessWeb, config.ProcessWorker)
 	}
 }
 
-func boolPtr(v bool) *bool {
-	return &v
+func parseCLIArgs(args []string) (cliCommand, error) {
+	if len(args) == 0 {
+		return cliCommand{}, nil
+	}
+
+	switch command := strings.ToLower(strings.TrimSpace(args[0])); command {
+	case "all":
+		return cliCommand{name: "all", processOverride: config.ProcessAll}, nil
+	case "serve":
+		return cliCommand{name: "serve", processOverride: config.ProcessWeb}, nil
+	case "worker":
+		return cliCommand{name: "worker", processOverride: config.ProcessWorker}, nil
+	case "migrate":
+		return parseMigrateArgs(args[1:])
+	case "init":
+		return parseInitArgs(args[1:])
+	default:
+		return cliCommand{}, fmt.Errorf("unknown command %q; use %q, %q, %q, %q, or %q", command, "serve", "worker", "all", "migrate", "init")
+	}
 }
 
-func processArg(args []string) (string, error) {
-	if len(args) == 0 {
-		return "", nil
+func parseInitArgs(args []string) (cliCommand, error) {
+	fs := flag.NewFlagSet("init", flag.ContinueOnError)
+	fs.SetOutput(io.Discard)
+
+	var options projectinit.Options
+	var emailVerification string
+
+	fs.StringVar(&options.ProjectName, "project-name", "", "project name for docs and README")
+	fs.StringVar(&options.ModulePath, "module-path", "", "Go module path")
+	fs.StringVar(&options.AppName, "app-name", "", "app display name")
+	fs.StringVar(&options.EmailFromName, "email-from-name", "", "default email sender display name")
+	fs.StringVar(&options.EmailFromAddress, "email-from-address", "", "default email sender address")
+	fs.StringVar(&options.DatabasePath, "database-path", "", "default SQLite database path")
+	fs.StringVar(&emailVerification, "email-verification", "", "default email verification setting (true/false)")
+
+	if err := fs.Parse(args); err != nil {
+		return cliCommand{}, err
 	}
-	if len(args) > 1 {
-		return "", fmt.Errorf("expected at most one process mode argument (%q, %q, or %q)", config.ProcessAll, config.ProcessWeb, config.ProcessWorker)
+	if fs.NArg() != 0 {
+		return cliCommand{}, fmt.Errorf("init subcommand does not accept positional arguments")
 	}
 
-	process := strings.ToLower(strings.TrimSpace(args[0]))
-	if !config.IsProcess(process) {
-		return "", fmt.Errorf("process mode must be %q, %q, or %q", config.ProcessAll, config.ProcessWeb, config.ProcessWorker)
+	if emailVerification != "" {
+		value, err := parseCLIOptionalBool(emailVerification)
+		if err != nil {
+			return cliCommand{}, fmt.Errorf("parse -email-verification: %w", err)
+		}
+		options.EmailVerificationRequired = &value
 	}
-	return process, nil
+
+	return cliCommand{name: "init", initOptions: &options}, nil
+}
+
+func parseMigrateArgs(args []string) (cliCommand, error) {
+	if len(args) != 1 {
+		return cliCommand{}, fmt.Errorf("migrate subcommand requires exactly one action (%q, %q, or %q)", "up", "down", "status")
+	}
+
+	action := strings.ToLower(strings.TrimSpace(args[0]))
+	switch action {
+	case "up", "down", "status":
+		return cliCommand{name: "migrate", migrateAction: action}, nil
+	default:
+		return cliCommand{}, fmt.Errorf("migrate action must be %q, %q, or %q", "up", "down", "status")
+	}
+}
+
+func parseCLIOptionalBool(value string) (bool, error) {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "1", "true", "t", "yes", "y":
+		return true, nil
+	case "0", "false", "f", "no", "n":
+		return false, nil
+	default:
+		return false, fmt.Errorf("expected true or false")
+	}
+}
+
+func runMigrate(action string) error {
+	if err := config.LoadDotEnv(".env"); err != nil {
+		return fmt.Errorf("load .env: %w", err)
+	}
+
+	cfg, err := config.FromEnvWithProcess(services.DefaultPasswordMinLength, config.ProcessAll)
+	if err != nil {
+		return fmt.Errorf("load config: %w", err)
+	}
+
+	if err := os.MkdirAll(filepath.Dir(cfg.DatabasePath), 0o755); err != nil {
+		return fmt.Errorf("create database directory: %w", err)
+	}
+
+	db, err := goose.OpenDBWithDriver("sqlite3", cfg.DatabasePath)
+	if err != nil {
+		return fmt.Errorf("open migration database: %w", err)
+	}
+	defer db.Close()
+
+	if err := goose.RunContext(context.Background(), action, db, migrationsDir); err != nil {
+		return fmt.Errorf("run migrations %s: %w", action, err)
+	}
+
+	return nil
 }
 
 func runAll(ctx context.Context, logger *slog.Logger, cfg config.Config, httpServer *http.Server, jobsRunner *jobs.Runner) error {
@@ -221,152 +258,4 @@ func runWorker(ctx context.Context, logger *slog.Logger, cfg config.Config, jobs
 	}
 	logger.Info("background jobs worker stopped")
 	return nil
-}
-
-func newEmailSender(cfg config.Config, logger *slog.Logger) (email.Sender, error) {
-	switch cfg.EmailProvider {
-	case email.ProviderLog:
-		return email.NewLogSender(logger, email.LogSenderOptions{
-			LogBody: cfg.EmailLogBody,
-		}), nil
-	case email.ProviderSMTP:
-		return email.NewSMTPSender(email.SMTPSenderOptions{
-			Logger:   logger,
-			Host:     cfg.SMTPHost,
-			Port:     cfg.SMTPPort,
-			Username: cfg.SMTPUsername,
-			Password: cfg.SMTPPassword,
-			From:     cfg.SMTPFrom,
-			UseTLS:   cfg.SMTPTLS,
-		})
-	default:
-		return nil, fmt.Errorf("unsupported email provider %q", cfg.EmailProvider)
-	}
-}
-
-func authSenderFrom(cfg config.Config) string {
-	if cfg.EmailProvider == email.ProviderSMTP && strings.TrimSpace(cfg.SMTPFrom) != "" {
-		return cfg.SMTPFrom
-	}
-	return cfg.EmailFrom
-}
-
-func validateSecurityConfig(cfg config.Config) error {
-	if cfg.Env != "production" {
-		return nil
-	}
-	if !cfg.CookieSecure {
-		return fmt.Errorf("APP_COOKIE_SECURE must be true when APP_ENV=production")
-	}
-	if !isHTTPSURL(cfg.AppBaseURL) {
-		return fmt.Errorf("APP_BASE_URL must use https when APP_ENV=production")
-	}
-	if strings.TrimSpace(cfg.PasswordPepper) == "" {
-		return fmt.Errorf("AUTH_PASSWORD_PEPPER must be set when APP_ENV=production")
-	}
-	if strings.TrimSpace(cfg.CSRFSigningKey) == "" {
-		return fmt.Errorf("CSRF_SIGNING_KEY must be set when APP_ENV=production")
-	}
-	return nil
-}
-
-func resolveCSRFSigningKey(cfg config.Config, logger *slog.Logger) (string, error) {
-	key := strings.TrimSpace(cfg.CSRFSigningKey)
-	if key != "" {
-		return key, nil
-	}
-
-	random := make([]byte, 32)
-	if _, err := rand.Read(random); err != nil {
-		return "", err
-	}
-
-	ephemeralKey := base64.RawURLEncoding.EncodeToString(random)
-	if logger != nil {
-		logger.Warn("CSRF_SIGNING_KEY is not set; generated ephemeral key for non-production process startup")
-	}
-	return ephemeralKey, nil
-}
-
-func logSecurityConfigWarnings(cfg config.Config, logger *slog.Logger) {
-	for _, warning := range securityConfigWarnings(cfg) {
-		logger.Warn("production security configuration warning", "warning", warning)
-	}
-}
-
-func securityConfigWarnings(cfg config.Config) []string {
-	if cfg.Env != "production" {
-		return nil
-	}
-
-	warnings := make([]string, 0, 4)
-
-	if !cfg.EmailVerificationRequired {
-		warnings = append(warnings, "AUTH_EMAIL_VERIFICATION_REQUIRED=false allows unverified users to access account features in production")
-	}
-	if cfg.EmailProvider != email.ProviderSMTP {
-		warnings = append(warnings, fmt.Sprintf("EMAIL_PROVIDER=%q in production does not deliver real email by default", cfg.EmailProvider))
-	}
-	if cfg.EmailLogBody {
-		warnings = append(warnings, "EMAIL_LOG_BODY=true may expose email contents and token links in production logs")
-	}
-	if isDefaultStarterEmailFrom(cfg.EmailFrom) {
-		warnings = append(warnings, "EMAIL_FROM is still the default starter sender in production")
-	}
-
-	return warnings
-}
-
-func isHTTPSURL(raw string) bool {
-	parsed, err := url.Parse(raw)
-	return err == nil && strings.EqualFold(parsed.Scheme, "https")
-}
-
-func isDefaultStarterEmailFrom(value string) bool {
-	return strings.TrimSpace(value) == defaultStarterEmailFrom
-}
-
-func toServerRateLimitPolicies(cfg config.RateLimitPoliciesConfig) server.RateLimitPolicies {
-	return server.RateLimitPolicies{
-		Login: server.RateLimitPolicy{
-			MaxRequests: cfg.Login.MaxRequests,
-			Window:      cfg.Login.Window,
-		},
-		Register: server.RateLimitPolicy{
-			MaxRequests: cfg.Register.MaxRequests,
-			Window:      cfg.Register.Window,
-		},
-		ForgotPassword: server.RateLimitPolicy{
-			MaxRequests: cfg.ForgotPassword.MaxRequests,
-			Window:      cfg.ForgotPassword.Window,
-		},
-		ResetPassword: server.RateLimitPolicy{
-			MaxRequests: cfg.ResetPassword.MaxRequests,
-			Window:      cfg.ResetPassword.Window,
-		},
-		PublicResendVerification: server.RateLimitPolicy{
-			MaxRequests: cfg.PublicResendVerification.MaxRequests,
-			Window:      cfg.PublicResendVerification.Window,
-		},
-		AccountResendVerification: server.RateLimitPolicy{
-			MaxRequests: cfg.AccountResendVerification.MaxRequests,
-			Window:      cfg.AccountResendVerification.Window,
-		},
-		ChangePassword: server.RateLimitPolicy{
-			MaxRequests: cfg.ChangePassword.MaxRequests,
-			Window:      cfg.ChangePassword.Window,
-		},
-		ChangeEmail: server.RateLimitPolicy{
-			MaxRequests: cfg.ChangeEmail.MaxRequests,
-			Window:      cfg.ChangeEmail.Window,
-		},
-		RevokeSession: server.RateLimitPolicy{
-			MaxRequests: cfg.RevokeSession.MaxRequests,
-			Window:      cfg.RevokeSession.Window,
-		},
-		RevokeOtherSessions: server.RateLimitPolicy{
-			MaxRequests: cfg.RevokeOtherSessions.MaxRequests,
-			Window:      cfg.RevokeOtherSessions.Window,
-		},
-	}
 }

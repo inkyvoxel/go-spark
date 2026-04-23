@@ -13,19 +13,29 @@ For auth email flows, see [email.md](email.md).
 ## First Run
 
 ```sh
+make init
 cp .env.example .env
-make migrate-up
-make run
+make setup
+make start
 ```
+
+This starter assumes SQLite as the normal development and first-run path. The
+default database file is `./data/app.db`.
+
+`make init` is the intended first step for a new fork. It updates
+the module path, app branding, default email sender, default SQLite path, and
+other starter defaults before you copy `.env.example` to `.env`.
 
 The app loads `.env` when present. Existing shell environment variables still win.
 
 ## Common Commands
 
 ```sh
-make run
-make run-web
-make run-worker
+make start
+make start-web
+make start-worker
+make setup
+make migrate-status
 make migrate-up
 make migrate-down
 make test
@@ -35,10 +45,14 @@ make sqlc
 
 Notes:
 
-* `make run` starts the HTTP server and background jobs worker together.
-* `make run-web` starts only the HTTP server.
-* `make run-worker` starts only the background jobs worker.
+* `make setup` creates the local SQLite path and applies the baseline schema.
+* `make start` starts the HTTP server and background jobs worker together.
+* `make start-web` starts only the HTTP server.
+* `make start-worker` starts only the background jobs worker.
+* `make migrate-up`, `make migrate-down`, and `make migrate-status` run through the app CLI so initialization and migrations share one command surface.
 * `make check` runs formatting, module tidy, sqlc generation, vulncheck, and tests.
+* The app CLI now prefers explicit commands: `all`, `serve`, `worker`, `migrate`, and `init`.
+* `make init` personalizes the starter branding and rewrites the home page to a simple welcome screen for the new app.
 
 ## Tooling
 
@@ -73,9 +87,16 @@ If you add a new route, update `internal/paths` first and use those constants fr
 
 ### Database changes
 
+The template is SQLite-first today.
+
 * Migrations live in `migrations`.
+* The template currently ships with one baseline schema migration for fresh projects.
 * SQL queries live in `internal/db/queries`.
 * Generated code lives in `internal/db/generated`.
+* SQLite connection setup now lives under `internal/platform/sqlite`.
+* SQLite-backed domain stores live in `internal/database`.
+* The default SQLite tuning is:
+  `foreign_keys = ON`, `busy_timeout = 5000`, and `MaxOpenConns = 1`.
 
 If you change schema or queries, regenerate with:
 
@@ -88,7 +109,7 @@ make sqlc
 The `worker` process hosts all background jobs. Today that includes:
 
 * email outbox delivery
-* database cleanup
+* SQLite-backed data cleanup
 
 When adding new background behavior, follow [jobs.md](jobs.md) instead of inventing a new pattern.
 

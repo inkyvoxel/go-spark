@@ -1,274 +1,173 @@
 package main
 
 import (
-	"io"
-	"log/slog"
 	"strings"
 	"testing"
 
 	"github.com/inkyvoxel/go-spark/internal/config"
-	"github.com/inkyvoxel/go-spark/internal/email"
 )
 
-func TestNewEmailSenderReturnsLogSender(t *testing.T) {
-	sender, err := newEmailSender(config.Config{
-		EmailProvider: email.ProviderLog,
-		EmailLogBody:  true,
-	}, slog.New(slog.NewTextHandler(io.Discard, nil)))
+func TestParseCLIArgsReturnsEmptyWhenNoArg(t *testing.T) {
+	command, err := parseCLIArgs(nil)
 	if err != nil {
-		t.Fatalf("newEmailSender() error = %v", err)
+		t.Fatalf("parseCLIArgs() error = %v", err)
 	}
-
-	if _, ok := sender.(*email.LogSender); !ok {
-		t.Fatalf("sender type = %T, want *email.LogSender", sender)
+	if command.processOverride != "" {
+		t.Fatalf("parseCLIArgs() processOverride = %q, want empty", command.processOverride)
 	}
 }
 
-func TestNewEmailSenderReturnsSMTPSender(t *testing.T) {
-	sender, err := newEmailSender(config.Config{
-		EmailProvider: email.ProviderSMTP,
-		SMTPHost:      "smtp.example.com",
-		SMTPPort:      587,
-		SMTPFrom:      "Mailer <mailer@example.com>",
-		SMTPTLS:       true,
-	}, slog.New(slog.NewTextHandler(io.Discard, nil)))
+func TestParseCLIArgsSupportsServe(t *testing.T) {
+	command, err := parseCLIArgs([]string{"serve"})
 	if err != nil {
-		t.Fatalf("newEmailSender() error = %v", err)
+		t.Fatalf("parseCLIArgs() error = %v", err)
 	}
-
-	if _, ok := sender.(*email.SMTPSender); !ok {
-		t.Fatalf("sender type = %T, want *email.SMTPSender", sender)
+	if command.name != "serve" {
+		t.Fatalf("parseCLIArgs() name = %q, want serve", command.name)
+	}
+	if command.processOverride != config.ProcessWeb {
+		t.Fatalf("parseCLIArgs() processOverride = %q, want %q", command.processOverride, config.ProcessWeb)
 	}
 }
 
-func TestNewEmailSenderRejectsUnknownProvider(t *testing.T) {
-	_, err := newEmailSender(config.Config{
-		EmailProvider: "invalid",
-	}, slog.New(slog.NewTextHandler(io.Discard, nil)))
+func TestParseCLIArgsSupportsWorkerSubcommand(t *testing.T) {
+	command, err := parseCLIArgs([]string{"worker"})
+	if err != nil {
+		t.Fatalf("parseCLIArgs() error = %v", err)
+	}
+	if command.name != "worker" {
+		t.Fatalf("parseCLIArgs() name = %q, want worker", command.name)
+	}
+	if command.processOverride != config.ProcessWorker {
+		t.Fatalf("parseCLIArgs() processOverride = %q, want %q", command.processOverride, config.ProcessWorker)
+	}
+}
+
+func TestParseCLIArgsSupportsAll(t *testing.T) {
+	command, err := parseCLIArgs([]string{"all"})
+	if err != nil {
+		t.Fatalf("parseCLIArgs() error = %v", err)
+	}
+	if command.name != "all" {
+		t.Fatalf("parseCLIArgs() name = %q, want all", command.name)
+	}
+	if command.processOverride != config.ProcessAll {
+		t.Fatalf("parseCLIArgs() processOverride = %q, want %q", command.processOverride, config.ProcessAll)
+	}
+}
+
+func TestParseCLIArgsSupportsMigrate(t *testing.T) {
+	command, err := parseCLIArgs([]string{"migrate", "status"})
+	if err != nil {
+		t.Fatalf("parseCLIArgs() error = %v", err)
+	}
+	if command.name != "migrate" {
+		t.Fatalf("parseCLIArgs() name = %q, want migrate", command.name)
+	}
+	if command.migrateAction != "status" {
+		t.Fatalf("parseCLIArgs() migrateAction = %q, want status", command.migrateAction)
+	}
+}
+
+func TestParseCLIArgsSupportsInit(t *testing.T) {
+	command, err := parseCLIArgs([]string{"init", "-project-name", "Acme", "-module-path", "github.com/acme/app", "-database-path", "./data/acme.db", "-email-verification", "false"})
+	if err != nil {
+		t.Fatalf("parseCLIArgs() error = %v", err)
+	}
+	if command.name != "init" {
+		t.Fatalf("parseCLIArgs() name = %q, want init", command.name)
+	}
+	if command.initOptions == nil {
+		t.Fatal("parseCLIArgs() initOptions = nil, want options")
+	}
+	if command.initOptions.ProjectName != "Acme" {
+		t.Fatalf("parseCLIArgs() init project name = %q, want Acme", command.initOptions.ProjectName)
+	}
+	if command.initOptions.ModulePath != "github.com/acme/app" {
+		t.Fatalf("parseCLIArgs() init module path = %q, want github.com/acme/app", command.initOptions.ModulePath)
+	}
+	if command.initOptions.DatabasePath != "./data/acme.db" {
+		t.Fatalf("parseCLIArgs() database path = %q, want ./data/acme.db", command.initOptions.DatabasePath)
+	}
+	if command.initOptions.EmailVerificationRequired == nil || *command.initOptions.EmailVerificationRequired {
+		t.Fatalf("parseCLIArgs() email verification = %v, want false", command.initOptions.EmailVerificationRequired)
+	}
+}
+
+func TestParseCLIArgsRejectsRemovedTrimStarterFlag(t *testing.T) {
+	_, err := parseCLIArgs([]string{"init", "-trim-starter", "true"})
 	if err == nil {
-		t.Fatal("newEmailSender() error = nil, want error")
+		t.Fatal("parseCLIArgs() error = nil, want error")
+	}
+	if !strings.Contains(err.Error(), "flag provided but not defined") {
+		t.Fatalf("parseCLIArgs() error = %v, want unknown flag context", err)
 	}
 }
 
-func TestAuthSenderFromUsesSMTPFromForSMTPProvider(t *testing.T) {
-	from := authSenderFrom(config.Config{
-		EmailProvider: email.ProviderSMTP,
-		EmailFrom:     "App <app@example.com>",
-		SMTPFrom:      "Mailer <mailer@example.com>",
-	})
-	if from != "Mailer <mailer@example.com>" {
-		t.Fatalf("authSenderFrom() = %q, want SMTP_FROM", from)
-	}
-}
-
-func TestAuthSenderFromUsesEmailFromByDefault(t *testing.T) {
-	from := authSenderFrom(config.Config{
-		EmailProvider: email.ProviderLog,
-		EmailFrom:     "App <app@example.com>",
-		SMTPFrom:      "Mailer <mailer@example.com>",
-	})
-	if from != "App <app@example.com>" {
-		t.Fatalf("authSenderFrom() = %q, want EMAIL_FROM", from)
-	}
-}
-
-func TestValidateSecurityConfigRequiresPepperInProduction(t *testing.T) {
-	cfg := productionSecurityConfig()
-	cfg.PasswordPepper = ""
-
-	assertValidateSecurityConfigErrorContains(t, cfg, "AUTH_PASSWORD_PEPPER")
-}
-
-func TestValidateSecurityConfigRejectsWhitespacePepperInProduction(t *testing.T) {
-	cfg := productionSecurityConfig()
-	cfg.PasswordPepper = " \t "
-
-	assertValidateSecurityConfigErrorContains(t, cfg, "AUTH_PASSWORD_PEPPER")
-}
-
-func TestValidateSecurityConfigRequiresCookieSecureInProduction(t *testing.T) {
-	cfg := productionSecurityConfig()
-	cfg.CookieSecure = false
-
-	assertValidateSecurityConfigErrorContains(t, cfg, "APP_COOKIE_SECURE")
-}
-
-func TestValidateSecurityConfigRequiresHTTPSAppBaseURLInProduction(t *testing.T) {
-	cfg := productionSecurityConfig()
-	cfg.AppBaseURL = "http://app.example.com"
-
-	assertValidateSecurityConfigErrorContains(t, cfg, "APP_BASE_URL")
-}
-
-func TestValidateSecurityConfigRequiresCSRFSigningKeyInProduction(t *testing.T) {
-	cfg := productionSecurityConfig()
-	cfg.CSRFSigningKey = ""
-
-	assertValidateSecurityConfigErrorContains(t, cfg, "CSRF_SIGNING_KEY")
-}
-
-func TestValidateSecurityConfigRejectsWhitespaceCSRFSigningKeyInProduction(t *testing.T) {
-	cfg := productionSecurityConfig()
-	cfg.CSRFSigningKey = " \n\t "
-
-	assertValidateSecurityConfigErrorContains(t, cfg, "CSRF_SIGNING_KEY")
-}
-
-func TestValidateSecurityConfigAllowsProductionWithSecureBaseline(t *testing.T) {
-	err := validateSecurityConfig(productionSecurityConfig())
-	if err != nil {
-		t.Fatalf("validateSecurityConfig() error = %v, want nil", err)
-	}
-}
-
-func TestValidateSecurityConfigAllowsNonProductionWithoutPepper(t *testing.T) {
-	err := validateSecurityConfig(config.Config{
-		Env:            "development",
-		PasswordPepper: "",
-	})
-	if err != nil {
-		t.Fatalf("validateSecurityConfig() error = %v, want nil", err)
-	}
-}
-
-func TestSecurityConfigWarningsProductionIncludesOptionalSettingWarnings(t *testing.T) {
-	warnings := securityConfigWarnings(config.Config{
-		Env:                       "production",
-		EmailVerificationRequired: false,
-		EmailProvider:             email.ProviderLog,
-		EmailLogBody:              true,
-		EmailFrom:                 defaultStarterEmailFrom,
-	})
-
-	if len(warnings) != 4 {
-		t.Fatalf("warning count = %d, want 4", len(warnings))
-	}
-	assertWarningsContain(t, warnings, "AUTH_EMAIL_VERIFICATION_REQUIRED")
-	assertWarningsContain(t, warnings, "EMAIL_PROVIDER")
-	assertWarningsContain(t, warnings, "EMAIL_LOG_BODY")
-	assertWarningsContain(t, warnings, "EMAIL_FROM")
-}
-
-func TestSecurityConfigWarningsProductionSkipsConfiguredOptions(t *testing.T) {
-	warnings := securityConfigWarnings(config.Config{
-		Env:                       "production",
-		EmailVerificationRequired: true,
-		EmailProvider:             email.ProviderSMTP,
-		EmailLogBody:              false,
-		EmailFrom:                 `"App" <security@example.com>`,
-	})
-
-	if len(warnings) != 0 {
-		t.Fatalf("warning count = %d, want 0", len(warnings))
-	}
-}
-
-func TestSecurityConfigWarningsNonProductionReturnsNone(t *testing.T) {
-	warnings := securityConfigWarnings(config.Config{
-		Env:                       "development",
-		EmailVerificationRequired: false,
-		EmailProvider:             email.ProviderLog,
-		EmailLogBody:              true,
-		EmailFrom:                 defaultStarterEmailFrom,
-	})
-
-	if len(warnings) != 0 {
-		t.Fatalf("warning count = %d, want 0", len(warnings))
-	}
-}
-
-func TestResolveCSRFSigningKeyUsesConfiguredValue(t *testing.T) {
-	key, err := resolveCSRFSigningKey(config.Config{
-		CSRFSigningKey: "configured-key",
-	}, slog.New(slog.NewTextHandler(io.Discard, nil)))
-	if err != nil {
-		t.Fatalf("resolveCSRFSigningKey() error = %v", err)
-	}
-	if key != "configured-key" {
-		t.Fatalf("resolveCSRFSigningKey() = %q, want configured key", key)
-	}
-}
-
-func TestResolveCSRFSigningKeyGeneratesEphemeralWhenUnset(t *testing.T) {
-	key, err := resolveCSRFSigningKey(config.Config{}, slog.New(slog.NewTextHandler(io.Discard, nil)))
-	if err != nil {
-		t.Fatalf("resolveCSRFSigningKey() error = %v", err)
-	}
-	if key == "" {
-		t.Fatal("resolveCSRFSigningKey() = empty, want generated key")
-	}
-}
-
-func TestProcessArgReturnsEmptyWhenNoArg(t *testing.T) {
-	process, err := processArg(nil)
-	if err != nil {
-		t.Fatalf("processArg() error = %v", err)
-	}
-	if process != "" {
-		t.Fatalf("processArg() = %q, want empty", process)
-	}
-}
-
-func TestProcessArgReturnsValidMode(t *testing.T) {
-	process, err := processArg([]string{"web"})
-	if err != nil {
-		t.Fatalf("processArg() error = %v", err)
-	}
-	if process != config.ProcessWeb {
-		t.Fatalf("processArg() = %q, want %q", process, config.ProcessWeb)
-	}
-}
-
-func TestProcessArgRejectsInvalidMode(t *testing.T) {
-	_, err := processArg([]string{"jobs"})
+func TestParseCLIArgsRejectsInvalidCommand(t *testing.T) {
+	_, err := parseCLIArgs([]string{"jobs"})
 	if err == nil {
-		t.Fatal("processArg() error = nil, want error")
+		t.Fatal("parseCLIArgs() error = nil, want error")
 	}
-	if !strings.Contains(err.Error(), "process mode") {
-		t.Fatalf("processArg() error = %v, want process mode context", err)
+	if !strings.Contains(err.Error(), "unknown command") {
+		t.Fatalf("parseCLIArgs() error = %v, want unknown command context", err)
 	}
 }
 
-func TestProcessArgRejectsMultipleArgs(t *testing.T) {
-	_, err := processArg([]string{"web", "worker"})
+func TestParseCLIArgsRejectsLegacyRunCommand(t *testing.T) {
+	_, err := parseCLIArgs([]string{"run", "web"})
 	if err == nil {
-		t.Fatal("processArg() error = nil, want error")
+		t.Fatal("parseCLIArgs() error = nil, want error")
 	}
-	if !strings.Contains(err.Error(), "at most one") {
-		t.Fatalf("processArg() error = %v, want argument count context", err)
-	}
-}
-
-func productionSecurityConfig() config.Config {
-	return config.Config{
-		Env:            "production",
-		CookieSecure:   true,
-		CSRFSigningKey: "csrf-key",
-		AppBaseURL:     "https://app.example.com",
-		PasswordPepper: "pepper",
+	if !strings.Contains(err.Error(), "unknown command") {
+		t.Fatalf("parseCLIArgs() error = %v, want unknown command context", err)
 	}
 }
 
-func assertWarningsContain(t *testing.T, warnings []string, fragment string) {
-	t.Helper()
+func TestParseCLIArgsRejectsInvalidMigrateArgs(t *testing.T) {
+	_, err := parseCLIArgs([]string{"migrate"})
+	if err == nil {
+		t.Fatal("parseCLIArgs() error = nil, want error")
+	}
+	if !strings.Contains(err.Error(), "migrate subcommand requires exactly one action") {
+		t.Fatalf("parseCLIArgs() error = %v, want migrate argument context", err)
+	}
+}
 
-	for _, warning := range warnings {
-		if strings.Contains(warning, fragment) {
-			return
+func TestParseCLIArgsRejectsInvalidMigrateAction(t *testing.T) {
+	_, err := parseCLIArgs([]string{"migrate", "redo"})
+	if err == nil {
+		t.Fatal("parseCLIArgs() error = nil, want error")
+	}
+	if !strings.Contains(err.Error(), "migrate action must be") {
+		t.Fatalf("parseCLIArgs() error = %v, want migrate action context", err)
+	}
+}
+
+func TestParseCLIArgsRejectsInitPositionalArgs(t *testing.T) {
+	_, err := parseCLIArgs([]string{"init", "extra"})
+	if err == nil {
+		t.Fatal("parseCLIArgs() error = nil, want error")
+	}
+	if !strings.Contains(err.Error(), "init subcommand does not accept positional arguments") {
+		t.Fatalf("parseCLIArgs() error = %v, want init positional argument context", err)
+	}
+}
+
+func TestParseCLIArgsRejectsLegacyStartCommand(t *testing.T) {
+	tests := [][]string{
+		{"start"},
+		{"start", "web"},
+		{"start", "worker"},
+	}
+
+	for _, args := range tests {
+		_, err := parseCLIArgs(args)
+		if err == nil {
+			t.Fatalf("parseCLIArgs(%v) error = nil, want error", args)
 		}
-	}
-
-	t.Fatalf("warnings %q did not contain %q", warnings, fragment)
-}
-
-func assertValidateSecurityConfigErrorContains(t *testing.T, cfg config.Config, fragment string) {
-	t.Helper()
-
-	err := validateSecurityConfig(cfg)
-	if err == nil {
-		t.Fatal("validateSecurityConfig() error = nil, want error")
-	}
-	if !strings.Contains(err.Error(), fragment) {
-		t.Fatalf("validateSecurityConfig() error = %v, want %s context", err, fragment)
+		if !strings.Contains(err.Error(), "unknown command") {
+			t.Fatalf("parseCLIArgs(%v) error = %v, want unknown command context", args, err)
+		}
 	}
 }

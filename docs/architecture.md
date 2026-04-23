@@ -13,6 +13,7 @@ Go Spark prefers:
 * explicit code over framework magic
 * standard library defaults where practical
 * SQL-first data access
+* SQLite-first persistence for new projects
 * server-rendered UI by default
 * small, focused packages with clear boundaries
 
@@ -20,11 +21,13 @@ Go Spark prefers:
 
 ```text
 /cmd/app            wires the application together
+/internal/app       application bootstrap and runtime assembly
 /internal/config    reads environment config
-/internal/database  database openers and SQLite-backed stores
+/internal/database  SQLite-backed domain stores
 /internal/db        SQL queries and generated sqlc code
 /internal/email     email messages, senders, and outbox processor
 /internal/jobs      jobs runner and periodic background jobs
+/internal/platform  engine-specific platform code such as SQLite setup
 /internal/paths     canonical public URL paths
 /internal/server    HTTP handlers, middleware, templates
 /internal/services  business logic
@@ -34,8 +37,13 @@ Rules of thumb:
 
 * handlers own HTTP concerns
 * services own business logic
-* stores own persistence and driver-specific translation
+* stores own persistence and SQLite-specific translation today
+* engine setup belongs in engine-focused packages under `internal/platform`
 * templates render data, not business rules
+
+Go Spark keeps service/store seams because they protect business logic from
+HTTP and persistence concerns. Those seams are not a promise that the starter
+currently supports interchangeable database backends.
 
 ## Request Flow
 
@@ -43,10 +51,11 @@ Most features follow this path:
 
 1. `internal/server` receives and validates the request
 2. `internal/services` applies business rules
-3. `internal/database` persists through `sqlc` queries
+3. `internal/database` persists through SQLite-targeted `sqlc` queries
 4. the handler renders HTML or redirects
 
-This keeps HTTP concerns, business rules, and database behavior separate.
+This keeps HTTP concerns, business rules, and SQLite persistence behavior
+separate.
 
 ## Rendering Conventions
 
@@ -75,11 +84,52 @@ It intentionally does not use JWTs or a large auth framework for the default ser
 
 The project is SQL-first:
 
-* schema changes go in `migrations`
+* the starter's baseline SQLite schema lives in `migrations`
 * queries go in `internal/db/queries`
 * `sqlc` generates typed query code in `internal/db/generated`
 
-SQLite is the default because it keeps setup small and local development easy. If a future project needs multi-instance writes or managed database operations, Postgres is the natural next step.
+SQLite is not just the default implementation; it is the intended foundation
+for this starter. That keeps setup small, local development easy, and the
+deployment story friendly to single-node and single-binary projects.
+
+The starter does not currently aim to provide plug-and-play support for
+multiple SQL engines. If a future fork needs something else, treat that as an
+explicit refactor of the persistence layer.
+
+If later phases split connection setup away from stores, the preferred
+direction is:
+
+* keep SQLite engine setup and tuning in an explicit SQLite-focused package
+* keep domain stores separate from engine setup
+* keep service/store seams because they support domain boundaries, not because
+  they imply broad engine portability
+* keep tuning defaults small and documented instead of introducing a large
+  connection abstraction
+
+Current SQLite tuning defaults in `internal/platform/sqlite` are:
+
+* `PRAGMA foreign_keys = ON` to keep relational constraints enforced
+* `PRAGMA busy_timeout = 5000` to tolerate short write contention
+* `MaxOpenConns = 1` to match the starter's single-writer SQLite model
+
+WAL mode is intentionally not enabled by default yet. If the starter adopts it
+later, that should come with clear documentation about local development,
+backups, and multi-process tradeoffs.
+
+## Application Bootstrap
+
+`cmd/app` stays intentionally thin:
+
+* load environment and parse process mode
+* assemble signal handling and shutdown behavior
+* delegate runtime wiring to `internal/app`
+
+`internal/app` owns application assembly:
+
+* SQLite connection setup
+* service and store wiring
+* email sender and background job composition
+* HTTP server construction
 
 ## Background Work
 
