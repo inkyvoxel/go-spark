@@ -18,7 +18,7 @@
       <ul>
         {{ if .Authenticated }}
         <li><a href="{{ .Routes.Account }}">Account</a></li>
-        <li><button type="submit" form="logout-form" class="secondary">Sign out</button></li>
+        <li><button form="logout-form" class="secondary">Sign out</button></li>
         {{ else }}
         <li><a href="{{ .Routes.Login }}">Sign in</a></li>
         <li><a href="{{ .Routes.Register }}">Create account</a></li>
