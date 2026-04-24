@@ -29,7 +29,7 @@ func TestNewEmailSenderReturnsSMTPSender(t *testing.T) {
 		EmailProvider: email.ProviderSMTP,
 		SMTPHost:      "smtp.example.com",
 		SMTPPort:      587,
-		SMTPFrom:      "Mailer <mailer@example.com>",
+		EmailFrom:     "Mailer <mailer@example.com>",
 		SMTPTLS:       true,
 	}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	if err != nil {
@@ -47,28 +47,6 @@ func TestNewEmailSenderRejectsUnknownProvider(t *testing.T) {
 	}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	if err == nil {
 		t.Fatal("newEmailSender() error = nil, want error")
-	}
-}
-
-func TestAuthSenderFromUsesSMTPFromForSMTPProvider(t *testing.T) {
-	from := authSenderFrom(config.Config{
-		EmailProvider: email.ProviderSMTP,
-		EmailFrom:     "App <app@example.com>",
-		SMTPFrom:      "Mailer <mailer@example.com>",
-	})
-	if from != "Mailer <mailer@example.com>" {
-		t.Fatalf("authSenderFrom() = %q, want SMTP_FROM", from)
-	}
-}
-
-func TestAuthSenderFromUsesEmailFromByDefault(t *testing.T) {
-	from := authSenderFrom(config.Config{
-		EmailProvider: email.ProviderLog,
-		EmailFrom:     "App <app@example.com>",
-		SMTPFrom:      "Mailer <mailer@example.com>",
-	})
-	if from != "App <app@example.com>" {
-		t.Fatalf("authSenderFrom() = %q, want EMAIL_FROM", from)
 	}
 }
 

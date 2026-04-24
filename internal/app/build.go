@@ -68,11 +68,11 @@ func buildRuntime(cfg config.Config, logger *slog.Logger, db *sql.DB, csrfSignin
 		EmailChangeNoticeEnabled: boolPtr(cfg.EmailChangeNoticeEnabled),
 		ConfirmationEmail: email.AccountConfirmationOptions{
 			AppBaseURL: cfg.AppBaseURL,
-			From:       authSenderFrom(cfg),
+			From:       cfg.EmailFrom,
 		},
 		PasswordResetEmail: email.PasswordResetOptions{
 			AppBaseURL: cfg.AppBaseURL,
-			From:       authSenderFrom(cfg),
+			From:       cfg.EmailFrom,
 		},
 	})
 
@@ -147,19 +147,12 @@ func newEmailSender(cfg config.Config, logger *slog.Logger) (email.Sender, error
 			Port:     cfg.SMTPPort,
 			Username: cfg.SMTPUsername,
 			Password: cfg.SMTPPassword,
-			From:     cfg.SMTPFrom,
+			From:     cfg.EmailFrom,
 			UseTLS:   cfg.SMTPTLS,
 		})
 	default:
 		return nil, fmt.Errorf("unsupported email provider %q", cfg.EmailProvider)
 	}
-}
-
-func authSenderFrom(cfg config.Config) string {
-	if cfg.EmailProvider == email.ProviderSMTP && strings.TrimSpace(cfg.SMTPFrom) != "" {
-		return cfg.SMTPFrom
-	}
-	return cfg.EmailFrom
 }
 
 func validateSecurityConfig(cfg config.Config) error {

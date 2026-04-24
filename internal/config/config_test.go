@@ -469,11 +469,12 @@ func TestFromEnvRejectsInvalidRateLimitWindow(t *testing.T) {
 
 func TestFromEnvParsesSMTPProvider(t *testing.T) {
 	t.Setenv("EMAIL_PROVIDER", "smtp")
+	t.Setenv("EMAIL_FROM", "App Sender <sender@example.com>")
 	t.Setenv("SMTP_HOST", "smtp.example.com")
 	t.Setenv("SMTP_PORT", "587")
 	t.Setenv("SMTP_USERNAME", "mailer")
 	t.Setenv("SMTP_PASSWORD", "secret")
-	t.Setenv("SMTP_FROM", "Mailer <mailer@example.com>")
+	t.Setenv("SMTP_FROM", "Ignored Sender <ignored@example.com>")
 	t.Setenv("SMTP_TLS", "true")
 
 	cfg, err := FromEnv(services.DefaultPasswordMinLength)
@@ -496,20 +497,19 @@ func TestFromEnvParsesSMTPProvider(t *testing.T) {
 	if cfg.SMTPPassword != "secret" {
 		t.Fatalf("SMTPPassword = %q, want secret", cfg.SMTPPassword)
 	}
-	if cfg.SMTPFrom != `"Mailer" <mailer@example.com>` {
-		t.Fatalf("SMTPFrom = %q, want formatted sender", cfg.SMTPFrom)
+	if cfg.EmailFrom != `"App Sender" <sender@example.com>` {
+		t.Fatalf("EmailFrom = %q, want formatted sender from EMAIL_FROM", cfg.EmailFrom)
 	}
 	if !cfg.SMTPTLS {
 		t.Fatal("SMTPTLS = false, want true")
 	}
 }
 
-func TestFromEnvSMTPProviderDefaultsSMTPFromAndTLS(t *testing.T) {
+func TestFromEnvSMTPProviderDefaultsTLS(t *testing.T) {
 	t.Setenv("EMAIL_PROVIDER", "smtp")
 	t.Setenv("EMAIL_FROM", "Go Spark <hello@example.com>")
 	t.Setenv("SMTP_HOST", "smtp.example.com")
 	t.Setenv("SMTP_PORT", "587")
-	t.Setenv("SMTP_FROM", "")
 	t.Setenv("SMTP_TLS", "")
 
 	cfg, err := FromEnv(services.DefaultPasswordMinLength)
@@ -517,8 +517,8 @@ func TestFromEnvSMTPProviderDefaultsSMTPFromAndTLS(t *testing.T) {
 		t.Fatalf("FromEnv() error = %v", err)
 	}
 
-	if cfg.SMTPFrom != `"Go Spark" <hello@example.com>` {
-		t.Fatalf("SMTPFrom = %q, want EMAIL_FROM fallback", cfg.SMTPFrom)
+	if cfg.EmailFrom != `"Go Spark" <hello@example.com>` {
+		t.Fatalf("EmailFrom = %q, want formatted sender from EMAIL_FROM", cfg.EmailFrom)
 	}
 	if !cfg.SMTPTLS {
 		t.Fatal("SMTPTLS = false, want true default")

@@ -56,7 +56,6 @@ type Config struct {
 	SMTPPort                    int
 	SMTPUsername                string
 	SMTPPassword                string
-	SMTPFrom                    string
 	SMTPTLS                     bool
 	CleanupInterval             time.Duration
 	CleanupTokenRetention       time.Duration
@@ -178,11 +177,6 @@ func FromEnvWithProcess(defaultPasswordMinLength int, processOverride string) (C
 		return Config{}, err
 	}
 
-	smtpFrom, err := envEmailAddress("SMTP_FROM", emailFrom)
-	if err != nil {
-		return Config{}, err
-	}
-
 	smtpUsername := strings.TrimSpace(os.Getenv("SMTP_USERNAME"))
 	smtpPassword := os.Getenv("SMTP_PASSWORD")
 	if (smtpUsername == "") != (smtpPassword == "") {
@@ -193,7 +187,6 @@ func FromEnvWithProcess(defaultPasswordMinLength int, processOverride string) (C
 	cfg.SMTPPort = smtpPort
 	cfg.SMTPUsername = smtpUsername
 	cfg.SMTPPassword = smtpPassword
-	cfg.SMTPFrom = smtpFrom
 	cfg.SMTPTLS = smtpTLS
 	return cfg, nil
 }

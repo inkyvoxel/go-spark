@@ -124,5 +124,5 @@ To send real email, switch to `EMAIL_PROVIDER=smtp` and set:
 
 * `SMTP_HOST`
 * `SMTP_PORT`
-* `SMTP_FROM`
+* `EMAIL_FROM`
 * optionally `SMTP_USERNAME` and `SMTP_PASSWORD`
