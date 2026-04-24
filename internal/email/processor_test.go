@@ -1,9 +1,12 @@
 package email
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
+	"log/slog"
 	"strings"
 	"testing"
 	"time"
@@ -192,6 +195,69 @@ func TestProcessorValidateRequiresDependencies(t *testing.T) {
 	}
 }
 
+func TestProcessorProcessPendingLogsCycleSummary(t *testing.T) {
+	var output bytes.Buffer
+	logger := slog.New(slog.NewJSONHandler(&output, nil))
+	store := &fakeOutboxStore{
+		claimed: []OutboxEmail{
+			{ID: 1, ClaimToken: "claim-1", Message: Message{To: "sent@example.com"}},
+			{ID: 2, ClaimToken: "claim-2", Message: Message{To: "retry@example.com"}},
+			{ID: 3, ClaimToken: "claim-3", Attempts: DefaultMaxAttempts - 1, Message: Message{To: "perm@example.com"}},
+		},
+	}
+	sender := fakeSenderFunc(func(ctx context.Context, message Message) error {
+		if strings.HasPrefix(message.To, "sent@") {
+			return nil
+		}
+		return errors.New("smtp failed")
+	})
+	processor := NewProcessor(store, sender, ProcessorOptions{
+		Logger: logger,
+	})
+
+	if err := processor.ProcessPending(context.Background()); err != nil {
+		t.Fatalf("ProcessPending() error = %v", err)
+	}
+
+	entry, ok := findLogEntry(t, output.String(), "email outbox cycle completed")
+	if !ok {
+		t.Fatalf("missing cycle summary log in %q", output.String())
+	}
+	if got := asInt(entry["claimed"]); got != 3 {
+		t.Fatalf("claimed = %d, want %d", got, 3)
+	}
+	if got := asInt(entry["sent"]); got != 1 {
+		t.Fatalf("sent = %d, want %d", got, 1)
+	}
+	if got := asInt(entry["retry_scheduled"]); got != 1 {
+		t.Fatalf("retry_scheduled = %d, want %d", got, 1)
+	}
+	if got := asInt(entry["permanent_failures"]); got != 1 {
+		t.Fatalf("permanent_failures = %d, want %d", got, 1)
+	}
+	if got := asInt(entry["skipped_claim_lost"]); got != 0 {
+		t.Fatalf("skipped_claim_lost = %d, want %d", got, 0)
+	}
+	if got := asInt(entry["duration_ms"]); got < 0 {
+		t.Fatalf("duration_ms = %d, want >= 0", got)
+	}
+}
+
+func TestProcessorProcessPendingSkipsSummaryWhenNoWork(t *testing.T) {
+	var output bytes.Buffer
+	logger := slog.New(slog.NewJSONHandler(&output, nil))
+	processor := NewProcessor(&fakeOutboxStore{}, &fakeSender{}, ProcessorOptions{
+		Logger: logger,
+	})
+
+	if err := processor.ProcessPending(context.Background()); err != nil {
+		t.Fatalf("ProcessPending() error = %v", err)
+	}
+	if strings.Contains(output.String(), "email outbox cycle completed") {
+		t.Fatalf("unexpected cycle summary log: %q", output.String())
+	}
+}
+
 type fakeOutboxStore struct {
 	claimed                    []OutboxEmail
 	claimLimit                 int64
@@ -260,4 +326,39 @@ func (s *fakeSender) Send(ctx context.Context, message Message) error {
 	}
 	s.sent = append(s.sent, message)
 	return nil
+}
+
+type fakeSenderFunc func(ctx context.Context, message Message) error
+
+func (f fakeSenderFunc) Send(ctx context.Context, message Message) error {
+	return f(ctx, message)
+}
+
+func findLogEntry(t *testing.T, output string, msg string) (map[string]any, bool) {
+	t.Helper()
+
+	for _, line := range strings.Split(strings.TrimSpace(output), "\n") {
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+		entry := map[string]any{}
+		if err := json.Unmarshal([]byte(line), &entry); err != nil {
+			t.Fatalf("json.Unmarshal(%q) error = %v", line, err)
+		}
+		if value, _ := entry["msg"].(string); value == msg {
+			return entry, true
+		}
+	}
+	return nil, false
+}
+
+func asInt(v any) int {
+	switch value := v.(type) {
+	case float64:
+		return int(value)
+	case int:
+		return value
+	default:
+		return 0
+	}
 }

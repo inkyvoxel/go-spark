@@ -76,6 +76,7 @@ func TestFromEnvUsesDefaults(t *testing.T) {
 	t.Setenv("APP_ADDR", "")
 	t.Setenv("APP_PROCESS", "")
 	t.Setenv("APP_ENV", "")
+	t.Setenv("LOG_FORMAT", "")
 	t.Setenv("DATABASE_PATH", "")
 	t.Setenv("APP_COOKIE_SECURE", "")
 	t.Setenv("CSRF_SIGNING_KEY", "")
@@ -105,6 +106,9 @@ func TestFromEnvUsesDefaults(t *testing.T) {
 	}
 	if cfg.Env != "development" {
 		t.Fatalf("Env = %q, want %q", cfg.Env, "development")
+	}
+	if cfg.LogFormat != "text" {
+		t.Fatalf("LogFormat = %q, want %q", cfg.LogFormat, "text")
 	}
 	if cfg.DatabasePath != "./data/app.db" {
 		t.Fatalf("DatabasePath = %q, want %q", cfg.DatabasePath, "./data/app.db")
@@ -157,6 +161,7 @@ func TestFromEnvUsesEnvironment(t *testing.T) {
 	t.Setenv("APP_ADDR", ":9090")
 	t.Setenv("APP_PROCESS", "WORKER")
 	t.Setenv("APP_ENV", "test")
+	t.Setenv("LOG_FORMAT", "JSON")
 	t.Setenv("DATABASE_PATH", "/tmp/app-test.db")
 	t.Setenv("APP_COOKIE_SECURE", "true")
 	t.Setenv("CSRF_SIGNING_KEY", "csrf-signing-key")
@@ -198,6 +203,9 @@ func TestFromEnvUsesEnvironment(t *testing.T) {
 	}
 	if cfg.Env != "test" {
 		t.Fatalf("Env = %q, want %q", cfg.Env, "test")
+	}
+	if cfg.LogFormat != "json" {
+		t.Fatalf("LogFormat = %q, want %q", cfg.LogFormat, "json")
 	}
 	if cfg.DatabasePath != "/tmp/app-test.db" {
 		t.Fatalf("DatabasePath = %q, want %q", cfg.DatabasePath, "/tmp/app-test.db")
@@ -316,6 +324,18 @@ func TestFromEnvRejectsInvalidPasswordMinLength(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "AUTH_PASSWORD_MIN_LENGTH") {
 		t.Fatalf("FromEnv() error = %v, want AUTH_PASSWORD_MIN_LENGTH", err)
+	}
+}
+
+func TestFromEnvRejectsInvalidLogFormat(t *testing.T) {
+	t.Setenv("LOG_FORMAT", "yaml")
+
+	_, err := FromEnv(services.DefaultPasswordMinLength)
+	if err == nil {
+		t.Fatal("FromEnv() error = nil, want error")
+	}
+	if !strings.Contains(err.Error(), "LOG_FORMAT") {
+		t.Fatalf("FromEnv() error = %v, want LOG_FORMAT context", err)
 	}
 }
 

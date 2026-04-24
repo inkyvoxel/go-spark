@@ -41,6 +41,7 @@ Strongly recommended:
 * `EMAIL_PROVIDER=smtp`, and configure `SMTP_*` settings
 * `AUTH_EMAIL_VERIFICATION_REQUIRED=true`
 * `EMAIL_LOG_BODY=false`
+* `LOG_FORMAT=json` for structured production log ingestion
 * set a real sender address in `EMAIL_FROM`
 
 Also set your production database path (for example `DATABASE_PATH=/var/lib/go-spark/app.db`) and SMTP settings when SMTP is enabled.

@@ -71,6 +71,7 @@ func (j *CleanupJob) Job(interval time.Duration) Job {
 }
 
 func (j *CleanupJob) Run(ctx context.Context) error {
+	startedAt := time.Now().UTC()
 	now := time.Now().UTC()
 	tokenConsumedBefore := now.Add(-j.tokenRetention)
 	sentBefore := now.Add(-j.sentEmailRetention)
@@ -116,6 +117,7 @@ func (j *CleanupJob) Run(ctx context.Context) error {
 
 	j.logger.Info(
 		"database cleanup completed",
+		"job", "database-cleanup",
 		"deleted_total", total,
 		"expired_sessions", deletedSessions,
 		"password_reset_tokens", deletedResetTokens,
@@ -123,6 +125,7 @@ func (j *CleanupJob) Run(ctx context.Context) error {
 		"email_change_tokens", deletedEmailChangeTokens,
 		"sent_emails", deletedSentEmails,
 		"failed_emails", deletedFailedEmails,
+		"duration_ms", time.Since(startedAt).Milliseconds(),
 	)
 
 	return nil

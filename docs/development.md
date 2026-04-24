@@ -28,6 +28,7 @@ the module path, app branding, default email sender, default SQLite path, and
 other starter defaults before you copy `.env.example` to `.env`.
 
 The app loads `.env` when present. Existing shell environment variables still win.
+Use `LOG_FORMAT=text` locally by default; switch to `LOG_FORMAT=json` when you want machine-parseable logs during development.
 
 ## Common Commands
 

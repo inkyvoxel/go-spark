@@ -76,20 +76,20 @@ func (r *Runner) runJobLoop(ctx context.Context, job Job) {
 
 func (r *Runner) runJobOnce(ctx context.Context, job Job) bool {
 	startedAt := time.Now().UTC()
-	r.logger.Info("background job starting", "job", job.Name, "interval", job.Interval)
+	r.logger.Info("background job starting", "job", job.Name, "interval_ms", job.Interval.Milliseconds())
 
 	err := job.Run(ctx)
-	duration := time.Since(startedAt)
+	durationMs := time.Since(startedAt).Milliseconds()
 	if err != nil {
 		if ctx.Err() != nil {
-			r.logger.Info("background job stopped", "job", job.Name, "duration", duration)
+			r.logger.Info("background job stopped", "job", job.Name, "duration_ms", durationMs)
 			return false
 		}
-		r.logger.Error("background job failed", "job", job.Name, "duration", duration, "err", err)
+		r.logger.Error("background job failed", "job", job.Name, "duration_ms", durationMs, "err", err)
 		return true
 	}
 
-	r.logger.Info("background job finished", "job", job.Name, "duration", duration)
+	r.logger.Info("background job finished", "job", job.Name, "duration_ms", durationMs)
 	return true
 }
 

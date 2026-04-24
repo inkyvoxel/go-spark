@@ -36,7 +36,7 @@ type cliCommand struct {
 const migrationsDir = "migrations"
 
 func main() {
-	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
+	logger := configureAppLogger("text", os.Stdout)
 
 	if err := run(os.Args[1:], logger); err != nil {
 		logger.Error("application failed", "err", err)
@@ -71,6 +71,7 @@ func run(args []string, logger *slog.Logger) error {
 	if err != nil {
 		return fmt.Errorf("load config: %w", err)
 	}
+	logger = configureAppLogger(cfg.LogFormat, os.Stdout)
 
 	runtime, err := bootstrap.Build(cfg, logger)
 	if err != nil {
@@ -91,6 +92,14 @@ func run(args []string, logger *slog.Logger) error {
 	default:
 		return fmt.Errorf("APP_PROCESS must be %q, %q, or %q", config.ProcessAll, config.ProcessWeb, config.ProcessWorker)
 	}
+}
+
+func configureAppLogger(format string, out io.Writer) *slog.Logger {
+	handlerOptions := &slog.HandlerOptions{}
+	if strings.EqualFold(strings.TrimSpace(format), "json") {
+		return slog.New(slog.NewJSONHandler(out, handlerOptions))
+	}
+	return slog.New(slog.NewTextHandler(out, handlerOptions))
 }
 
 func parseCLIArgs(args []string) (cliCommand, error) {

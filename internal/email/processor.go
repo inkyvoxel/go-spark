@@ -101,11 +101,18 @@ func (p *Processor) ProcessPending(ctx context.Context) error {
 		return err
 	}
 
+	startedAt := time.Now().UTC()
 	now := time.Now().UTC()
 	messages, err := p.store.ClaimPending(ctx, now, p.claimTTL, p.batchSize)
 	if err != nil {
 		return fmt.Errorf("claim pending email: %w", err)
 	}
+
+	claimed := len(messages)
+	sent := 0
+	retryScheduled := 0
+	permanentFailures := 0
+	skippedClaimLost := 0
 
 	for _, outboxEmail := range messages {
 		if err := p.sender.Send(ctx, outboxEmail.Message); err != nil {
@@ -115,31 +122,49 @@ func (p *Processor) ProcessPending(ctx context.Context) error {
 				if markErr := p.store.MarkFailedPermanently(ctx, outboxEmail.ID, outboxEmail.ClaimToken, lastError, time.Now().UTC()); markErr != nil {
 					if errors.Is(markErr, sql.ErrNoRows) {
 						p.logger.Warn("email outbox claim no longer owned while marking permanent failure", "outbox_id", outboxEmail.ID)
+						skippedClaimLost++
 						continue
 					}
 					return fmt.Errorf("mark email permanently failed after send error %q: %w", err.Error(), markErr)
 				}
 				p.logger.Warn("email delivery failed permanently", "outbox_id", outboxEmail.ID, "attempts", nextAttempt, "err", err)
+				permanentFailures++
 				continue
 			}
 
 			if markErr := p.store.MarkFailed(ctx, outboxEmail.ID, outboxEmail.ClaimToken, lastError, time.Now().UTC().Add(p.retryDelay)); markErr != nil {
 				if errors.Is(markErr, sql.ErrNoRows) {
 					p.logger.Warn("email outbox claim no longer owned while marking retry", "outbox_id", outboxEmail.ID)
+					skippedClaimLost++
 					continue
 				}
 				return fmt.Errorf("mark email failed after send error %q: %w", err.Error(), markErr)
 			}
+			retryScheduled++
 			continue
 		}
 
 		if err := p.store.MarkSent(ctx, outboxEmail.ID, outboxEmail.ClaimToken, time.Now().UTC()); err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
 				p.logger.Warn("email outbox claim no longer owned while marking sent", "outbox_id", outboxEmail.ID)
+				skippedClaimLost++
 				continue
 			}
 			return fmt.Errorf("mark email sent: %w", err)
 		}
+		sent++
+	}
+
+	if claimed > 0 || retryScheduled > 0 || permanentFailures > 0 || skippedClaimLost > 0 {
+		p.logger.Info(
+			"email outbox cycle completed",
+			"claimed", claimed,
+			"sent", sent,
+			"retry_scheduled", retryScheduled,
+			"permanent_failures", permanentFailures,
+			"skipped_claim_lost", skippedClaimLost,
+			"duration_ms", time.Since(startedAt).Milliseconds(),
+		)
 	}
 
 	return nil

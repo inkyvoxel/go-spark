@@ -41,6 +41,7 @@ type Config struct {
 	Addr                        string
 	Process                     string
 	Env                         string
+	LogFormat                   string
 	DatabasePath                string
 	CookieSecure                bool
 	CSRFSigningKey              string
@@ -88,6 +89,10 @@ func FromEnvWithProcess(defaultPasswordMinLength int, processOverride string) (C
 	if err != nil {
 		return Config{}, err
 	}
+	logFormat, err := envLogFormat("LOG_FORMAT", "text")
+	if err != nil {
+		return Config{}, err
+	}
 
 	cookieSecure, err := envBool("APP_COOKIE_SECURE")
 	if err != nil {
@@ -132,6 +137,7 @@ func FromEnvWithProcess(defaultPasswordMinLength int, processOverride string) (C
 		Addr:                        envOrDefault("APP_ADDR", ":8080"),
 		Process:                     process,
 		Env:                         envOrDefault("APP_ENV", "development"),
+		LogFormat:                   logFormat,
 		DatabasePath:                envOrDefault("DATABASE_PATH", "./data/app.db"),
 		CookieSecure:                cookieSecure,
 		CSRFSigningKey:              strings.TrimSpace(os.Getenv("CSRF_SIGNING_KEY")),
@@ -357,6 +363,16 @@ func envProcess(key, fallback string) (string, error) {
 	}
 
 	return process, nil
+}
+
+func envLogFormat(key, fallback string) (string, error) {
+	format := strings.ToLower(strings.TrimSpace(envOrDefault(key, fallback)))
+	switch format {
+	case "text", "json":
+		return format, nil
+	default:
+		return "", fmt.Errorf("%s must be %q or %q", key, "text", "json")
+	}
 }
 
 func IsProcess(process string) bool {

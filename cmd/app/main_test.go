@@ -1,6 +1,9 @@
 package main
 
 import (
+	"bytes"
+	"encoding/json"
+	"log/slog"
 	"strings"
 	"testing"
 
@@ -14,6 +17,38 @@ func TestParseCLIArgsReturnsEmptyWhenNoArg(t *testing.T) {
 	}
 	if command.processOverride != "" {
 		t.Fatalf("parseCLIArgs() processOverride = %q, want empty", command.processOverride)
+	}
+}
+
+func TestConfigureAppLoggerUsesJSONFormat(t *testing.T) {
+	var output bytes.Buffer
+	logger := configureAppLogger("json", &output)
+
+	logger.Info("test message", "key", "value")
+
+	entry := map[string]any{}
+	if err := json.Unmarshal(output.Bytes(), &entry); err != nil {
+		t.Fatalf("json.Unmarshal() error = %v", err)
+	}
+	if got := entry[slog.MessageKey]; got != "test message" {
+		t.Fatalf("message = %v, want %q", got, "test message")
+	}
+	if got := entry["key"]; got != "value" {
+		t.Fatalf("key = %v, want %q", got, "value")
+	}
+}
+
+func TestConfigureAppLoggerFallsBackToTextFormat(t *testing.T) {
+	var output bytes.Buffer
+	logger := configureAppLogger("yaml", &output)
+
+	logger.Info("text message", "key", "value")
+	got := output.String()
+	if strings.HasPrefix(strings.TrimSpace(got), "{") {
+		t.Fatalf("logger output appears to be json: %q", got)
+	}
+	if !strings.Contains(got, "msg=\"text message\"") {
+		t.Fatalf("logger output = %q, want text handler output", got)
 	}
 }
 

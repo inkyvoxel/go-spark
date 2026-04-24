@@ -70,7 +70,7 @@ func TestWithRequestIDReplacesInvalidHeader(t *testing.T) {
 	}
 }
 
-func TestLogRequestsIncludesRequestIDStatusMethodAndPath(t *testing.T) {
+func TestLogRequestsIncludesRequestIDAndAccessLogFields(t *testing.T) {
 	var logBuf bytes.Buffer
 	logger := jsonLogger(&logBuf)
 	srv := &Server{logger: logger}
@@ -101,6 +101,9 @@ func TestLogRequestsIncludesRequestIDStatusMethodAndPath(t *testing.T) {
 	if got := asString(entry["method"]); got != http.MethodGet {
 		t.Fatalf("logged method = %q, want %q", got, http.MethodGet)
 	}
+	if got := asString(entry["route"]); got != "/healthz" {
+		t.Fatalf("logged route = %q, want %q", got, "/healthz")
+	}
 	if got := asString(entry["path"]); got != "/healthz" {
 		t.Fatalf("logged path = %q, want %q", got, "/healthz")
 	}
@@ -109,6 +112,119 @@ func TestLogRequestsIncludesRequestIDStatusMethodAndPath(t *testing.T) {
 	}
 	if got := asInt(entry["duration_ms"]); got < 0 {
 		t.Fatalf("logged duration_ms = %d, want >= 0", got)
+	}
+	if got := asInt(entry["response_bytes"]); got != 2 {
+		t.Fatalf("logged response_bytes = %d, want %d", got, 2)
+	}
+	if got := asBool(entry["authenticated"]); got {
+		t.Fatal("logged authenticated = true, want false")
+	}
+	if got := asString(entry["remote_ip"]); got == "" {
+		t.Fatal("logged remote_ip = empty, want non-empty")
+	}
+}
+
+func TestLogRequestsUsesRoutePatternWhenPresent(t *testing.T) {
+	var logBuf bytes.Buffer
+	logger := jsonLogger(&logBuf)
+	srv := &Server{logger: logger}
+
+	handler := srv.withRequestID(srv.logRequests(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	})))
+
+	req := httptest.NewRequest(http.MethodGet, "/account?token=secret", nil)
+	req.Pattern = "GET /account"
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	entries := decodeJSONLogLines(t, logBuf.String())
+	entry, ok := findLogEntry(entries, "http request")
+	if !ok {
+		t.Fatalf("missing access log entry in logs: %v", entries)
+	}
+	if got := asString(entry["route"]); got != "GET /account" {
+		t.Fatalf("logged route = %q, want %q", got, "GET /account")
+	}
+	if got := asString(entry["path"]); got != "/account" {
+		t.Fatalf("logged path = %q, want %q", got, "/account")
+	}
+	if strings.Contains(logBuf.String(), "token=secret") {
+		t.Fatalf("access log leaked query string: %q", logBuf.String())
+	}
+}
+
+func TestLogRequestsFallsBackFromGenericRootPatternToPath(t *testing.T) {
+	var logBuf bytes.Buffer
+	logger := jsonLogger(&logBuf)
+	srv := &Server{logger: logger}
+
+	handler := srv.withRequestID(srv.logRequests(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	})))
+
+	req := httptest.NewRequest(http.MethodGet, "/register", nil)
+	req.Pattern = "/"
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	entries := decodeJSONLogLines(t, logBuf.String())
+	entry, ok := findLogEntry(entries, "http request")
+	if !ok {
+		t.Fatalf("missing access log entry in logs: %v", entries)
+	}
+	if got := asString(entry["route"]); got != "/register" {
+		t.Fatalf("logged route = %q, want %q", got, "/register")
+	}
+	if got := asString(entry["path"]); got != "/register" {
+		t.Fatalf("logged path = %q, want %q", got, "/register")
+	}
+}
+
+func TestLogRequestsIncludesAuthenticatedTrue(t *testing.T) {
+	var logBuf bytes.Buffer
+	logger := jsonLogger(&logBuf)
+	srv := &Server{logger: logger}
+
+	handler := srv.withRequestID(srv.logRequests(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	})))
+
+	req := httptest.NewRequest(http.MethodGet, "/account", nil)
+	req = req.WithContext(contextWithUser(req.Context(), verifiedRouteUser()))
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	entries := decodeJSONLogLines(t, logBuf.String())
+	entry, ok := findLogEntry(entries, "http request")
+	if !ok {
+		t.Fatalf("missing access log entry in logs: %v", entries)
+	}
+	if got := asBool(entry["authenticated"]); !got {
+		t.Fatal("logged authenticated = false, want true")
+	}
+}
+
+func TestLogRequestsWarnsForServerErrorResponses(t *testing.T) {
+	var logBuf bytes.Buffer
+	logger := jsonLogger(&logBuf)
+	srv := &Server{logger: logger}
+
+	handler := srv.withRequestID(srv.logRequests(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "boom", http.StatusInternalServerError)
+	})))
+
+	req := httptest.NewRequest(http.MethodGet, "/boom", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	entries := decodeJSONLogLines(t, logBuf.String())
+	entry, ok := findLogEntry(entries, "http request")
+	if !ok {
+		t.Fatalf("missing access log entry in logs: %v", entries)
+	}
+	if got := asString(entry["level"]); got != "WARN" {
+		t.Fatalf("logged level = %q, want WARN", got)
 	}
 }
 
@@ -216,4 +332,9 @@ func asInt(v any) int {
 	default:
 		return 0
 	}
+}
+
+func asBool(v any) bool {
+	b, _ := v.(bool)
+	return b
 }

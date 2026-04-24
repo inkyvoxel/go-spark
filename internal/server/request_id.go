@@ -81,20 +81,37 @@ func (s *Server) logRequests(next http.Handler) http.Handler {
 
 		next.ServeHTTP(rec, r)
 
-		s.loggerForRequest(r).Info(
-			"http request",
+		path := r.URL.Path
+		route := strings.TrimSpace(r.Pattern)
+		if route == "" || (route == "/" && path != "/") {
+			route = path
+		}
+
+		_, authenticated := currentUser(r.Context())
+		attrs := []any{
 			"method", r.Method,
-			"path", r.URL.Path,
+			"route", route,
+			"path", path,
 			"status", rec.status,
 			"duration_ms", time.Since(start).Milliseconds(),
+			"response_bytes", rec.written,
 			"remote_ip", requestIP(r),
-		)
+			"authenticated", authenticated,
+		}
+
+		logger := s.loggerForRequest(r)
+		if rec.status >= http.StatusInternalServerError || rec.status == http.StatusTooManyRequests {
+			logger.Warn("http request", attrs...)
+			return
+		}
+		logger.Info("http request", attrs...)
 	})
 }
 
 type statusCapturingResponseWriter struct {
 	http.ResponseWriter
-	status int
+	status  int
+	written int
 }
 
 func (w *statusCapturingResponseWriter) WriteHeader(status int) {
@@ -103,5 +120,7 @@ func (w *statusCapturingResponseWriter) WriteHeader(status int) {
 }
 
 func (w *statusCapturingResponseWriter) Write(b []byte) (int, error) {
-	return w.ResponseWriter.Write(b)
+	n, err := w.ResponseWriter.Write(b)
+	w.written += n
+	return n, err
 }
