@@ -7,7 +7,9 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -200,6 +202,7 @@ func runMigrate(action string) error {
 func runAll(ctx context.Context, logger *slog.Logger, cfg config.Config, httpServer *http.Server, jobsRunner *jobs.Runner) error {
 	errs := make(chan error, 2)
 	go func() {
+		logStartupURL(logger, cfg)
 		logger.Info("server listening", "addr", cfg.Addr, "env", cfg.Env, "email_provider", cfg.EmailProvider, "process", cfg.Process)
 		errs <- httpServer.ListenAndServe()
 	}()
@@ -230,6 +233,7 @@ func runAll(ctx context.Context, logger *slog.Logger, cfg config.Config, httpSer
 func runWeb(ctx context.Context, logger *slog.Logger, cfg config.Config, httpServer *http.Server) error {
 	errs := make(chan error, 1)
 	go func() {
+		logStartupURL(logger, cfg)
 		logger.Info("server listening", "addr", cfg.Addr, "env", cfg.Env, "email_provider", cfg.EmailProvider, "process", cfg.Process)
 		errs <- httpServer.ListenAndServe()
 	}()
@@ -259,4 +263,77 @@ func runWorker(ctx context.Context, logger *slog.Logger, cfg config.Config, jobs
 	}
 	logger.Info("background jobs worker stopped")
 	return nil
+}
+
+func logStartupURL(logger *slog.Logger, cfg config.Config) {
+	if logger == nil {
+		return
+	}
+
+	if appURL := startupURL(cfg); appURL != "" {
+		logger.Info("open application", "url", appURL)
+	}
+}
+
+func startupURL(cfg config.Config) string {
+	if localURL := normalizeLocalBaseURL(cfg.AppBaseURL); localURL != "" {
+		return localURL
+	}
+	return localURLFromAddr(cfg.Addr)
+}
+
+func normalizeLocalBaseURL(raw string) string {
+	parsed, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil || parsed == nil {
+		return ""
+	}
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return ""
+	}
+
+	host := parsed.Hostname()
+	if !isLocalHost(host) {
+		return ""
+	}
+
+	if parsed.Path == "" {
+		parsed.Path = "/"
+	}
+	parsed.RawQuery = ""
+	parsed.Fragment = ""
+	return parsed.String()
+}
+
+func localURLFromAddr(addr string) string {
+	addr = strings.TrimSpace(addr)
+	if addr == "" {
+		return ""
+	}
+
+	host, port, err := net.SplitHostPort(addr)
+	if err != nil {
+		return ""
+	}
+	if port == "" {
+		return ""
+	}
+
+	host = strings.TrimSpace(host)
+	if host == "" || host == "0.0.0.0" || host == "::" || host == "[::]" {
+		host = "localhost"
+	}
+	if !isLocalHost(host) {
+		return ""
+	}
+
+	return "http://" + net.JoinHostPort(host, port) + "/"
+}
+
+func isLocalHost(host string) bool {
+	switch strings.ToLower(strings.TrimSpace(host)) {
+	case "localhost", "127.0.0.1", "::1":
+		return true
+	default:
+		return false
+	}
 }

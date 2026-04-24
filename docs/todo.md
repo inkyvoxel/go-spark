@@ -1,6 +1,17 @@
 # TODO
 
-* introduce database-backed rate limiting only if the in-memory limiter stops being sufficient for the starter's deploymentmodel
-* split auth into a reusable module only if a real second bounded context appears
-* add richer observability hooks only after there is a concrete operational need
-* add cache headers for static assets (immutable fingerprinting?)
+Starter-template priorities:
+
+* add request ID middleware and include request IDs in logs
+* add minimal structured HTTP access logs via slog
+* add simple `/healthz` and `/readyz` endpoints. No need to add a link anywhere in the app, but document.
+* tighten worker lifecycle and email outbox logging for easier debugging
+* add sensible cache headers for `/static/` without introducing an asset pipeline
+
+Auth boundaries:
+
+* tighten auth package boundaries and naming without forcing a large package reorg
+* keep HTTP concerns in handlers/middleware, business rules in services, and persistence in stores
+* avoid leaking storage details outside auth-related code paths
+* keep auth flows observable with structured logs and request IDs
+* only extract a reusable auth module if a second real consumer appears

@@ -171,3 +171,59 @@ func TestParseCLIArgsRejectsLegacyStartCommand(t *testing.T) {
 		}
 	}
 }
+
+func TestStartupURLUsesLocalBaseURLWhenPresent(t *testing.T) {
+	cfg := config.Config{
+		AppBaseURL: "http://localhost:8080/account?tab=settings",
+		Addr:       ":9999",
+	}
+
+	got := startupURL(cfg)
+	if got != "http://localhost:8080/account" {
+		t.Fatalf("startupURL() = %q, want %q", got, "http://localhost:8080/account")
+	}
+}
+
+func TestStartupURLFallsBackToListenAddr(t *testing.T) {
+	tests := []struct {
+		name string
+		addr string
+		want string
+	}{
+		{name: "wildcard port", addr: ":8080", want: "http://localhost:8080/"},
+		{name: "ipv4 wildcard", addr: "0.0.0.0:3000", want: "http://localhost:3000/"},
+		{name: "ipv6 wildcard", addr: "[::]:4000", want: "http://localhost:4000/"},
+		{name: "localhost", addr: "localhost:5000", want: "http://localhost:5000/"},
+		{name: "loopback ipv4", addr: "127.0.0.1:6000", want: "http://127.0.0.1:6000/"},
+		{name: "loopback ipv6", addr: "[::1]:7000", want: "http://[::1]:7000/"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := config.Config{Addr: tt.addr}
+			if got := startupURL(cfg); got != tt.want {
+				t.Fatalf("startupURL() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestStartupURLIgnoresNonLocalBaseURL(t *testing.T) {
+	cfg := config.Config{
+		AppBaseURL: "https://app.example.com",
+		Addr:       ":8080",
+	}
+
+	got := startupURL(cfg)
+	if got != "http://localhost:8080/" {
+		t.Fatalf("startupURL() = %q, want %q", got, "http://localhost:8080/")
+	}
+}
+
+func TestStartupURLReturnsEmptyForNonLocalAddr(t *testing.T) {
+	cfg := config.Config{Addr: "192.168.1.10:8080"}
+
+	if got := startupURL(cfg); got != "" {
+		t.Fatalf("startupURL() = %q, want empty", got)
+	}
+}
