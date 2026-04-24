@@ -60,6 +60,7 @@ Notes:
 ## Tooling
 
 `sqlc`, `goose`, and `govulncheck` are pinned as Go tools in `go.mod`.
+This intentionally adds a larger set of indirect dependencies to `go.mod`, because a single module keeps template setup and upgrades straightforward. Do not split tools into a separate module unless that tradeoff becomes painful for real template users.
 
 Useful commands:
 

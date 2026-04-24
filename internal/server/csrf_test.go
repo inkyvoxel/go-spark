@@ -290,7 +290,8 @@ func TestCSRFRejectsPostWithMismatchedToken(t *testing.T) {
 func TestCSRFRejectsPostWithTamperedSignature(t *testing.T) {
 	srv := newAuthMiddlewareTestServer(nil)
 	token := mustSignedCSRFToken(t, srv, csrfAnonymousSessionHash, time.Now().UTC())
-	tampered := token[:len(token)-1] + "A"
+	signatureStart := strings.LastIndex(token, ".") + 1
+	tampered := token[:signatureStart] + "bad-signature"
 
 	req := httptest.NewRequest(http.MethodPost, "/submit", nil)
 	req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: tampered})

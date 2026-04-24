@@ -40,6 +40,7 @@ Rules of thumb:
 * stores own persistence and SQLite-specific translation today
 * engine setup belongs in engine-focused packages under `internal/platform`
 * templates render data, not business rules
+* `internal/server` must not import `internal/db/generated`; handlers should work with service-owned types and leave generated persistence models inside stores
 
 Go Spark keeps service/store seams because they protect business logic from
 HTTP and persistence concerns. Those seams are not a promise that the starter

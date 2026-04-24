@@ -4,8 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"github.com/inkyvoxel/go-spark/internal/paths"
-	"github.com/inkyvoxel/go-spark/internal/services"
 	"io"
 	"log/slog"
 	"net/http"
@@ -13,6 +11,9 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/inkyvoxel/go-spark/internal/paths"
+	"github.com/inkyvoxel/go-spark/internal/services"
 )
 
 func TestLoadSessionAddsCurrentUserToContext(t *testing.T) {
