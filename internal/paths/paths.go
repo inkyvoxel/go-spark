@@ -2,6 +2,8 @@ package paths
 
 const (
 	Home                        = "/"
+	Healthz                     = "/healthz"
+	Readyz                      = "/readyz"
 	StaticPrefix                = "/static/"
 	StaticPicoCSS               = StaticPrefix + "vendor/pico/pico.min.css"
 	StaticStyles                = StaticPrefix + "styles.css"

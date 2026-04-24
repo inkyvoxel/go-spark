@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"database/sql"
 	"html/template"
 	"log/slog"
@@ -147,6 +148,8 @@ func (s *Server) Routes() http.Handler {
 	mux := http.NewServeMux()
 	dynamic := http.NewServeMux()
 
+	mux.HandleFunc(route(http.MethodGet, paths.Healthz), s.healthz)
+	mux.HandleFunc(route(http.MethodGet, paths.Readyz), s.readyz)
 	mux.Handle(route(http.MethodGet, paths.StaticPrefix), staticFileHandler())
 
 	// Register new protected pages with requireAuth and anonymous-only pages with requireAnonymous.
@@ -248,6 +251,31 @@ func staticFileHandler() http.Handler {
 
 func (s *Server) home(w http.ResponseWriter, r *http.Request) {
 	s.render(w, templateHome, s.newTemplateData(r, "Go Spark"))
+}
+
+func (s *Server) healthz(w http.ResponseWriter, _ *http.Request) {
+	writePlaintext(w, http.StatusOK, "ok")
+}
+
+func (s *Server) readyz(w http.ResponseWriter, r *http.Request) {
+	if !s.isReady(r.Context()) {
+		writePlaintext(w, http.StatusServiceUnavailable, "not ready")
+		return
+	}
+	writePlaintext(w, http.StatusOK, "ok")
+}
+
+func (s *Server) isReady(ctx context.Context) bool {
+	if s.db == nil {
+		return false
+	}
+	return s.db.PingContext(ctx) == nil
+}
+
+func writePlaintext(w http.ResponseWriter, status int, body string) {
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	w.WriteHeader(status)
+	_, _ = w.Write([]byte(body))
 }
 
 func (s *Server) notFoundPage(w http.ResponseWriter, r *http.Request) {

@@ -13,6 +13,8 @@ func TestRoutePathConstants(t *testing.T) {
 		want string
 	}{
 		{name: "home", got: paths.Home, want: "/"},
+		{name: "healthz", got: paths.Healthz, want: "/healthz"},
+		{name: "readyz", got: paths.Readyz, want: "/readyz"},
 		{name: "static", got: paths.StaticPrefix, want: "/static/"},
 		{name: "static pico css", got: paths.StaticPicoCSS, want: "/static/vendor/pico/pico.min.css"},
 		{name: "static styles", got: paths.StaticStyles, want: "/static/styles.css"},

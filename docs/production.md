@@ -46,7 +46,17 @@ Strongly recommended:
 
 Also set your production database path (for example `DATABASE_PATH=/var/lib/go-spark/app.db`) and SMTP settings when SMTP is enabled.
 
-## 3. Run migrations before first start
+## 3. Health Endpoints
+
+The app exposes two plain-text health endpoints intended for load balancers and orchestrators:
+
+* `GET /healthz` returns `200 OK` with body `ok`
+* `GET /readyz` returns `200 OK` with body `ok` when the app is ready to serve traffic
+* `GET /readyz` returns `503 Service Unavailable` with body `not ready` when the app is not ready
+
+Responses are intentionally minimal and do not include internal details such as database metadata, migration versions, environment values, hostnames, queue state, or build identifiers.
+
+## 4. Run migrations before first start
 
 ```sh
 DATABASE_PATH=/var/lib/go-spark/app.db ./bin/app migrate up
@@ -54,7 +64,7 @@ DATABASE_PATH=/var/lib/go-spark/app.db ./bin/app migrate up
 
 Migrations are embedded into the binary, so this command does not depend on a local `migrations/` directory.
 
-## 4. Run as a systemd service
+## 5. Run as a systemd service
 
 Example `/etc/systemd/system/go-spark.service` using single-process `all` mode:
 
@@ -79,7 +89,7 @@ WantedBy=multi-user.target
 
 Single-process `all` mode is the default recommendation for this starter. If you need stricter isolation, you can run separate `serve` and `worker` services.
 
-## 5. Put Caddy in front
+## 6. Put Caddy in front
 
 Minimal Caddy config:
 

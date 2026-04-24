@@ -44,6 +44,64 @@ func TestRoutesHome(t *testing.T) {
 	}
 }
 
+func TestRoutesHealthz(t *testing.T) {
+	srv := testServer(t)
+
+	req := httptest.NewRequest(http.MethodGet, paths.Healthz, nil)
+	rec := httptest.NewRecorder()
+
+	srv.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	if got := rec.Body.String(); got != "ok" {
+		t.Fatalf("body = %q, want %q", got, "ok")
+	}
+	if got := rec.Header().Get("Content-Type"); got != "text/plain; charset=utf-8" {
+		t.Fatalf("Content-Type = %q, want %q", got, "text/plain; charset=utf-8")
+	}
+}
+
+func TestRoutesReadyz(t *testing.T) {
+	srv := testServer(t)
+
+	req := httptest.NewRequest(http.MethodGet, paths.Readyz, nil)
+	rec := httptest.NewRecorder()
+
+	srv.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	if got := rec.Body.String(); got != "ok" {
+		t.Fatalf("body = %q, want %q", got, "ok")
+	}
+	if got := rec.Header().Get("Content-Type"); got != "text/plain; charset=utf-8" {
+		t.Fatalf("Content-Type = %q, want %q", got, "text/plain; charset=utf-8")
+	}
+}
+
+func TestRoutesReadyzReturnsServiceUnavailableWhenNotReady(t *testing.T) {
+	srv := testServer(t)
+	srv.db = nil
+
+	req := httptest.NewRequest(http.MethodGet, paths.Readyz, nil)
+	rec := httptest.NewRecorder()
+
+	srv.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusServiceUnavailable)
+	}
+	if got := rec.Body.String(); got != "not ready" {
+		t.Fatalf("body = %q, want %q", got, "not ready")
+	}
+	if strings.Contains(strings.ToLower(rec.Body.String()), "error") {
+		t.Fatalf("body = %q, want no diagnostic details", rec.Body.String())
+	}
+}
+
 func TestRoutesUnknownGetRendersCustomNotFound(t *testing.T) {
 	srv := testServer(t)
 
