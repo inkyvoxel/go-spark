@@ -170,6 +170,9 @@ func TestRoutesStaticDirectoryListingIsNotServed(t *testing.T) {
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusNotFound)
 	}
+	if got := rec.Header().Get("Cache-Control"); got != "" {
+		t.Fatalf("Cache-Control = %q, want empty", got)
+	}
 }
 
 func TestRoutesStaticFileIsServed(t *testing.T) {
@@ -182,6 +185,9 @@ func TestRoutesStaticFileIsServed(t *testing.T) {
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	if got := rec.Header().Get("Cache-Control"); got != cacheControlPublic {
+		t.Fatalf("Cache-Control = %q, want %q", got, cacheControlPublic)
 	}
 }
 

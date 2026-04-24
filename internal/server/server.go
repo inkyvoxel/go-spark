@@ -19,6 +19,7 @@ const (
 	maxRequestBodyBytes = 64 * 1024
 	cspHeaderValue      = "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; form-action 'self'; frame-ancestors 'none'; base-uri 'self'"
 	cacheControlNoStore = "no-store"
+	cacheControlPublic  = "public, max-age=86400"
 	pragmaNoCache       = "no-cache"
 	expiresImmediately  = "0"
 )
@@ -245,8 +246,29 @@ func staticFileHandler() http.Handler {
 			http.NotFound(w, r)
 			return
 		}
-		fileServer.ServeHTTP(w, r)
+		fileServer.ServeHTTP(&staticCacheHeaderResponseWriter{ResponseWriter: w}, r)
 	})
+}
+
+type staticCacheHeaderResponseWriter struct {
+	http.ResponseWriter
+	wroteHeader bool
+}
+
+func (w *staticCacheHeaderResponseWriter) WriteHeader(statusCode int) {
+	if w.wroteHeader {
+		return
+	}
+	w.wroteHeader = true
+	if statusCode == http.StatusOK || statusCode == http.StatusNotModified {
+		w.Header().Set("Cache-Control", cacheControlPublic)
+	}
+	w.ResponseWriter.WriteHeader(statusCode)
+}
+
+func (w *staticCacheHeaderResponseWriter) Write(data []byte) (int, error) {
+	w.WriteHeader(http.StatusOK)
+	return w.ResponseWriter.Write(data)
 }
 
 func (s *Server) home(w http.ResponseWriter, r *http.Request) {

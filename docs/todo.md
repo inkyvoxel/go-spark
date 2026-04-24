@@ -1,9 +1,5 @@
 # TODO
 
-## Starter-template priorities:
-
-* add sensible cache headers for `/static/` without introducing an asset pipeline
-
 ## Auth boundaries:
 
 * tighten auth package boundaries and naming without forcing a large package reorg
