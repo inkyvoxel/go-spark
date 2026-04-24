@@ -13,7 +13,6 @@ import (
 	"time"
 	"unicode/utf8"
 
-	db "github.com/inkyvoxel/go-spark/internal/db/generated"
 	"github.com/inkyvoxel/go-spark/internal/email"
 )
 
@@ -58,6 +57,44 @@ type AuthSession struct {
 	ExpiresAt time.Time
 }
 
+type User struct {
+	ID              int64
+	Email           string
+	EmailVerifiedAt sql.NullTime
+	CreatedAt       time.Time
+}
+
+type UserRecord struct {
+	User
+	PasswordHash string
+}
+
+type SessionRecord struct {
+	ID        int64
+	UserID    int64
+	TokenHash string
+	ExpiresAt time.Time
+	CreatedAt time.Time
+}
+
+type EmailVerificationToken struct {
+	ID         int64
+	UserID     int64
+	TokenHash  string
+	ExpiresAt  time.Time
+	ConsumedAt sql.NullTime
+	CreatedAt  time.Time
+}
+
+type PasswordResetToken struct {
+	ID         int64
+	UserID     int64
+	TokenHash  string
+	ExpiresAt  time.Time
+	ConsumedAt sql.NullTime
+	CreatedAt  time.Time
+}
+
 type ManagedSession struct {
 	ID        int64
 	CreatedAt time.Time
@@ -66,28 +103,29 @@ type ManagedSession struct {
 }
 
 type AuthStore interface {
-	CreateUser(ctx context.Context, email, passwordHash string) (db.User, error)
-	CreateVerifiedUser(ctx context.Context, email, passwordHash string, verifiedAt time.Time) (db.User, error)
-	CreateUserWithEmailVerification(ctx context.Context, params CreateUserWithEmailVerificationParams) (db.User, error)
-	GetUserByEmail(ctx context.Context, email string) (db.User, error)
-	CreateSession(ctx context.Context, userID int64, tokenHash string, expiresAt time.Time) (db.Session, error)
-	GetUserBySessionTokenHash(ctx context.Context, tokenHash string) (db.User, error)
+	CreateUser(ctx context.Context, email, passwordHash string) (User, error)
+	CreateVerifiedUser(ctx context.Context, email, passwordHash string, verifiedAt time.Time) (User, error)
+	CreateUserWithEmailVerification(ctx context.Context, params CreateUserWithEmailVerificationParams) (User, error)
+	GetUserByEmail(ctx context.Context, email string) (UserRecord, error)
+	GetUserByID(ctx context.Context, userID int64) (UserRecord, error)
+	CreateSession(ctx context.Context, userID int64, tokenHash string, expiresAt time.Time) (SessionRecord, error)
+	GetUserBySessionTokenHash(ctx context.Context, tokenHash string) (UserRecord, error)
 	DeleteSessionByTokenHash(ctx context.Context, tokenHash string) error
 	DeleteSessionsByUserID(ctx context.Context, userID int64) error
-	ListActiveSessionsByUserID(ctx context.Context, userID int64) ([]db.Session, error)
+	ListActiveSessionsByUserID(ctx context.Context, userID int64) ([]SessionRecord, error)
 	DeleteOtherSessionsByUserIDAndTokenHash(ctx context.Context, userID int64, tokenHash string) (int64, error)
 	DeleteSessionByIDAndUserIDAndTokenHashNot(ctx context.Context, sessionID, userID int64, tokenHash string) (int64, error)
 	UpdateUserPasswordHash(ctx context.Context, userID int64, passwordHash string) error
-	CreatePasswordResetToken(ctx context.Context, userID int64, tokenHash string, expiresAt time.Time) (db.PasswordResetToken, error)
-	GetValidPasswordResetTokenByHash(ctx context.Context, tokenHash string, now time.Time) (db.PasswordResetToken, error)
-	ConsumePasswordResetToken(ctx context.Context, tokenHash string, consumedAt time.Time) (db.PasswordResetToken, error)
+	CreatePasswordResetToken(ctx context.Context, userID int64, tokenHash string, expiresAt time.Time) (PasswordResetToken, error)
+	GetValidPasswordResetTokenByHash(ctx context.Context, tokenHash string, now time.Time) (PasswordResetToken, error)
+	ConsumePasswordResetToken(ctx context.Context, tokenHash string, consumedAt time.Time) (PasswordResetToken, error)
 	RequestPasswordReset(ctx context.Context, params RequestPasswordResetParams) error
 	RequestEmailChange(ctx context.Context, params RequestEmailChangeParams) error
-	ChangeEmailImmediately(ctx context.Context, params ChangeEmailImmediatelyParams) (db.User, error)
-	ConfirmEmailChange(ctx context.Context, params ConfirmEmailChangeParams) (db.User, error)
-	CreateEmailVerificationToken(ctx context.Context, userID int64, tokenHash string, expiresAt time.Time) (db.EmailVerificationToken, error)
+	ChangeEmailImmediately(ctx context.Context, params ChangeEmailImmediatelyParams) (User, error)
+	ConfirmEmailChange(ctx context.Context, params ConfirmEmailChangeParams) (User, error)
+	CreateEmailVerificationToken(ctx context.Context, userID int64, tokenHash string, expiresAt time.Time) (EmailVerificationToken, error)
 	ResendEmailVerification(ctx context.Context, params ResendEmailVerificationParams) error
-	VerifyEmailByTokenHash(ctx context.Context, tokenHash string, verifiedAt time.Time) (db.User, error)
+	VerifyEmailByTokenHash(ctx context.Context, tokenHash string, verifiedAt time.Time) (User, error)
 }
 
 type CreateUserWithEmailVerificationParams struct {
@@ -208,36 +246,36 @@ func NewAuthService(store AuthStore, opts AuthOptions) *AuthService {
 	}
 }
 
-func (s *AuthService) Register(ctx context.Context, emailAddress, password string) (db.User, error) {
+func (s *AuthService) Register(ctx context.Context, emailAddress, password string) (User, error) {
 	emailAddress = normalizeEmail(emailAddress)
 	if !isValidEmail(emailAddress) {
-		return db.User{}, ErrInvalidEmail
+		return User{}, ErrInvalidEmail
 	}
 	if utf8.RuneCountInString(password) < s.passwordMinLen {
-		return db.User{}, ErrInvalidPassword
+		return User{}, ErrInvalidPassword
 	}
 	if _, err := s.store.GetUserByEmail(ctx, emailAddress); err == nil {
-		return db.User{}, ErrEmailAlreadyRegistered
+		return User{}, ErrEmailAlreadyRegistered
 	} else if !errors.Is(err, sql.ErrNoRows) {
-		return db.User{}, fmt.Errorf("get user by email: %w", err)
+		return User{}, fmt.Errorf("get user by email: %w", err)
 	}
 
 	hash, err := s.passwordHasher.Hash(password)
 	if err != nil {
-		return db.User{}, fmt.Errorf("hash password: %w", err)
+		return User{}, fmt.Errorf("hash password: %w", err)
 	}
 
 	now := time.Now().UTC()
-	var user db.User
+	var user User
 	if s.emailVerificationPolicy.Required() {
 		token, err := generateToken(s.tokenBytes)
 		if err != nil {
-			return db.User{}, fmt.Errorf("generate email verification token: %w", err)
+			return User{}, fmt.Errorf("generate email verification token: %w", err)
 		}
 
 		message, err := email.NewAccountConfirmationMessage(s.confirmationEmail, emailAddress, token)
 		if err != nil {
-			return db.User{}, fmt.Errorf("build account confirmation email: %w", err)
+			return User{}, fmt.Errorf("build account confirmation email: %w", err)
 		}
 
 		user, err = s.store.CreateUserWithEmailVerification(
@@ -256,63 +294,63 @@ func (s *AuthService) Register(ctx context.Context, emailAddress, password strin
 	}
 	if err != nil {
 		if errors.Is(err, ErrEmailAlreadyRegistered) {
-			return db.User{}, ErrEmailAlreadyRegistered
+			return User{}, ErrEmailAlreadyRegistered
 		}
-		return db.User{}, fmt.Errorf("create user: %w", err)
+		return User{}, fmt.Errorf("create user: %w", err)
 	}
 
 	return user, nil
 }
 
-func (s *AuthService) Login(ctx context.Context, email, password string) (db.User, AuthSession, error) {
+func (s *AuthService) Login(ctx context.Context, email, password string) (User, AuthSession, error) {
 	user, err := s.store.GetUserByEmail(ctx, normalizeEmail(email))
 	if errors.Is(err, sql.ErrNoRows) {
-		return db.User{}, AuthSession{}, ErrInvalidCredentials
+		return User{}, AuthSession{}, ErrInvalidCredentials
 	}
 	if err != nil {
-		return db.User{}, AuthSession{}, fmt.Errorf("get user by email: %w", err)
+		return User{}, AuthSession{}, fmt.Errorf("get user by email: %w", err)
 	}
 
 	matches, err := s.passwordHasher.Verify(user.PasswordHash, password)
 	if err != nil {
-		return db.User{}, AuthSession{}, ErrInvalidCredentials
+		return User{}, AuthSession{}, ErrInvalidCredentials
 	}
 	if !matches {
-		return db.User{}, AuthSession{}, ErrInvalidCredentials
+		return User{}, AuthSession{}, ErrInvalidCredentials
 	}
 
 	token, err := generateToken(s.tokenBytes)
 	if err != nil {
-		return db.User{}, AuthSession{}, fmt.Errorf("generate session token: %w", err)
+		return User{}, AuthSession{}, fmt.Errorf("generate session token: %w", err)
 	}
 
 	expiresAt := time.Now().UTC().Add(s.sessionDuration)
 	_, err = s.store.CreateSession(ctx, user.ID, hashToken(token), expiresAt)
 	if err != nil {
-		return db.User{}, AuthSession{}, fmt.Errorf("create session: %w", err)
+		return User{}, AuthSession{}, fmt.Errorf("create session: %w", err)
 	}
 
-	return user, AuthSession{
+	return user.User, AuthSession{
 		Token:     token,
 		ExpiresAt: expiresAt,
 	}, nil
 }
 
-func (s *AuthService) UserBySessionToken(ctx context.Context, token string) (db.User, error) {
+func (s *AuthService) UserBySessionToken(ctx context.Context, token string) (User, error) {
 	token = strings.TrimSpace(token)
 	if token == "" {
-		return db.User{}, ErrInvalidSession
+		return User{}, ErrInvalidSession
 	}
 
 	user, err := s.store.GetUserBySessionTokenHash(ctx, hashToken(token))
 	if errors.Is(err, sql.ErrNoRows) {
-		return db.User{}, ErrInvalidSession
+		return User{}, ErrInvalidSession
 	}
 	if err != nil {
-		return db.User{}, fmt.Errorf("get user by session token: %w", err)
+		return User{}, fmt.Errorf("get user by session token: %w", err)
 	}
 
-	return user, nil
+	return user.User, nil
 }
 
 func (s *AuthService) Logout(ctx context.Context, token string) error {
@@ -400,7 +438,15 @@ func (s *AuthService) RevokeSessionByID(ctx context.Context, userID int64, curre
 	return ErrInvalidSessionTarget
 }
 
-func (s *AuthService) ChangePassword(ctx context.Context, user db.User, currentPassword, newPassword string) error {
+func (s *AuthService) ChangePassword(ctx context.Context, userID int64, currentPassword, newPassword string) error {
+	user, err := s.store.GetUserByID(ctx, userID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return ErrCurrentPasswordIncorrect
+	}
+	if err != nil {
+		return fmt.Errorf("get user by ID: %w", err)
+	}
+
 	currentMatches, err := s.passwordHasher.Verify(user.PasswordHash, currentPassword)
 	if err != nil || !currentMatches {
 		return ErrCurrentPasswordIncorrect
@@ -422,7 +468,15 @@ func (s *AuthService) ChangePassword(ctx context.Context, user db.User, currentP
 	return nil
 }
 
-func (s *AuthService) RequestEmailChange(ctx context.Context, user db.User, currentPassword, newEmail string) error {
+func (s *AuthService) RequestEmailChange(ctx context.Context, userID int64, currentPassword, newEmail string) error {
+	user, err := s.store.GetUserByID(ctx, userID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return ErrCurrentPasswordIncorrect
+	}
+	if err != nil {
+		return fmt.Errorf("get user by ID: %w", err)
+	}
+
 	currentMatches, err := s.passwordHasher.Verify(user.PasswordHash, currentPassword)
 	if err != nil || !currentMatches {
 		return ErrCurrentPasswordIncorrect
@@ -489,10 +543,10 @@ func (s *AuthService) RequestEmailChange(ctx context.Context, user db.User, curr
 	return nil
 }
 
-func (s *AuthService) ConfirmEmailChange(ctx context.Context, token string) (db.User, error) {
+func (s *AuthService) ConfirmEmailChange(ctx context.Context, token string) (User, error) {
 	token = strings.TrimSpace(token)
 	if token == "" {
-		return db.User{}, ErrInvalidEmailChangeToken
+		return User{}, ErrInvalidEmailChangeToken
 	}
 
 	now := time.Now().UTC()
@@ -504,10 +558,10 @@ func (s *AuthService) ConfirmEmailChange(ctx context.Context, token string) (db.
 		SendOldEmailNotice:     s.emailChangeNoticeEnabled,
 	})
 	if errors.Is(err, sql.ErrNoRows) {
-		return db.User{}, ErrInvalidEmailChangeToken
+		return User{}, ErrInvalidEmailChangeToken
 	}
 	if err != nil {
-		return db.User{}, fmt.Errorf("confirm email change: %w", err)
+		return User{}, fmt.Errorf("confirm email change: %w", err)
 	}
 
 	return user, nil
@@ -617,10 +671,10 @@ func (s *AuthService) setPasswordAndRevokeSessions(ctx context.Context, userID i
 	return nil
 }
 
-func (s *AuthService) CreateEmailVerificationToken(ctx context.Context, userID int64) (string, db.EmailVerificationToken, error) {
+func (s *AuthService) CreateEmailVerificationToken(ctx context.Context, userID int64) (string, EmailVerificationToken, error) {
 	token, err := generateToken(s.tokenBytes)
 	if err != nil {
-		return "", db.EmailVerificationToken{}, fmt.Errorf("generate email verification token: %w", err)
+		return "", EmailVerificationToken{}, fmt.Errorf("generate email verification token: %w", err)
 	}
 
 	verificationToken, err := s.store.CreateEmailVerificationToken(
@@ -630,31 +684,39 @@ func (s *AuthService) CreateEmailVerificationToken(ctx context.Context, userID i
 		time.Now().UTC().Add(s.emailVerificationTokenDuration),
 	)
 	if err != nil {
-		return "", db.EmailVerificationToken{}, fmt.Errorf("create email verification token: %w", err)
+		return "", EmailVerificationToken{}, fmt.Errorf("create email verification token: %w", err)
 	}
 
 	return token, verificationToken, nil
 }
 
-func (s *AuthService) VerifyEmail(ctx context.Context, token string) (db.User, error) {
+func (s *AuthService) VerifyEmail(ctx context.Context, token string) (User, error) {
 	token = strings.TrimSpace(token)
 	if token == "" {
-		return db.User{}, ErrInvalidVerificationToken
+		return User{}, ErrInvalidVerificationToken
 	}
 
 	user, err := s.store.VerifyEmailByTokenHash(ctx, hashToken(token), time.Now().UTC())
 	if errors.Is(err, sql.ErrNoRows) {
-		return db.User{}, ErrInvalidVerificationToken
+		return User{}, ErrInvalidVerificationToken
 	}
 	if err != nil {
-		return db.User{}, fmt.Errorf("verify email: %w", err)
+		return User{}, fmt.Errorf("verify email: %w", err)
 	}
 
 	return user, nil
 }
 
-func (s *AuthService) ResendVerificationEmail(ctx context.Context, user db.User) error {
-	if !s.emailVerificationPolicy.Required() || s.emailVerificationPolicy.UserIsVerified(user) {
+func (s *AuthService) ResendVerificationEmail(ctx context.Context, userID int64) error {
+	user, err := s.store.GetUserByID(ctx, userID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("get user by ID: %w", err)
+	}
+
+	if !s.emailVerificationPolicy.Required() || s.emailVerificationPolicy.UserIsVerified(user.User) {
 		return nil
 	}
 
@@ -700,11 +762,11 @@ func (s *AuthService) ResendVerificationEmailByAddress(ctx context.Context, emai
 		return fmt.Errorf("get user by email: %w", err)
 	}
 
-	if s.emailVerificationPolicy.UserIsVerified(user) {
+	if s.emailVerificationPolicy.UserIsVerified(user.User) {
 		return nil
 	}
 
-	if err := s.ResendVerificationEmail(ctx, user); err != nil {
+	if err := s.ResendVerificationEmail(ctx, user.ID); err != nil {
 		return err
 	}
 

@@ -1,12 +1,10 @@
 package services
 
-import db "github.com/inkyvoxel/go-spark/internal/db/generated"
-
 // EmailVerificationPolicy centralizes how verification affects behavior.
 type EmailVerificationPolicy interface {
 	Required() bool
 	RequiresEmailChangeVerification() bool
-	UserIsVerified(user db.User) bool
+	UserIsVerified(user User) bool
 }
 
 type requiredEmailVerificationPolicy struct{}
@@ -32,7 +30,7 @@ func (requiredEmailVerificationPolicy) RequiresEmailChangeVerification() bool {
 	return true
 }
 
-func (requiredEmailVerificationPolicy) UserIsVerified(user db.User) bool {
+func (requiredEmailVerificationPolicy) UserIsVerified(user User) bool {
 	return user.EmailVerifiedAt.Valid
 }
 
@@ -44,6 +42,6 @@ func (optionalEmailVerificationPolicy) RequiresEmailChangeVerification() bool {
 	return false
 }
 
-func (optionalEmailVerificationPolicy) UserIsVerified(db.User) bool {
+func (optionalEmailVerificationPolicy) UserIsVerified(User) bool {
 	return true
 }

@@ -8,7 +8,6 @@ import (
 	"strings"
 	"time"
 
-	db "github.com/inkyvoxel/go-spark/internal/db/generated"
 	"github.com/inkyvoxel/go-spark/internal/paths"
 	"github.com/inkyvoxel/go-spark/internal/services"
 )
@@ -21,32 +20,32 @@ const (
 )
 
 type authService interface {
-	RequestEmailChange(context.Context, db.User, string, string) error
-	ConfirmEmailChange(context.Context, string) (db.User, error)
-	ChangePassword(context.Context, db.User, string, string) error
+	RequestEmailChange(context.Context, int64, string, string) error
+	ConfirmEmailChange(context.Context, string) (services.User, error)
+	ChangePassword(context.Context, int64, string, string) error
 	ListManagedSessions(context.Context, int64, string) ([]services.ManagedSession, error)
 	RevokeOtherSessions(context.Context, int64, string) error
 	RevokeSessionByID(context.Context, int64, string, int64) error
-	Login(context.Context, string, string) (db.User, services.AuthSession, error)
+	Login(context.Context, string, string) (services.User, services.AuthSession, error)
 	Logout(context.Context, string) error
 	RequestPasswordReset(context.Context, string) error
-	Register(context.Context, string, string) (db.User, error)
+	Register(context.Context, string, string) (services.User, error)
 	ResetPasswordWithToken(context.Context, string, string) error
 	ResendVerificationEmailByAddress(context.Context, string) error
-	ResendVerificationEmail(context.Context, db.User) error
-	UserBySessionToken(context.Context, string) (db.User, error)
+	ResendVerificationEmail(context.Context, int64) error
+	UserBySessionToken(context.Context, string) (services.User, error)
 	ValidatePasswordResetToken(context.Context, string) error
-	VerifyEmail(context.Context, string) (db.User, error)
+	VerifyEmail(context.Context, string) (services.User, error)
 }
 
 type authContextKey struct{}
 
-func currentUser(ctx context.Context) (db.User, bool) {
-	user, ok := ctx.Value(authContextKey{}).(db.User)
+func currentUser(ctx context.Context) (services.User, bool) {
+	user, ok := ctx.Value(authContextKey{}).(services.User)
 	return user, ok
 }
 
-func contextWithUser(ctx context.Context, user db.User) context.Context {
+func contextWithUser(ctx context.Context, user services.User) context.Context {
 	return context.WithValue(ctx, authContextKey{}, user)
 }
 

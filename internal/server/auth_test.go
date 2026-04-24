@@ -4,6 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"github.com/inkyvoxel/go-spark/internal/paths"
+	"github.com/inkyvoxel/go-spark/internal/services"
 	"io"
 	"log/slog"
 	"net/http"
@@ -11,14 +13,10 @@ import (
 	"strings"
 	"testing"
 	"time"
-
-	db "github.com/inkyvoxel/go-spark/internal/db/generated"
-	"github.com/inkyvoxel/go-spark/internal/paths"
-	"github.com/inkyvoxel/go-spark/internal/services"
 )
 
 func TestLoadSessionAddsCurrentUserToContext(t *testing.T) {
-	wantUser := db.User{ID: 42, Email: "user@example.com"}
+	wantUser := services.User{ID: 42, Email: "user@example.com"}
 	auth := &fakeAuthLookup{
 		user: wantUser,
 	}
@@ -131,7 +129,7 @@ func TestRequireAuthAllowsCurrentUser(t *testing.T) {
 	srv := newAuthMiddlewareTestServer(&fakeAuthLookup{})
 
 	req := httptest.NewRequest(http.MethodGet, "/private", nil)
-	req = req.WithContext(contextWithUser(req.Context(), db.User{ID: 42, Email: "user@example.com"}))
+	req = req.WithContext(contextWithUser(req.Context(), services.User{ID: 42, Email: "user@example.com"}))
 	rec := httptest.NewRecorder()
 
 	srv.requireAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -180,7 +178,7 @@ func TestRequireAnonymousRedirectsCurrentUserToAccount(t *testing.T) {
 	srv := newAuthMiddlewareTestServer(&fakeAuthLookup{})
 
 	req := httptest.NewRequest(http.MethodGet, paths.Login, nil)
-	req = req.WithContext(contextWithUser(req.Context(), db.User{
+	req = req.WithContext(contextWithUser(req.Context(), services.User{
 		ID:    42,
 		Email: "user@example.com",
 		EmailVerifiedAt: sql.NullTime{
@@ -206,7 +204,7 @@ func TestRequireAnonymousRedirectsUnverifiedUserToVerifyEmail(t *testing.T) {
 	srv := newAuthMiddlewareTestServer(&fakeAuthLookup{})
 
 	req := httptest.NewRequest(http.MethodGet, paths.Login, nil)
-	req = req.WithContext(contextWithUser(req.Context(), db.User{ID: 42, Email: "user@example.com"}))
+	req = req.WithContext(contextWithUser(req.Context(), services.User{ID: 42, Email: "user@example.com"}))
 	rec := httptest.NewRecorder()
 
 	srv.requireAnonymous(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -241,7 +239,7 @@ func TestRequireAnonymousRedirectsUnverifiedUserToAccountWhenVerificationOptiona
 	srv.emailVerificationPolicy = services.NewEmailVerificationPolicy(false)
 
 	req := httptest.NewRequest(http.MethodGet, paths.Login, nil)
-	req = req.WithContext(contextWithUser(req.Context(), db.User{ID: 42, Email: "user@example.com"}))
+	req = req.WithContext(contextWithUser(req.Context(), services.User{ID: 42, Email: "user@example.com"}))
 	rec := httptest.NewRecorder()
 
 	srv.requireAnonymous(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -260,7 +258,7 @@ func TestRequireVerifiedAuthAllowsVerifiedUser(t *testing.T) {
 	srv := newAuthMiddlewareTestServer(&fakeAuthLookup{})
 
 	req := httptest.NewRequest(http.MethodPost, paths.ChangePassword, nil)
-	req = req.WithContext(contextWithUser(req.Context(), db.User{
+	req = req.WithContext(contextWithUser(req.Context(), services.User{
 		ID:    42,
 		Email: "user@example.com",
 		EmailVerifiedAt: sql.NullTime{
@@ -283,7 +281,7 @@ func TestRequireVerifiedAuthRejectsUnverifiedUser(t *testing.T) {
 	srv := newAuthMiddlewareTestServer(&fakeAuthLookup{})
 
 	req := httptest.NewRequest(http.MethodPost, paths.ChangePassword, nil)
-	req = req.WithContext(contextWithUser(req.Context(), db.User{
+	req = req.WithContext(contextWithUser(req.Context(), services.User{
 		ID:    42,
 		Email: "user@example.com",
 	}))
@@ -303,7 +301,7 @@ func TestRequireVerifiedAuthAllowsUnverifiedUserWhenVerificationOptional(t *test
 	srv.emailVerificationPolicy = services.NewEmailVerificationPolicy(false)
 
 	req := httptest.NewRequest(http.MethodPost, paths.ChangePassword, nil)
-	req = req.WithContext(contextWithUser(req.Context(), db.User{
+	req = req.WithContext(contextWithUser(req.Context(), services.User{
 		ID:    42,
 		Email: "user@example.com",
 	}))
@@ -322,7 +320,7 @@ func TestRequireVerifiedAuthRedirectsUnverifiedGETToVerifyPage(t *testing.T) {
 	srv := newAuthMiddlewareTestServer(&fakeAuthLookup{})
 
 	req := httptest.NewRequest(http.MethodGet, "/private", nil)
-	req = req.WithContext(contextWithUser(req.Context(), db.User{
+	req = req.WithContext(contextWithUser(req.Context(), services.User{
 		ID:    42,
 		Email: "user@example.com",
 	}))
@@ -387,7 +385,7 @@ func TestCurrentUserReturnsFalseWhenMissing(t *testing.T) {
 }
 
 type fakeAuthLookup struct {
-	user                 db.User
+	user                 services.User
 	token                string
 	err                  error
 	registered           bool
@@ -405,15 +403,15 @@ type fakeAuthLookup struct {
 	publicResendEmail    string
 	publicResendErr      error
 	publicResendCalls    int
-	resendUser           db.User
+	resendUser           services.User
 	resendErr            error
 	resendCalled         bool
-	changePasswordUser   db.User
+	changePasswordUser   services.User
 	changePasswordOld    string
 	changePasswordNew    string
 	changePasswordErr    error
 	changePasswordCalled bool
-	changeEmailUser      db.User
+	changeEmailUser      services.User
 	changeEmailPassword  string
 	changeEmailNewEmail  string
 	changeEmailErr       error
@@ -435,16 +433,16 @@ type fakeAuthLookup struct {
 	revokeOtherCalled    bool
 }
 
-func (f *fakeAuthLookup) UserBySessionToken(ctx context.Context, token string) (db.User, error) {
+func (f *fakeAuthLookup) UserBySessionToken(ctx context.Context, token string) (services.User, error) {
 	f.token = token
 	return f.user, f.err
 }
 
-func (f *fakeAuthLookup) Login(ctx context.Context, email string, password string) (db.User, services.AuthSession, error) {
+func (f *fakeAuthLookup) Login(ctx context.Context, email string, password string) (services.User, services.AuthSession, error) {
 	f.loginEmail = email
 	f.loginPass = password
 	if f.loginErr != nil {
-		return db.User{}, services.AuthSession{}, f.loginErr
+		return services.User{}, services.AuthSession{}, f.loginErr
 	}
 	return f.user, f.loginSession, nil
 }
@@ -454,17 +452,17 @@ func (f *fakeAuthLookup) Logout(ctx context.Context, token string) error {
 	return f.logoutErr
 }
 
-func (f *fakeAuthLookup) Register(ctx context.Context, email string, password string) (db.User, error) {
+func (f *fakeAuthLookup) Register(ctx context.Context, email string, password string) (services.User, error) {
 	f.registered = true
 	f.registerEmail = email
 	f.registerPass = password
 	return f.user, f.registerErr
 }
 
-func (f *fakeAuthLookup) VerifyEmail(ctx context.Context, token string) (db.User, error) {
+func (f *fakeAuthLookup) VerifyEmail(ctx context.Context, token string) (services.User, error) {
 	f.verifyToken = token
 	if f.verifyErr != nil {
-		return db.User{}, f.verifyErr
+		return services.User{}, f.verifyErr
 	}
 	return f.user, nil
 }
@@ -475,29 +473,29 @@ func (f *fakeAuthLookup) ResendVerificationEmailByAddress(ctx context.Context, e
 	return f.publicResendErr
 }
 
-func (f *fakeAuthLookup) ResendVerificationEmail(ctx context.Context, user db.User) error {
+func (f *fakeAuthLookup) ResendVerificationEmail(ctx context.Context, userID int64) error {
 	f.resendCalled = true
-	f.resendUser = user
+	f.resendUser = services.User{ID: userID}
 	return f.resendErr
 }
 
-func (f *fakeAuthLookup) ChangePassword(ctx context.Context, user db.User, currentPassword, newPassword string) error {
+func (f *fakeAuthLookup) ChangePassword(ctx context.Context, userID int64, currentPassword, newPassword string) error {
 	f.changePasswordCalled = true
-	f.changePasswordUser = user
+	f.changePasswordUser = services.User{ID: userID}
 	f.changePasswordOld = currentPassword
 	f.changePasswordNew = newPassword
 	return f.changePasswordErr
 }
 
-func (f *fakeAuthLookup) RequestEmailChange(ctx context.Context, user db.User, currentPassword, newEmail string) error {
+func (f *fakeAuthLookup) RequestEmailChange(ctx context.Context, userID int64, currentPassword, newEmail string) error {
 	f.changeEmailCalled = true
-	f.changeEmailUser = user
+	f.changeEmailUser = services.User{ID: userID}
 	f.changeEmailPassword = currentPassword
 	f.changeEmailNewEmail = newEmail
 	return f.changeEmailErr
 }
 
-func (f *fakeAuthLookup) ConfirmEmailChange(ctx context.Context, token string) (db.User, error) {
+func (f *fakeAuthLookup) ConfirmEmailChange(ctx context.Context, token string) (services.User, error) {
 	f.confirmEmailToken = token
 	return f.user, f.confirmEmailErr
 }

@@ -3,6 +3,8 @@ package server
 import (
 	"database/sql"
 	"errors"
+	"github.com/inkyvoxel/go-spark/internal/paths"
+	"github.com/inkyvoxel/go-spark/internal/services"
 	"io"
 	"log/slog"
 	"net/http"
@@ -11,10 +13,6 @@ import (
 	"strings"
 	"testing"
 	"time"
-
-	db "github.com/inkyvoxel/go-spark/internal/db/generated"
-	"github.com/inkyvoxel/go-spark/internal/paths"
-	"github.com/inkyvoxel/go-spark/internal/services"
 
 	_ "modernc.org/sqlite"
 )
@@ -69,7 +67,7 @@ func TestRoutesLogin(t *testing.T) {
 
 func TestRoutesLoginSetsSecureSessionCookieWhenConfigured(t *testing.T) {
 	auth := &fakeAuthLookup{
-		user: db.User{ID: 1, Email: "user@example.com"},
+		user: services.User{ID: 1, Email: "user@example.com"},
 		loginSession: services.AuthSession{
 			Token:     "session-token",
 			ExpiresAt: time.Now().Add(time.Hour),
@@ -323,7 +321,7 @@ func TestRoutesLoginRedirectsAuthenticatedUserToAccount(t *testing.T) {
 
 func TestRoutesLoginRedirectsAuthenticatedUnverifiedUserToVerifyEmail(t *testing.T) {
 	auth := &fakeAuthLookup{
-		user: db.User{ID: 1, Email: "user@example.com"},
+		user: services.User{ID: 1, Email: "user@example.com"},
 	}
 	srv := newAuthRouteTestServer(t, auth)
 
@@ -343,7 +341,7 @@ func TestRoutesLoginRedirectsAuthenticatedUnverifiedUserToVerifyEmail(t *testing
 
 func TestRoutesLoginRedirectsUnverifiedUserToVerifyEmail(t *testing.T) {
 	auth := &fakeAuthLookup{
-		user: db.User{ID: 1, Email: "user@example.com"},
+		user: services.User{ID: 1, Email: "user@example.com"},
 		loginSession: services.AuthSession{
 			Token:     "session-token",
 			ExpiresAt: time.Now().Add(time.Hour),
@@ -374,7 +372,7 @@ func TestRoutesLoginRedirectsUnverifiedUserToVerifyEmail(t *testing.T) {
 
 func TestRoutesLoginOptionalVerificationRedirectsUnverifiedUserToNextPath(t *testing.T) {
 	auth := &fakeAuthLookup{
-		user: db.User{ID: 1, Email: "user@example.com"},
+		user: services.User{ID: 1, Email: "user@example.com"},
 		loginSession: services.AuthSession{
 			Token:     "session-token",
 			ExpiresAt: time.Now().Add(time.Hour),
@@ -405,7 +403,7 @@ func TestRoutesLoginOptionalVerificationRedirectsUnverifiedUserToNextPath(t *tes
 
 func TestRoutesRegister(t *testing.T) {
 	auth := &fakeAuthLookup{
-		user: db.User{ID: 1, Email: "new@example.com"},
+		user: services.User{ID: 1, Email: "new@example.com"},
 		loginSession: services.AuthSession{
 			Token:     "new-session-token",
 			ExpiresAt: time.Now().Add(time.Hour),
@@ -449,7 +447,7 @@ func TestRoutesRegister(t *testing.T) {
 
 func TestRoutesRegisterOptionalVerificationRedirectsToAccount(t *testing.T) {
 	auth := &fakeAuthLookup{
-		user: db.User{ID: 1, Email: "new@example.com"},
+		user: services.User{ID: 1, Email: "new@example.com"},
 		loginSession: services.AuthSession{
 			Token:     "new-session-token",
 			ExpiresAt: time.Now().Add(time.Hour),
@@ -564,7 +562,7 @@ func TestRoutesRegisterShowsServiceValidationErrors(t *testing.T) {
 
 func TestRoutesConfirmEmail(t *testing.T) {
 	auth := &fakeAuthLookup{
-		user: db.User{ID: 1, Email: "new@example.com"},
+		user: services.User{ID: 1, Email: "new@example.com"},
 	}
 	srv := newAuthRouteTestServer(t, auth)
 
@@ -617,7 +615,7 @@ func TestRoutesConfirmEmailRejectsInvalidToken(t *testing.T) {
 
 func TestRoutesConfirmEmailRejectsInvalidTokenForAuthenticatedUser(t *testing.T) {
 	auth := &fakeAuthLookup{
-		user:      db.User{ID: 1, Email: "user@example.com"},
+		user:      services.User{ID: 1, Email: "user@example.com"},
 		verifyErr: services.ErrInvalidVerificationToken,
 	}
 	srv := newAuthRouteTestServer(t, auth)
@@ -803,7 +801,7 @@ func TestRoutesHomeShowsAnonymousNav(t *testing.T) {
 
 func TestRoutesHomeShowsAuthenticatedNav(t *testing.T) {
 	auth := &fakeAuthLookup{
-		user: db.User{ID: 1, Email: "user@example.com"},
+		user: services.User{ID: 1, Email: "user@example.com"},
 	}
 	srv := newAuthRouteTestServer(t, auth)
 
@@ -914,7 +912,7 @@ func TestRoutesRevokeOtherSessionsRedirects(t *testing.T) {
 
 func TestRoutesAccountShowsResendForUnverifiedUser(t *testing.T) {
 	auth := &fakeAuthLookup{
-		user: db.User{ID: 1, Email: "user@example.com"},
+		user: services.User{ID: 1, Email: "user@example.com"},
 	}
 	srv := newAuthRouteTestServer(t, auth)
 
@@ -950,7 +948,7 @@ func TestRoutesVerifyEmailRequiresAuth(t *testing.T) {
 
 func TestRoutesVerifyEmailShowsInterstitialForUnverifiedUser(t *testing.T) {
 	auth := &fakeAuthLookup{
-		user: db.User{ID: 1, Email: "user@example.com"},
+		user: services.User{ID: 1, Email: "user@example.com"},
 	}
 	srv := newAuthRouteTestServer(t, auth)
 
@@ -990,7 +988,7 @@ func TestRoutesVerifyEmailRedirectsVerifiedUserToAccount(t *testing.T) {
 
 func TestRoutesVerifyEmailRedirectsToAccountWhenVerificationOptional(t *testing.T) {
 	auth := &fakeAuthLookup{
-		user: db.User{ID: 1, Email: "user@example.com"},
+		user: services.User{ID: 1, Email: "user@example.com"},
 	}
 	srv := newAuthRouteTestServerOptional(t, auth)
 
@@ -1010,7 +1008,7 @@ func TestRoutesVerifyEmailRedirectsToAccountWhenVerificationOptional(t *testing.
 
 func TestRoutesAccountHidesResendForVerifiedUser(t *testing.T) {
 	auth := &fakeAuthLookup{
-		user: db.User{
+		user: services.User{
 			ID:    1,
 			Email: "user@example.com",
 			EmailVerifiedAt: sql.NullTime{
@@ -1264,7 +1262,7 @@ func TestRoutesChangeEmailRequiresCSRF(t *testing.T) {
 
 func TestRoutesChangeEmailRequiresVerifiedEmail(t *testing.T) {
 	auth := &fakeAuthLookup{
-		user: db.User{ID: 1, Email: "user@example.com"},
+		user: services.User{ID: 1, Email: "user@example.com"},
 	}
 	srv := newAuthRouteTestServer(t, auth)
 
@@ -1307,7 +1305,7 @@ func TestRoutesConfirmEmailChangeRedirectsToLoginWhenVerificationOptional(t *tes
 
 func TestRoutesResendVerification(t *testing.T) {
 	auth := &fakeAuthLookup{
-		user: db.User{ID: 1, Email: "user@example.com"},
+		user: services.User{ID: 1, Email: "user@example.com"},
 	}
 	srv := newAuthRouteTestServer(t, auth)
 
@@ -1336,7 +1334,7 @@ func TestRoutesResendVerification(t *testing.T) {
 
 func TestRoutesResendVerificationHandlesError(t *testing.T) {
 	auth := &fakeAuthLookup{
-		user:      db.User{ID: 1, Email: "user@example.com"},
+		user:      services.User{ID: 1, Email: "user@example.com"},
 		resendErr: errors.New("database unavailable"),
 	}
 	srv := newAuthRouteTestServer(t, auth)
@@ -1360,7 +1358,7 @@ func TestRoutesResendVerificationHandlesError(t *testing.T) {
 
 func TestRoutesResendVerificationRequiresCSRF(t *testing.T) {
 	auth := &fakeAuthLookup{
-		user: db.User{ID: 1, Email: "user@example.com"},
+		user: services.User{ID: 1, Email: "user@example.com"},
 	}
 	srv := newAuthRouteTestServer(t, auth)
 
@@ -1556,7 +1554,7 @@ func TestRoutesChangePasswordFormRequiresAuth(t *testing.T) {
 
 func TestRoutesChangePasswordRequiresVerifiedEmail(t *testing.T) {
 	auth := &fakeAuthLookup{
-		user: db.User{ID: 1, Email: "user@example.com"},
+		user: services.User{ID: 1, Email: "user@example.com"},
 	}
 	srv := newAuthRouteTestServer(t, auth)
 
@@ -1584,7 +1582,7 @@ func TestRoutesChangePasswordRequiresVerifiedEmail(t *testing.T) {
 
 func TestRoutesChangePasswordFormRequiresVerifiedEmail(t *testing.T) {
 	auth := &fakeAuthLookup{
-		user: db.User{ID: 1, Email: "user@example.com"},
+		user: services.User{ID: 1, Email: "user@example.com"},
 	}
 	srv := newAuthRouteTestServer(t, auth)
 
@@ -1747,7 +1745,7 @@ func TestRoutesPublicResendVerificationRequiresCSRF(t *testing.T) {
 
 func TestRoutesPublicResendVerificationRedirectsAuthenticatedUser(t *testing.T) {
 	auth := &fakeAuthLookup{
-		user: db.User{ID: 1, Email: "user@example.com"},
+		user: services.User{ID: 1, Email: "user@example.com"},
 	}
 	srv := newAuthRouteTestServer(t, auth)
 
@@ -1874,7 +1872,7 @@ func TestRoutesForgotPasswordRequiresCSRF(t *testing.T) {
 
 func TestRoutesForgotPasswordRedirectsAuthenticatedUser(t *testing.T) {
 	auth := &fakeAuthLookup{
-		user: db.User{ID: 1, Email: "user@example.com"},
+		user: services.User{ID: 1, Email: "user@example.com"},
 	}
 	srv := newAuthRouteTestServer(t, auth)
 
@@ -2195,8 +2193,8 @@ func addCSRFCookieAndHeader(t *testing.T, srv *Server, req *http.Request) {
 	req.Header.Set(csrfHeaderName, token)
 }
 
-func verifiedRouteUser() db.User {
-	return db.User{
+func verifiedRouteUser() services.User {
+	return services.User{
 		ID:    1,
 		Email: "user@example.com",
 		EmailVerifiedAt: sql.NullTime{

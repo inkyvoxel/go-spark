@@ -4,8 +4,6 @@ import (
 	"database/sql"
 	"testing"
 	"time"
-
-	db "github.com/inkyvoxel/go-spark/internal/db/generated"
 )
 
 func TestRequiredEmailVerificationPolicyUsesPersistedVerificationState(t *testing.T) {
@@ -14,10 +12,10 @@ func TestRequiredEmailVerificationPolicyUsesPersistedVerificationState(t *testin
 		t.Fatal("RequiresEmailChangeVerification() = false, want true")
 	}
 
-	if policy.UserIsVerified(db.User{ID: 1, Email: "user@example.com"}) {
+	if policy.UserIsVerified(User{ID: 1, Email: "user@example.com"}) {
 		t.Fatal("UserIsVerified() = true, want false for unverified user")
 	}
-	if !policy.UserIsVerified(db.User{ID: 1, Email: "user@example.com", EmailVerifiedAt: sql.NullTime{Time: time.Now().UTC(), Valid: true}}) {
+	if !policy.UserIsVerified(User{ID: 1, Email: "user@example.com", EmailVerifiedAt: sql.NullTime{Time: time.Now().UTC(), Valid: true}}) {
 		t.Fatal("UserIsVerified() = false, want true for verified user")
 	}
 }
@@ -28,7 +26,7 @@ func TestOptionalEmailVerificationPolicyTreatsAllUsersAsVerified(t *testing.T) {
 		t.Fatal("RequiresEmailChangeVerification() = true, want false")
 	}
 
-	if !policy.UserIsVerified(db.User{ID: 1, Email: "user@example.com"}) {
+	if !policy.UserIsVerified(User{ID: 1, Email: "user@example.com"}) {
 		t.Fatal("UserIsVerified() = false, want true for unverified user in optional mode")
 	}
 }

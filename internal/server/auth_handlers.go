@@ -11,7 +11,6 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	db "github.com/inkyvoxel/go-spark/internal/db/generated"
 	"github.com/inkyvoxel/go-spark/internal/paths"
 	"github.com/inkyvoxel/go-spark/internal/services"
 )
@@ -51,7 +50,7 @@ type templateData struct {
 	Authenticated             bool
 	Verified                  bool
 	EmailVerificationRequired bool
-	User                      db.User
+	User                      services.User
 	PasswordMinLength         int
 	ResendStatus              string
 	ManagedSessions           []services.ManagedSession
@@ -126,6 +125,7 @@ func (s *Server) register(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
+	s.loggerForRequest(r).Info("auth register succeeded", "user_id", user.ID)
 	redirect := paths.Account
 	if !s.emailVerificationPolicy.UserIsVerified(user) {
 		redirect = paths.VerifyEmail
@@ -174,6 +174,7 @@ func (s *Server) forgotPassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	s.loggerForRequest(r).Info("auth password reset requested")
 	http.Redirect(w, r, withQueryParam(paths.ForgotPassword, queryKeyStatus, statusSent), http.StatusSeeOther)
 }
 
@@ -265,6 +266,7 @@ func (s *Server) confirmEmail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	s.loggerForRequest(r).Info("auth email verified")
 	s.render(w, templateConfirmEmail, data)
 }
 
@@ -305,9 +307,10 @@ func (s *Server) confirmEmailChange(w http.ResponseWriter, r *http.Request) {
 
 	s.clearSessionCookie(w, r)
 	s.clearCSRFCookie(w, r)
+	s.loggerForRequest(r).Info("auth email change confirmed")
 	data.Authenticated = false
 	data.Verified = false
-	data.User = db.User{}
+	data.User = services.User{}
 	s.render(w, templateConfirmEmailChange, data)
 }
 
@@ -319,7 +322,7 @@ func (s *Server) confirmEmailToken(
 	data *templateData,
 	templateName string,
 	logMessage string,
-	confirm func(context.Context, string) (db.User, error),
+	confirm func(context.Context, string) (services.User, error),
 	handleErr confirmEmailErrorHandler,
 ) bool {
 	if _, err := confirm(r.Context(), r.URL.Query().Get("token")); err != nil {
@@ -344,6 +347,9 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 
 	user, session, err := s.auth.Login(r.Context(), r.FormValue("email"), r.FormValue("password"))
 	if err != nil {
+		if errors.Is(err, services.ErrInvalidCredentials) {
+			s.loggerForRequest(r).Info("auth login failed")
+		}
 		data := s.newTemplateData(r, "Sign In")
 		data.Email = strings.TrimSpace(r.FormValue("email"))
 		data.Next = safeRedirectPath(r.FormValue("next"))
@@ -364,6 +370,7 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
+	s.loggerForRequest(r).Info("auth login succeeded", "user_id", user.ID)
 	http.Redirect(w, r, next, http.StatusSeeOther)
 }
 
@@ -379,6 +386,7 @@ func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
 
 	s.clearSessionCookie(w, r)
 	s.clearCSRFCookie(w, r)
+	s.loggerForRequest(r).Info("auth logout succeeded")
 	http.Redirect(w, r, paths.Home, http.StatusSeeOther)
 }
 
@@ -443,6 +451,7 @@ func (s *Server) revokeSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	s.loggerForRequest(r).Info("auth session revoked", "user_id", user.ID, "session_id", sessionID)
 	http.Redirect(w, r, withQueryParam(paths.Account, queryKeyStatus, statusSessionRevoked), http.StatusSeeOther)
 }
 
@@ -467,6 +476,7 @@ func (s *Server) revokeOtherSessions(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	s.loggerForRequest(r).Info("auth other sessions revoked", "user_id", user.ID)
 	http.Redirect(w, r, withQueryParam(paths.Account, queryKeyStatus, statusSessionsRevoked), http.StatusSeeOther)
 }
 
@@ -513,12 +523,13 @@ func (s *Server) resendVerification(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := s.auth.ResendVerificationEmail(r.Context(), user); err != nil {
+	if err := s.auth.ResendVerificationEmail(r.Context(), user.ID); err != nil {
 		s.loggerForRequest(r).Error("resend verification email", "user_id", user.ID, "err", err)
 		http.Redirect(w, r, withQueryParam(paths.VerifyEmail, queryKeyResend, statusError), http.StatusSeeOther)
 		return
 	}
 
+	s.loggerForRequest(r).Info("auth verification email resent", "user_id", user.ID)
 	http.Redirect(w, r, withQueryParam(paths.VerifyEmail, queryKeyResend, statusSent), http.StatusSeeOther)
 }
 
@@ -553,7 +564,7 @@ func (s *Server) changePassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := s.auth.ChangePassword(r.Context(), user, currentPassword, newPassword); err != nil {
+	if err := s.auth.ChangePassword(r.Context(), user.ID, currentPassword, newPassword); err != nil {
 		data := s.newChangePasswordTemplateData(r)
 		data.Error = "Check your details and try again."
 		switch {
@@ -578,6 +589,7 @@ func (s *Server) changePassword(w http.ResponseWriter, r *http.Request) {
 
 	s.clearSessionCookie(w, r)
 	s.clearCSRFCookie(w, r)
+	s.loggerForRequest(r).Info("auth password changed", "user_id", user.ID)
 	http.Redirect(w, r, loginPathWithStatusChanged, http.StatusSeeOther)
 }
 
@@ -612,7 +624,7 @@ func (s *Server) changeEmail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := s.auth.RequestEmailChange(r.Context(), user, currentPassword, newEmail); err != nil {
+	if err := s.auth.RequestEmailChange(r.Context(), user.ID, currentPassword, newEmail); err != nil {
 		data := s.newChangeEmailTemplateData(r)
 		data.Email = strings.TrimSpace(newEmail)
 		data.Error = "Check your details and try again."
@@ -637,10 +649,12 @@ func (s *Server) changeEmail(w http.ResponseWriter, r *http.Request) {
 	if !s.emailVerificationPolicy.RequiresEmailChangeVerification() {
 		s.clearSessionCookie(w, r)
 		s.clearCSRFCookie(w, r)
+		s.loggerForRequest(r).Info("auth email changed", "user_id", user.ID)
 		http.Redirect(w, r, loginPathWithEmailChanged, http.StatusSeeOther)
 		return
 	}
 
+	s.loggerForRequest(r).Info("auth email change requested", "user_id", user.ID)
 	http.Redirect(w, r, withQueryParam(paths.ChangeEmail, queryKeyStatus, statusSent), http.StatusSeeOther)
 }
 
@@ -685,6 +699,7 @@ func (s *Server) resetPassword(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.clearResetCookie(w, r)
+	s.loggerForRequest(r).Info("auth password reset completed")
 	http.Redirect(w, r, loginPathWithStatusChanged, http.StatusSeeOther)
 }
 
@@ -719,6 +734,7 @@ func (s *Server) resendVerificationPublic(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	s.loggerForRequest(r).Info("auth verification email requested")
 	http.Redirect(w, r, withQueryParam(paths.ResendVerification, queryKeyStatus, statusSent), http.StatusSeeOther)
 }
 

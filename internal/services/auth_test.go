@@ -24,10 +24,12 @@ func TestAuthServiceRegisterHashesPassword(t *testing.T) {
 	if user.Email != "user@example.com" {
 		t.Fatalf("Email = %q, want %q", user.Email, "user@example.com")
 	}
-	if user.PasswordHash == "correct horse battery staple" {
+	store := service.store.(*fakeAuthStore)
+	storedUser := store.usersByID[user.ID]
+	if storedUser.PasswordHash == "correct horse battery staple" {
 		t.Fatal("PasswordHash stores plaintext password")
 	}
-	matches, err := service.passwordHasher.Verify(user.PasswordHash, "correct horse battery staple")
+	matches, err := service.passwordHasher.Verify(storedUser.PasswordHash, "correct horse battery staple")
 	if err != nil {
 		t.Fatalf("Verify() error = %v", err)
 	}
@@ -35,7 +37,6 @@ func TestAuthServiceRegisterHashesPassword(t *testing.T) {
 		t.Fatal("Verify() = false, want true")
 	}
 
-	store := service.store.(*fakeAuthStore)
 	if len(store.verificationTokens) != 1 {
 		t.Fatalf("verification token count = %d, want 1", len(store.verificationTokens))
 	}
@@ -134,7 +135,7 @@ func TestAuthServiceWithPepperSupportsRegisterLoginAndPasswordChange(t *testing.
 		t.Fatalf("Login() error = %v", err)
 	}
 
-	if err := service.ChangePassword(context.Background(), user, "password", "new-password"); err != nil {
+	if err := service.ChangePassword(context.Background(), user.ID, "password", "new-password"); err != nil {
 		t.Fatalf("ChangePassword() error = %v", err)
 	}
 
@@ -271,7 +272,7 @@ func TestAuthServiceChangePassword(t *testing.T) {
 		t.Fatalf("Login() error = %v", err)
 	}
 
-	if err := service.ChangePassword(context.Background(), user, "password", "new-password"); err != nil {
+	if err := service.ChangePassword(context.Background(), user.ID, "password", "new-password"); err != nil {
 		t.Fatalf("ChangePassword() error = %v", err)
 	}
 
@@ -296,7 +297,7 @@ func TestAuthServiceChangePasswordRejectsIncorrectCurrentPassword(t *testing.T) 
 		t.Fatalf("Register() error = %v", err)
 	}
 
-	err = service.ChangePassword(context.Background(), user, "wrong-password", "new-password")
+	err = service.ChangePassword(context.Background(), user.ID, "wrong-password", "new-password")
 	if !errors.Is(err, ErrCurrentPasswordIncorrect) {
 		t.Fatalf("ChangePassword() error = %v, want %v", err, ErrCurrentPasswordIncorrect)
 	}
@@ -310,7 +311,7 @@ func TestAuthServiceChangePasswordRejectsShortPassword(t *testing.T) {
 		t.Fatalf("Register() error = %v", err)
 	}
 
-	err = service.ChangePassword(context.Background(), user, "password", "short")
+	err = service.ChangePassword(context.Background(), user.ID, "password", "short")
 	if !errors.Is(err, ErrInvalidPassword) {
 		t.Fatalf("ChangePassword() error = %v, want %v", err, ErrInvalidPassword)
 	}
@@ -324,7 +325,7 @@ func TestAuthServiceChangePasswordRejectsUnchangedPassword(t *testing.T) {
 		t.Fatalf("Register() error = %v", err)
 	}
 
-	err = service.ChangePassword(context.Background(), user, "password", "password")
+	err = service.ChangePassword(context.Background(), user.ID, "password", "password")
 	if !errors.Is(err, ErrPasswordUnchanged) {
 		t.Fatalf("ChangePassword() error = %v, want %v", err, ErrPasswordUnchanged)
 	}
@@ -340,7 +341,7 @@ func TestAuthServiceChangePasswordWrapsStoreErrors(t *testing.T) {
 	}
 
 	store.updateUserPasswordHashErr = errors.New("database unavailable")
-	err = service.ChangePassword(context.Background(), user, "password", "new-password")
+	err = service.ChangePassword(context.Background(), user.ID, "password", "new-password")
 	if err == nil {
 		t.Fatal("ChangePassword() error = nil, want error")
 	}
@@ -350,7 +351,7 @@ func TestAuthServiceChangePasswordWrapsStoreErrors(t *testing.T) {
 
 	store.updateUserPasswordHashErr = nil
 	store.deleteSessionsByUserIDErr = errors.New("database unavailable")
-	err = service.ChangePassword(context.Background(), user, "password", "new-password")
+	err = service.ChangePassword(context.Background(), user.ID, "password", "new-password")
 	if err == nil {
 		t.Fatal("ChangePassword() error = nil, want error")
 	}
@@ -368,7 +369,7 @@ func TestAuthServiceRequestEmailChange(t *testing.T) {
 		t.Fatalf("Register() error = %v", err)
 	}
 
-	if err := service.RequestEmailChange(context.Background(), user, "password", "NEW@example.com"); err != nil {
+	if err := service.RequestEmailChange(context.Background(), user.ID, "password", "NEW@example.com"); err != nil {
 		t.Fatalf("RequestEmailChange() error = %v", err)
 	}
 
@@ -422,7 +423,7 @@ func TestAuthServiceRequestEmailChangeRejectsInvalidInputs(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := service.RequestEmailChange(context.Background(), user, tt.password, tt.email)
+			err := service.RequestEmailChange(context.Background(), user.ID, tt.password, tt.email)
 			if !errors.Is(err, tt.want) {
 				t.Fatalf("RequestEmailChange() error = %v, want %v", err, tt.want)
 			}
@@ -440,7 +441,7 @@ func TestAuthServiceRequestEmailChangeWrapsStoreErrors(t *testing.T) {
 	}
 
 	store.emailChangeRequestErr = errors.New("database unavailable")
-	err = service.RequestEmailChange(context.Background(), user, "password", "new@example.com")
+	err = service.RequestEmailChange(context.Background(), user.ID, "password", "new@example.com")
 	if err == nil {
 		t.Fatal("RequestEmailChange() error = nil, want error")
 	}
@@ -463,7 +464,7 @@ func TestAuthServiceRequestEmailChangeOptionalModeAppliesImmediately(t *testing.
 	}
 	initialOutbox := len(store.outbox)
 
-	if err := service.RequestEmailChange(context.Background(), user, "password", "new@example.com"); err != nil {
+	if err := service.RequestEmailChange(context.Background(), user.ID, "password", "new@example.com"); err != nil {
 		t.Fatalf("RequestEmailChange() error = %v", err)
 	}
 
@@ -505,7 +506,7 @@ func TestAuthServiceRequestEmailChangeOptionalModeWrapsStoreErrors(t *testing.T)
 	}
 
 	store.changeEmailImmediatelyErr = errors.New("database unavailable")
-	err = service.RequestEmailChange(context.Background(), user, "password", "new@example.com")
+	err = service.RequestEmailChange(context.Background(), user.ID, "password", "new@example.com")
 	if err == nil {
 		t.Fatal("RequestEmailChange() error = nil, want error")
 	}
@@ -524,7 +525,7 @@ func TestAuthServiceRequestEmailChangeOptionalModeSkipsOldEmailNoticeWhenDisable
 	}
 	initialOutbox := len(store.outbox)
 
-	if err := service.RequestEmailChange(context.Background(), user, "password", "new@example.com"); err != nil {
+	if err := service.RequestEmailChange(context.Background(), user.ID, "password", "new@example.com"); err != nil {
 		t.Fatalf("RequestEmailChange() error = %v", err)
 	}
 
@@ -755,7 +756,7 @@ func TestAuthServiceResendVerificationEmailForUnverifiedUser(t *testing.T) {
 	}
 	initialOutbox := len(store.outbox)
 
-	if err := service.ResendVerificationEmail(context.Background(), user); err != nil {
+	if err := service.ResendVerificationEmail(context.Background(), user.ID); err != nil {
 		t.Fatalf("ResendVerificationEmail() error = %v", err)
 	}
 	if len(store.outbox) != initialOutbox+1 {
@@ -771,10 +772,13 @@ func TestAuthServiceResendVerificationEmailNoOpForVerifiedUser(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Register() error = %v", err)
 	}
-	user.EmailVerifiedAt = sql.NullTime{Time: time.Now().UTC(), Valid: true}
+	storedUser := store.usersByID[user.ID]
+	storedUser.EmailVerifiedAt = sql.NullTime{Time: time.Now().UTC(), Valid: true}
+	store.usersByID[user.ID] = storedUser
+	store.usersByEmail[user.Email] = storedUser
 	initialOutbox := len(store.outbox)
 
-	if err := service.ResendVerificationEmail(context.Background(), user); err != nil {
+	if err := service.ResendVerificationEmail(context.Background(), user.ID); err != nil {
 		t.Fatalf("ResendVerificationEmail() error = %v", err)
 	}
 	if len(store.outbox) != initialOutbox {
@@ -792,7 +796,7 @@ func TestAuthServiceResendVerificationEmailWrapsStoreError(t *testing.T) {
 		t.Fatalf("CreateUser() error = %v", err)
 	}
 
-	err = service.ResendVerificationEmail(context.Background(), user)
+	err = service.ResendVerificationEmail(context.Background(), user.ID)
 	if err == nil {
 		t.Fatal("ResendVerificationEmail() error = nil, want error")
 	}
@@ -839,9 +843,10 @@ func TestAuthServiceResendVerificationEmailByAddressNoOpForVerifiedUser(t *testi
 	if err != nil {
 		t.Fatalf("Register() error = %v", err)
 	}
-	user.EmailVerifiedAt = sql.NullTime{Time: time.Now().UTC(), Valid: true}
-	store.usersByID[user.ID] = user
-	store.usersByEmail[user.Email] = user
+	storedUser := store.usersByID[user.ID]
+	storedUser.EmailVerifiedAt = sql.NullTime{Time: time.Now().UTC(), Valid: true}
+	store.usersByID[user.ID] = storedUser
+	store.usersByEmail[user.Email] = storedUser
 	initialOutbox := len(store.outbox)
 
 	if err := service.ResendVerificationEmailByAddress(context.Background(), "user@example.com"); err != nil {
@@ -903,7 +908,7 @@ func TestAuthServiceResendVerificationEmailOptionalModeNoOp(t *testing.T) {
 	}
 
 	initialOutbox := len(store.outbox)
-	if err := service.ResendVerificationEmail(context.Background(), user); err != nil {
+	if err := service.ResendVerificationEmail(context.Background(), user.ID); err != nil {
 		t.Fatalf("ResendVerificationEmail() error = %v", err)
 	}
 	if len(store.outbox) != initialOutbox {
@@ -1114,9 +1119,9 @@ func newFakeAuthStore() *fakeAuthStore {
 	}
 }
 
-func (s *fakeAuthStore) CreateUser(ctx context.Context, email, passwordHash string) (db.User, error) {
+func (s *fakeAuthStore) CreateUser(ctx context.Context, email, passwordHash string) (User, error) {
 	if _, ok := s.usersByEmail[email]; ok {
-		return db.User{}, ErrEmailAlreadyRegistered
+		return User{}, ErrEmailAlreadyRegistered
 	}
 
 	user := db.User{
@@ -1129,48 +1134,58 @@ func (s *fakeAuthStore) CreateUser(ctx context.Context, email, passwordHash stri
 	s.usersByEmail[email] = user
 	s.usersByID[user.ID] = user
 
-	return user, nil
+	return userFromDB(user), nil
 }
 
-func (s *fakeAuthStore) CreateUserWithEmailVerification(ctx context.Context, params CreateUserWithEmailVerificationParams) (db.User, error) {
+func (s *fakeAuthStore) CreateUserWithEmailVerification(ctx context.Context, params CreateUserWithEmailVerificationParams) (User, error) {
 	user, err := s.CreateUser(ctx, params.Email, params.PasswordHash)
 	if err != nil {
-		return db.User{}, err
+		return User{}, err
 	}
 	if _, err := s.CreateEmailVerificationToken(ctx, user.ID, params.TokenHash, params.TokenExpiresAt); err != nil {
 		delete(s.usersByEmail, user.Email)
 		delete(s.usersByID, user.ID)
-		return db.User{}, err
+		return User{}, err
 	}
 	s.outbox = append(s.outbox, params.ConfirmationEmail)
 
 	return user, nil
 }
 
-func (s *fakeAuthStore) CreateVerifiedUser(ctx context.Context, email, passwordHash string, verifiedAt time.Time) (db.User, error) {
+func (s *fakeAuthStore) CreateVerifiedUser(ctx context.Context, email, passwordHash string, verifiedAt time.Time) (User, error) {
 	user, err := s.CreateUser(ctx, email, passwordHash)
 	if err != nil {
-		return db.User{}, err
+		return User{}, err
 	}
-	user.EmailVerifiedAt = sql.NullTime{Time: verifiedAt, Valid: true}
-	s.usersByID[user.ID] = user
-	s.usersByEmail[user.Email] = user
+	stored := s.usersByID[user.ID]
+	stored.EmailVerifiedAt = sql.NullTime{Time: verifiedAt, Valid: true}
+	s.usersByID[stored.ID] = stored
+	s.usersByEmail[stored.Email] = stored
+	user.EmailVerifiedAt = stored.EmailVerifiedAt
 	return user, nil
 }
 
-func (s *fakeAuthStore) GetUserByEmail(ctx context.Context, email string) (db.User, error) {
+func (s *fakeAuthStore) GetUserByEmail(ctx context.Context, email string) (UserRecord, error) {
 	if s.getUserByEmailErr != nil {
-		return db.User{}, s.getUserByEmailErr
+		return UserRecord{}, s.getUserByEmailErr
 	}
 	user, ok := s.usersByEmail[email]
 	if !ok {
-		return db.User{}, sql.ErrNoRows
+		return UserRecord{}, sql.ErrNoRows
 	}
 
-	return user, nil
+	return userRecordFromDB(user), nil
 }
 
-func (s *fakeAuthStore) CreateSession(ctx context.Context, userID int64, tokenHash string, expiresAt time.Time) (db.Session, error) {
+func (s *fakeAuthStore) GetUserByID(ctx context.Context, userID int64) (UserRecord, error) {
+	user, ok := s.usersByID[userID]
+	if !ok {
+		return UserRecord{}, sql.ErrNoRows
+	}
+	return userRecordFromDB(user), nil
+}
+
+func (s *fakeAuthStore) CreateSession(ctx context.Context, userID int64, tokenHash string, expiresAt time.Time) (SessionRecord, error) {
 	session := db.Session{
 		ID:        s.nextSessionID,
 		UserID:    userID,
@@ -1181,21 +1196,21 @@ func (s *fakeAuthStore) CreateSession(ctx context.Context, userID int64, tokenHa
 	s.nextSessionID++
 	s.sessions[tokenHash] = session
 
-	return session, nil
+	return sessionRecordFromDB(session), nil
 }
 
-func (s *fakeAuthStore) GetUserBySessionTokenHash(ctx context.Context, tokenHash string) (db.User, error) {
+func (s *fakeAuthStore) GetUserBySessionTokenHash(ctx context.Context, tokenHash string) (UserRecord, error) {
 	session, ok := s.sessions[tokenHash]
 	if !ok || !session.ExpiresAt.After(time.Now().UTC()) {
-		return db.User{}, sql.ErrNoRows
+		return UserRecord{}, sql.ErrNoRows
 	}
 
 	user, ok := s.usersByID[session.UserID]
 	if !ok {
-		return db.User{}, sql.ErrNoRows
+		return UserRecord{}, sql.ErrNoRows
 	}
 
-	return user, nil
+	return userRecordFromDB(user), nil
 }
 
 func (s *fakeAuthStore) DeleteSessionByTokenHash(ctx context.Context, tokenHash string) error {
@@ -1217,12 +1232,12 @@ func (s *fakeAuthStore) DeleteSessionsByUserID(ctx context.Context, userID int64
 	return nil
 }
 
-func (s *fakeAuthStore) ListActiveSessionsByUserID(ctx context.Context, userID int64) ([]db.Session, error) {
-	sessions := make([]db.Session, 0, len(s.sessions))
+func (s *fakeAuthStore) ListActiveSessionsByUserID(ctx context.Context, userID int64) ([]SessionRecord, error) {
+	sessions := make([]SessionRecord, 0, len(s.sessions))
 	now := time.Now().UTC()
 	for _, session := range s.sessions {
 		if session.UserID == userID && session.ExpiresAt.After(now) {
-			sessions = append(sessions, session)
+			sessions = append(sessions, sessionRecordFromDB(session))
 		}
 	}
 	return sessions, nil
@@ -1266,7 +1281,7 @@ func (s *fakeAuthStore) UpdateUserPasswordHash(ctx context.Context, userID int64
 	return nil
 }
 
-func (s *fakeAuthStore) CreateEmailVerificationToken(ctx context.Context, userID int64, tokenHash string, expiresAt time.Time) (db.EmailVerificationToken, error) {
+func (s *fakeAuthStore) CreateEmailVerificationToken(ctx context.Context, userID int64, tokenHash string, expiresAt time.Time) (EmailVerificationToken, error) {
 	token := db.EmailVerificationToken{
 		ID:        s.nextVerificationTokenID,
 		UserID:    userID,
@@ -1277,10 +1292,10 @@ func (s *fakeAuthStore) CreateEmailVerificationToken(ctx context.Context, userID
 	s.nextVerificationTokenID++
 	s.verificationTokens[tokenHash] = token
 
-	return token, nil
+	return emailVerificationTokenFromDB(token), nil
 }
 
-func (s *fakeAuthStore) CreatePasswordResetToken(ctx context.Context, userID int64, tokenHash string, expiresAt time.Time) (db.PasswordResetToken, error) {
+func (s *fakeAuthStore) CreatePasswordResetToken(ctx context.Context, userID int64, tokenHash string, expiresAt time.Time) (PasswordResetToken, error) {
 	token := db.PasswordResetToken{
 		ID:        s.nextPasswordResetTokenID,
 		UserID:    userID,
@@ -1291,27 +1306,27 @@ func (s *fakeAuthStore) CreatePasswordResetToken(ctx context.Context, userID int
 	s.nextPasswordResetTokenID++
 	s.passwordResetTokens[tokenHash] = token
 
-	return token, nil
+	return passwordResetTokenFromDB(token), nil
 }
 
-func (s *fakeAuthStore) GetValidPasswordResetTokenByHash(ctx context.Context, tokenHash string, now time.Time) (db.PasswordResetToken, error) {
+func (s *fakeAuthStore) GetValidPasswordResetTokenByHash(ctx context.Context, tokenHash string, now time.Time) (PasswordResetToken, error) {
 	token, ok := s.passwordResetTokens[tokenHash]
 	if !ok || token.ConsumedAt.Valid || !token.ExpiresAt.After(now) {
-		return db.PasswordResetToken{}, sql.ErrNoRows
+		return PasswordResetToken{}, sql.ErrNoRows
 	}
 
-	return token, nil
+	return passwordResetTokenFromDB(token), nil
 }
 
-func (s *fakeAuthStore) ConsumePasswordResetToken(ctx context.Context, tokenHash string, consumedAt time.Time) (db.PasswordResetToken, error) {
+func (s *fakeAuthStore) ConsumePasswordResetToken(ctx context.Context, tokenHash string, consumedAt time.Time) (PasswordResetToken, error) {
 	token, ok := s.passwordResetTokens[tokenHash]
 	if !ok || token.ConsumedAt.Valid || !token.ExpiresAt.After(consumedAt) {
-		return db.PasswordResetToken{}, sql.ErrNoRows
+		return PasswordResetToken{}, sql.ErrNoRows
 	}
 	token.ConsumedAt = sql.NullTime{Time: consumedAt, Valid: true}
 	s.passwordResetTokens[tokenHash] = token
 
-	return token, nil
+	return passwordResetTokenFromDB(token), nil
 }
 
 func (s *fakeAuthStore) RequestPasswordReset(ctx context.Context, params RequestPasswordResetParams) error {
@@ -1343,18 +1358,18 @@ func (s *fakeAuthStore) RequestEmailChange(ctx context.Context, params RequestEm
 	return nil
 }
 
-func (s *fakeAuthStore) ChangeEmailImmediately(ctx context.Context, params ChangeEmailImmediatelyParams) (db.User, error) {
+func (s *fakeAuthStore) ChangeEmailImmediately(ctx context.Context, params ChangeEmailImmediatelyParams) (User, error) {
 	if s.changeEmailImmediatelyErr != nil {
-		return db.User{}, s.changeEmailImmediatelyErr
+		return User{}, s.changeEmailImmediatelyErr
 	}
 	existing, ok := s.usersByEmail[params.NewEmail]
 	if ok && existing.ID != params.UserID {
-		return db.User{}, ErrEmailAlreadyRegistered
+		return User{}, ErrEmailAlreadyRegistered
 	}
 
 	user, ok := s.usersByID[params.UserID]
 	if !ok {
-		return db.User{}, sql.ErrNoRows
+		return User{}, sql.ErrNoRows
 	}
 
 	delete(s.usersByEmail, user.Email)
@@ -1365,33 +1380,33 @@ func (s *fakeAuthStore) ChangeEmailImmediately(ctx context.Context, params Chang
 	s.usersByEmail[user.Email] = user
 
 	if err := s.DeleteSessionsByUserID(ctx, user.ID); err != nil {
-		return db.User{}, err
+		return User{}, err
 	}
 	if params.SendOldEmailNotice {
 		notice, err := email.NewEmailChangeNoticeMessage(params.OldEmailNoticeOptions, oldEmail)
 		if err != nil {
-			return db.User{}, err
+			return User{}, err
 		}
 		s.outbox = append(s.outbox, notice)
 	}
-	return user, nil
+	return userFromDB(user), nil
 }
 
-func (s *fakeAuthStore) ConfirmEmailChange(ctx context.Context, params ConfirmEmailChangeParams) (db.User, error) {
+func (s *fakeAuthStore) ConfirmEmailChange(ctx context.Context, params ConfirmEmailChangeParams) (User, error) {
 	if s.confirmEmailChangeErr != nil {
-		return db.User{}, s.confirmEmailChangeErr
+		return User{}, s.confirmEmailChangeErr
 	}
 	token, ok := s.emailChangeTokens[params.TokenHash]
 	if !ok || token.ConsumedAt.Valid || !token.ExpiresAt.After(params.ChangedAt) {
-		return db.User{}, sql.ErrNoRows
+		return User{}, sql.ErrNoRows
 	}
 	if existing, ok := s.usersByEmail[token.NewEmail]; ok && existing.ID != token.UserID {
-		return db.User{}, ErrEmailAlreadyRegistered
+		return User{}, ErrEmailAlreadyRegistered
 	}
 
 	user, ok := s.usersByID[token.UserID]
 	if !ok {
-		return db.User{}, sql.ErrNoRows
+		return User{}, sql.ErrNoRows
 	}
 
 	delete(s.usersByEmail, user.Email)
@@ -1405,28 +1420,28 @@ func (s *fakeAuthStore) ConfirmEmailChange(ctx context.Context, params ConfirmEm
 	s.emailChangeTokens[params.TokenHash] = token
 
 	if err := s.DeleteSessionsByUserID(ctx, user.ID); err != nil {
-		return db.User{}, err
+		return User{}, err
 	}
 	if params.SendOldEmailNotice {
 		notice, err := email.NewEmailChangeNoticeMessage(params.OldEmailNoticeOptions, oldEmail)
 		if err != nil {
-			return db.User{}, err
+			return User{}, err
 		}
 		s.outbox = append(s.outbox, notice)
 	}
 
-	return user, nil
+	return userFromDB(user), nil
 }
 
-func (s *fakeAuthStore) VerifyEmailByTokenHash(ctx context.Context, tokenHash string, verifiedAt time.Time) (db.User, error) {
+func (s *fakeAuthStore) VerifyEmailByTokenHash(ctx context.Context, tokenHash string, verifiedAt time.Time) (User, error) {
 	token, ok := s.verificationTokens[tokenHash]
 	if !ok || token.ConsumedAt.Valid || !token.ExpiresAt.After(verifiedAt) {
-		return db.User{}, sql.ErrNoRows
+		return User{}, sql.ErrNoRows
 	}
 
 	user, ok := s.usersByID[token.UserID]
 	if !ok {
-		return db.User{}, sql.ErrNoRows
+		return User{}, sql.ErrNoRows
 	}
 
 	token.ConsumedAt = sql.NullTime{Time: verifiedAt, Valid: true}
@@ -1436,7 +1451,7 @@ func (s *fakeAuthStore) VerifyEmailByTokenHash(ctx context.Context, tokenHash st
 	s.usersByID[user.ID] = user
 	s.usersByEmail[user.Email] = user
 
-	return user, nil
+	return userFromDB(user), nil
 }
 
 func (s *fakeAuthStore) ResendEmailVerification(ctx context.Context, params ResendEmailVerificationParams) error {
@@ -1448,4 +1463,52 @@ func (s *fakeAuthStore) ResendEmailVerification(ctx context.Context, params Rese
 	}
 	s.outbox = append(s.outbox, params.ConfirmationEmail)
 	return nil
+}
+
+func userFromDB(row db.User) User {
+	return User{
+		ID:              row.ID,
+		Email:           row.Email,
+		EmailVerifiedAt: row.EmailVerifiedAt,
+		CreatedAt:       row.CreatedAt,
+	}
+}
+
+func userRecordFromDB(row db.User) UserRecord {
+	return UserRecord{
+		User:         userFromDB(row),
+		PasswordHash: row.PasswordHash,
+	}
+}
+
+func sessionRecordFromDB(row db.Session) SessionRecord {
+	return SessionRecord{
+		ID:        row.ID,
+		UserID:    row.UserID,
+		TokenHash: row.TokenHash,
+		ExpiresAt: row.ExpiresAt,
+		CreatedAt: row.CreatedAt,
+	}
+}
+
+func emailVerificationTokenFromDB(row db.EmailVerificationToken) EmailVerificationToken {
+	return EmailVerificationToken{
+		ID:         row.ID,
+		UserID:     row.UserID,
+		TokenHash:  row.TokenHash,
+		ExpiresAt:  row.ExpiresAt,
+		ConsumedAt: row.ConsumedAt,
+		CreatedAt:  row.CreatedAt,
+	}
+}
+
+func passwordResetTokenFromDB(row db.PasswordResetToken) PasswordResetToken {
+	return PasswordResetToken{
+		ID:         row.ID,
+		UserID:     row.UserID,
+		TokenHash:  row.TokenHash,
+		ExpiresAt:  row.ExpiresAt,
+		ConsumedAt: row.ConsumedAt,
+		CreatedAt:  row.CreatedAt,
+	}
 }
