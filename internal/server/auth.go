@@ -154,7 +154,9 @@ func (s *Server) loadSession(next http.Handler) http.Handler {
 			return
 		}
 
-		next.ServeHTTP(w, r.WithContext(contextWithUser(r.Context(), user)))
+		ctx := contextWithUser(r.Context(), user)
+		markRequestAuthenticated(ctx)
+		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
 

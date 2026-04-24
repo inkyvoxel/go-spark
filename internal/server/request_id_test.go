@@ -205,6 +205,30 @@ func TestLogRequestsIncludesAuthenticatedTrue(t *testing.T) {
 	}
 }
 
+func TestLogRequestsIncludesAuthenticatedTrueWhenMarkedDownstream(t *testing.T) {
+	var logBuf bytes.Buffer
+	logger := jsonLogger(&logBuf)
+	srv := &Server{logger: logger}
+
+	handler := srv.withRequestID(srv.logRequests(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		markRequestAuthenticated(r.Context())
+		w.WriteHeader(http.StatusNoContent)
+	})))
+
+	req := httptest.NewRequest(http.MethodGet, "/account", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	entries := decodeJSONLogLines(t, logBuf.String())
+	entry, ok := findLogEntry(entries, "http request")
+	if !ok {
+		t.Fatalf("missing access log entry in logs: %v", entries)
+	}
+	if got := asBool(entry["authenticated"]); !got {
+		t.Fatal("logged authenticated = false, want true")
+	}
+}
+
 func TestLogRequestsWarnsForServerErrorResponses(t *testing.T) {
 	var logBuf bytes.Buffer
 	logger := jsonLogger(&logBuf)

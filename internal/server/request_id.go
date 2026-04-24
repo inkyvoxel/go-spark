@@ -74,6 +74,10 @@ func (s *Server) loggerForRequestID(id string) *slog.Logger {
 func (s *Server) logRequests(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
+		_, hasUser := currentUser(r.Context())
+		authState := &requestAuthState{authenticated: hasUser}
+		r = r.WithContext(contextWithRequestAuthState(r.Context(), authState))
+
 		rec := &statusCapturingResponseWriter{
 			ResponseWriter: w,
 			status:         http.StatusOK,
@@ -87,7 +91,7 @@ func (s *Server) logRequests(next http.Handler) http.Handler {
 			route = path
 		}
 
-		_, authenticated := currentUser(r.Context())
+		authenticated := authState.authenticated
 		attrs := []any{
 			"method", r.Method,
 			"route", route,
