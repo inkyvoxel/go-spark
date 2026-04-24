@@ -43,7 +43,7 @@ func (s *Server) csrf(next http.Handler) http.Handler {
 			var err error
 			token, err = s.newSignedCSRFToken(sessionHash, time.Now().UTC())
 			if err != nil {
-				s.logger.Error("generate csrf token", "err", err)
+				s.loggerForRequest(r).Error("generate csrf token", "err", err)
 				http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 				return
 			}
@@ -54,7 +54,7 @@ func (s *Server) csrf(next http.Handler) http.Handler {
 			if !s.validSignedCSRFToken(token, sessionHash, time.Now().UTC()) {
 				rotated, err := s.newSignedCSRFToken(sessionHash, time.Now().UTC())
 				if err != nil {
-					s.logger.Error("rotate csrf token", "err", err)
+					s.loggerForRequest(r).Error("rotate csrf token", "err", err)
 					http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 					return
 				}

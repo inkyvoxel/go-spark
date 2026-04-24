@@ -227,7 +227,7 @@ func (s *Server) Routes() http.Handler {
 
 	mux.Handle(paths.Home, s.cacheControlHeaders(s.securityHeaders(s.limitRequestBody(s.csrf(s.loadSession(dynamic))))))
 
-	return s.logRequests(mux)
+	return s.withRequestID(s.logRequests(mux))
 }
 
 func route(method, path string) string {
@@ -272,13 +272,6 @@ func postOnlyAllowForPath(path string) (string, bool) {
 	default:
 		return "", false
 	}
-}
-
-func (s *Server) logRequests(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		s.logger.Info("request", "method", r.Method, "path", r.URL.Path)
-		next.ServeHTTP(w, r)
-	})
 }
 
 func (s *Server) securityHeaders(next http.Handler) http.Handler {

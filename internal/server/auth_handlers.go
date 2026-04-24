@@ -35,6 +35,7 @@ const (
 
 type templateData struct {
 	Title                     string
+	RequestID                 string
 	CSRFToken                 string
 	Routes                    paths.TemplateRouteSet
 	Breadcrumbs               []breadcrumbItem
@@ -67,6 +68,7 @@ type breadcrumbItem struct {
 func newTemplateData(r *http.Request, title string) templateData {
 	data := templateData{
 		Title:             title,
+		RequestID:         requestID(r.Context()),
 		CSRFToken:         csrfToken(r.Context()),
 		Routes:            paths.TemplateRoutes,
 		EmailPattern:      emailPattern,
@@ -120,7 +122,7 @@ func (s *Server) register(w http.ResponseWriter, r *http.Request) {
 
 	s.setSessionCookie(w, r, session)
 	if err := s.rotateCSRFCookieForSession(w, r, session.Token); err != nil {
-		s.logger.Error("rotate csrf token after register login", "err", err)
+		s.loggerForRequest(r).Error("rotate csrf token after register login", "err", err)
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
@@ -167,7 +169,7 @@ func (s *Server) forgotPassword(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		s.logger.Error("request password reset", "err", err)
+		s.loggerForRequest(r).Error("request password reset", "err", err)
 		http.Redirect(w, r, withQueryParam(paths.ForgotPassword, queryKeyStatus, statusError), http.StatusSeeOther)
 		return
 	}
@@ -188,7 +190,7 @@ func (s *Server) resetPasswordForm(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 
-			s.logger.Error("validate password reset token", "err", err)
+			s.loggerForRequest(r).Error("validate password reset token", "err", err)
 			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 			return
 		}
@@ -207,7 +209,7 @@ func (s *Server) resetPasswordForm(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		s.logger.Error("validate password reset token", "err", err)
+		s.loggerForRequest(r).Error("validate password reset token", "err", err)
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
@@ -326,7 +328,7 @@ func (s *Server) confirmEmailToken(
 			return false
 		}
 
-		s.logger.Error(logMessage, "err", err)
+		s.loggerForRequest(r).Error(logMessage, "err", err)
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return false
 	}
@@ -358,7 +360,7 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 
 	s.setSessionCookie(w, r, session)
 	if err := s.rotateCSRFCookieForSession(w, r, session.Token); err != nil {
-		s.logger.Error("rotate csrf token after login", "err", err)
+		s.loggerForRequest(r).Error("rotate csrf token after login", "err", err)
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
@@ -369,7 +371,7 @@ func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
 	cookie, err := r.Cookie(sessionCookieName)
 	if err == nil {
 		if err := s.auth.Logout(r.Context(), cookie.Value); err != nil && !errors.Is(err, services.ErrInvalidSession) {
-			s.logger.Error("logout", "err", err)
+			s.loggerForRequest(r).Error("logout", "err", err)
 			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 			return
 		}
@@ -429,7 +431,7 @@ func (s *Server) revokeSession(w http.ResponseWriter, r *http.Request) {
 		case errors.Is(err, services.ErrInvalidSessionTarget):
 			data.SessionManagementError = "The selected session is no longer available."
 		default:
-			s.logger.Error("revoke session", "user_id", user.ID, "session_id", sessionID, "err", err)
+			s.loggerForRequest(r).Error("revoke session", "user_id", user.ID, "session_id", sessionID, "err", err)
 			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 			return
 		}
@@ -459,7 +461,7 @@ func (s *Server) revokeOtherSessions(w http.ResponseWriter, r *http.Request) {
 			http.Redirect(w, r, paths.Login, http.StatusSeeOther)
 			return
 		default:
-			s.logger.Error("revoke other sessions", "user_id", user.ID, "err", err)
+			s.loggerForRequest(r).Error("revoke other sessions", "user_id", user.ID, "err", err)
 			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 			return
 		}
@@ -512,7 +514,7 @@ func (s *Server) resendVerification(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := s.auth.ResendVerificationEmail(r.Context(), user); err != nil {
-		s.logger.Error("resend verification email", "user_id", user.ID, "err", err)
+		s.loggerForRequest(r).Error("resend verification email", "user_id", user.ID, "err", err)
 		http.Redirect(w, r, withQueryParam(paths.VerifyEmail, queryKeyResend, statusError), http.StatusSeeOther)
 		return
 	}
@@ -568,7 +570,7 @@ func (s *Server) changePassword(w http.ResponseWriter, r *http.Request) {
 			s.renderStatus(w, http.StatusUnprocessableEntity, templateChangePassword, data)
 			return
 		default:
-			s.logger.Error("change password", "user_id", user.ID, "err", err)
+			s.loggerForRequest(r).Error("change password", "user_id", user.ID, "err", err)
 			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 			return
 		}
@@ -624,7 +626,7 @@ func (s *Server) changeEmail(w http.ResponseWriter, r *http.Request) {
 		case errors.Is(err, services.ErrEmailAlreadyRegistered):
 			data.FieldErrors = map[string]string{"email": "An account with this email already exists."}
 		default:
-			s.logger.Error("change email", "user_id", user.ID, "err", err)
+			s.loggerForRequest(r).Error("change email", "user_id", user.ID, "err", err)
 			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 			return
 		}
@@ -676,7 +678,7 @@ func (s *Server) resetPassword(w http.ResponseWriter, r *http.Request) {
 			s.renderStatus(w, http.StatusUnprocessableEntity, templateResetPassword, data)
 			return
 		default:
-			s.logger.Error("reset password", "err", err)
+			s.loggerForRequest(r).Error("reset password", "err", err)
 			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 			return
 		}
@@ -712,7 +714,7 @@ func (s *Server) resendVerificationPublic(w http.ResponseWriter, r *http.Request
 			return
 		}
 
-		s.logger.Error("resend verification email (public)", "err", err)
+		s.loggerForRequest(r).Error("resend verification email (public)", "err", err)
 		http.Redirect(w, r, withQueryParam(paths.ResendVerification, queryKeyStatus, statusError), http.StatusSeeOther)
 		return
 	}
@@ -745,7 +747,7 @@ func (s *Server) handleAuthFormError(w http.ResponseWriter, templateName string,
 		return
 	}
 
-	s.logger.Error("auth form", "err", err)
+	s.loggerForRequestID(data.RequestID).Error("auth form", "err", err)
 	http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 }
 
@@ -777,7 +779,7 @@ func (s *Server) populateAccountSessions(w http.ResponseWriter, r *http.Request,
 			return false
 		}
 
-		s.logger.Error("list account sessions", "user_id", user.ID, "err", err)
+		s.loggerForRequest(r).Error("list account sessions", "user_id", user.ID, "err", err)
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return false
 	}
@@ -852,7 +854,7 @@ func (s *Server) render(w http.ResponseWriter, templateName string, data templat
 func (s *Server) renderStatus(w http.ResponseWriter, status int, templateName string, data templateData) {
 	var body bytes.Buffer
 	if err := s.renderTemplate(&body, templateName, data); err != nil {
-		s.logger.Error("render template", "template", templateName, "err", err)
+		s.loggerForRequestID(data.RequestID).Error("render template", "template", templateName, "err", err)
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}

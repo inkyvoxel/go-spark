@@ -161,7 +161,7 @@ func (s *Server) withRateLimit(policyName string, policy RateLimitPolicy, keyFn 
 		}
 
 		w.Header().Set("Retry-After", strconv.Itoa(retryAfterSeconds))
-		s.logger.Warn(
+		s.loggerForRequest(r).Warn(
 			"rate limit exceeded",
 			"policy", policyName,
 			"path", r.URL.Path,

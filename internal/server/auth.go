@@ -149,7 +149,7 @@ func (s *Server) loadSession(next http.Handler) http.Handler {
 			return
 		}
 		if err != nil {
-			s.logger.Error("load user by session", "err", err)
+			s.loggerForRequest(r).Error("load user by session", "err", err)
 			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 			return
 		}
