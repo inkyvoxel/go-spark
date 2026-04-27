@@ -29,6 +29,7 @@ Go Spark prefers:
 /internal/jobs      jobs runner and periodic background jobs
 /internal/platform  engine-specific platform code such as SQLite setup
 /internal/paths     canonical public URL paths
+/internal/generator project generation workflow
 /internal/server    HTTP handlers, middleware, templates
 /internal/services  business logic
 ```
@@ -131,6 +132,12 @@ backups, and multi-process tradeoffs.
 * service and store wiring
 * email sender and background job composition
 * HTTP server construction
+
+## Project Generation
+
+`cmd/go-spark` is a one-time project generator. It copies starter source into a new directory, rewrites project defaults, and leaves the generated app as plain Go code with its own runtime CLI.
+
+Generation uses a manifest of components and dependencies so features can be split into component-owned bundles over time. The first implementation copies the full starter source for every feature set while that split is underway.
 
 ## Background Work
 

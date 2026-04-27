@@ -104,38 +104,13 @@ func TestParseCLIArgsSupportsMigrate(t *testing.T) {
 	}
 }
 
-func TestParseCLIArgsSupportsInit(t *testing.T) {
-	command, err := parseCLIArgs([]string{"init", "-project-name", "Acme", "-module-path", "github.com/acme/app", "-database-path", "./data/acme.db", "-email-verification", "false"})
-	if err != nil {
-		t.Fatalf("parseCLIArgs() error = %v", err)
-	}
-	if command.name != "init" {
-		t.Fatalf("parseCLIArgs() name = %q, want init", command.name)
-	}
-	if command.initOptions == nil {
-		t.Fatal("parseCLIArgs() initOptions = nil, want options")
-	}
-	if command.initOptions.ProjectName != "Acme" {
-		t.Fatalf("parseCLIArgs() init project name = %q, want Acme", command.initOptions.ProjectName)
-	}
-	if command.initOptions.ModulePath != "github.com/acme/app" {
-		t.Fatalf("parseCLIArgs() init module path = %q, want github.com/acme/app", command.initOptions.ModulePath)
-	}
-	if command.initOptions.DatabasePath != "./data/acme.db" {
-		t.Fatalf("parseCLIArgs() database path = %q, want ./data/acme.db", command.initOptions.DatabasePath)
-	}
-	if command.initOptions.EmailVerificationRequired == nil || *command.initOptions.EmailVerificationRequired {
-		t.Fatalf("parseCLIArgs() email verification = %v, want false", command.initOptions.EmailVerificationRequired)
-	}
-}
-
-func TestParseCLIArgsRejectsRemovedTrimStarterFlag(t *testing.T) {
-	_, err := parseCLIArgs([]string{"init", "-trim-starter", "true"})
+func TestParseCLIArgsRejectsInitCommand(t *testing.T) {
+	_, err := parseCLIArgs([]string{"init"})
 	if err == nil {
 		t.Fatal("parseCLIArgs() error = nil, want error")
 	}
-	if !strings.Contains(err.Error(), "flag provided but not defined") {
-		t.Fatalf("parseCLIArgs() error = %v, want unknown flag context", err)
+	if !strings.Contains(err.Error(), "unknown command") {
+		t.Fatalf("parseCLIArgs() error = %v, want unknown command context", err)
 	}
 }
 
@@ -179,13 +154,13 @@ func TestParseCLIArgsRejectsInvalidMigrateAction(t *testing.T) {
 	}
 }
 
-func TestParseCLIArgsRejectsInitPositionalArgs(t *testing.T) {
+func TestParseCLIArgsRejectsInitWithPositionalArgs(t *testing.T) {
 	_, err := parseCLIArgs([]string{"init", "extra"})
 	if err == nil {
 		t.Fatal("parseCLIArgs() error = nil, want error")
 	}
-	if !strings.Contains(err.Error(), "init subcommand does not accept positional arguments") {
-		t.Fatalf("parseCLIArgs() error = %v, want init positional argument context", err)
+	if !strings.Contains(err.Error(), "unknown command") {
+		t.Fatalf("parseCLIArgs() error = %v, want unknown command context", err)
 	}
 }
 

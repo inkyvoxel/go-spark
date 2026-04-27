@@ -1,6 +1,6 @@
 # Go Spark
 
-A small SQLite-first starter template for server-rendered Go web
+A small SQLite-first starter and project generator for server-rendered Go web
 applications.
 
 Go Spark keeps the default shape intentionally simple:
@@ -12,8 +12,8 @@ Go Spark keeps the default shape intentionally simple:
 * SQL migrations with `goose`
 * structured logging with `log/slog`
 
-It includes a runnable app, basic auth flows, transactional email, and a
-small background jobs worker.
+It includes a runnable app, basic auth flows, transactional email, a small
+background jobs worker, and a `go-spark new` generator for creating fresh projects.
 
 The template is designed for new projects that want a solid SQLite
 foundation, minimal infrastructure, and an easy path to running as a single
@@ -21,10 +21,14 @@ binary. It does not currently promise plug-and-play support for multiple
 database engines. If a future fork outgrows SQLite, treat that as an explicit
 refactor rather than a built-in template feature.
 
-## Quick Start
+## Generate A Project
 
 ```sh
-make init
+go run ./cmd/go-spark new ../my-app \
+  -project-name "My App" \
+  -module-path github.com/me/my-app \
+  -yes
+cd ../my-app
 cp .env.example .env
 make migrate-up
 make start
@@ -32,35 +36,39 @@ make start
 
 Open `http://localhost:8080`.
 
-The normal first-run path uses the SQLite database at `./data/app.db`.
-If you are using this repo as a template, run `make init` first to rename the module, app branding, default database path, and other starter defaults.
+The generator is one-time scaffolding. Generated projects are plain Go apps and do not depend on the generator at runtime.
 
-The `init` command prompts for:
+The `new` command prompts for:
 
 * project name
 * Go module path
-* default email sender name and address
 * default SQLite database path
-* whether email verification should be enabled by default
+* default email sender
+* feature selection
 
 If you want a non-interactive setup, pass flags such as:
 
 ```sh
-go run ./cmd/app init \
+go run ./cmd/go-spark new ../acme-starter \
   -project-name "Acme Starter" \
   -module-path github.com/acme/acme-starter \
-  -database-path ./var/acme.db
+  -database-path ./var/acme.db \
+  -email-from "Acme <team@acme.test>" \
+  -features all \
+  -yes
 ```
+
+Feature dependency resolution is implemented now. The first generator milestone still copies the full current starter for each feature set while the source tree is being split into component-owned bundles.
 
 ## Process Commands
 
 The CLI uses explicit subcommands:
 
 ```sh
-./go-spark all
-./go-spark serve
-./go-spark worker
-./go-spark migrate status
+./my-app all
+./my-app serve
+./my-app worker
+./my-app migrate status
 ```
 
 `APP_PROCESS` still exists as an environment-level override, but the preferred
@@ -81,10 +89,10 @@ Email delivery defaults to `EMAIL_PROVIDER=log` for safe local development.
 ## Commands
 
 ```sh
-make init
 make start
 make start-web
 make start-worker
+make build-generator
 make build-prod
 make check
 make test
@@ -128,7 +136,7 @@ Reference docs:
 /internal/jobs      background jobs runner and jobs
 /internal/platform  engine-specific platform code such as SQLite setup
 /internal/paths     canonical public URL paths
-/internal/projectinit template initialization workflow
+/internal/generator project generation workflow
 /internal/server    HTTP routes and handlers
 /internal/services  business logic
 /migrations         goose SQL migrations
@@ -141,8 +149,7 @@ Reference docs:
 
 If you use this as a template for a new project:
 
-* run `make init` first to set project name, Go module path, default sender,
-  and default database path across starter files
+* run `go-spark new` to set project name, Go module path, default sender, and default database path across starter files
 * copy `.env.example` to `.env`
 * initialize the local SQLite database with `make migrate-up`
 * replace or remove example routes, templates, and branding

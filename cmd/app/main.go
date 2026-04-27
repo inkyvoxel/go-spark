@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"errors"
-	"flag"
 	"fmt"
 	"io"
 	"log/slog"
@@ -21,7 +20,6 @@ import (
 	bootstrap "github.com/inkyvoxel/go-spark/internal/app"
 	"github.com/inkyvoxel/go-spark/internal/config"
 	"github.com/inkyvoxel/go-spark/internal/jobs"
-	"github.com/inkyvoxel/go-spark/internal/projectinit"
 	"github.com/inkyvoxel/go-spark/internal/services"
 	"github.com/pressly/goose/v3"
 )
@@ -29,7 +27,6 @@ import (
 type cliCommand struct {
 	name            string
 	processOverride string
-	initOptions     *projectinit.Options
 	migrateAction   string
 }
 
@@ -48,15 +45,6 @@ func run(args []string, logger *slog.Logger) error {
 	command, err := parseCLIArgs(args)
 	if err != nil {
 		return err
-	}
-
-	if command.name == "init" {
-		repoRoot, err := os.Getwd()
-		if err != nil {
-			return fmt.Errorf("get working directory: %w", err)
-		}
-
-		return projectinit.Run(repoRoot, *command.initOptions, os.Stdin, os.Stdout)
 	}
 
 	if command.name == "migrate" {
@@ -116,43 +104,9 @@ func parseCLIArgs(args []string) (cliCommand, error) {
 		return cliCommand{name: "worker", processOverride: config.ProcessWorker}, nil
 	case "migrate":
 		return parseMigrateArgs(args[1:])
-	case "init":
-		return parseInitArgs(args[1:])
 	default:
-		return cliCommand{}, fmt.Errorf("unknown command %q; use %q, %q, %q, %q, or %q", command, "serve", "worker", "all", "migrate", "init")
+		return cliCommand{}, fmt.Errorf("unknown command %q; use %q, %q, %q, or %q", command, "serve", "worker", "all", "migrate")
 	}
-}
-
-func parseInitArgs(args []string) (cliCommand, error) {
-	fs := flag.NewFlagSet("init", flag.ContinueOnError)
-	fs.SetOutput(io.Discard)
-
-	var options projectinit.Options
-	var emailVerification string
-
-	fs.StringVar(&options.ProjectName, "project-name", "", "project name for docs and README")
-	fs.StringVar(&options.ModulePath, "module-path", "", "Go module path")
-	fs.StringVar(&options.EmailFromName, "email-from-name", "", "default email sender display name")
-	fs.StringVar(&options.EmailFromAddress, "email-from-address", "", "default email sender address")
-	fs.StringVar(&options.DatabasePath, "database-path", "", "default SQLite database path")
-	fs.StringVar(&emailVerification, "email-verification", "", "default email verification setting (true/false)")
-
-	if err := fs.Parse(args); err != nil {
-		return cliCommand{}, err
-	}
-	if fs.NArg() != 0 {
-		return cliCommand{}, fmt.Errorf("init subcommand does not accept positional arguments")
-	}
-
-	if emailVerification != "" {
-		value, err := parseCLIOptionalBool(emailVerification)
-		if err != nil {
-			return cliCommand{}, fmt.Errorf("parse -email-verification: %w", err)
-		}
-		options.EmailVerificationRequired = &value
-	}
-
-	return cliCommand{name: "init", initOptions: &options}, nil
 }
 
 func parseMigrateArgs(args []string) (cliCommand, error) {
@@ -166,17 +120,6 @@ func parseMigrateArgs(args []string) (cliCommand, error) {
 		return cliCommand{name: "migrate", migrateAction: action}, nil
 	default:
 		return cliCommand{}, fmt.Errorf("migrate action must be %q, %q, or %q", "up", "down", "status")
-	}
-}
-
-func parseCLIOptionalBool(value string) (bool, error) {
-	switch strings.ToLower(strings.TrimSpace(value)) {
-	case "1", "true", "t", "yes", "y":
-		return true, nil
-	case "0", "false", "f", "no", "n":
-		return false, nil
-	default:
-		return false, fmt.Errorf("expected true or false")
 	}
 }
 

@@ -14,7 +14,11 @@ For production deployment guidance, see [production.md](production.md).
 ## First Run
 
 ```sh
-make init
+go run ./cmd/go-spark new ../my-app \
+  -project-name "My App" \
+  -module-path github.com/me/my-app \
+  -yes
+cd ../my-app
 cp .env.example .env
 make migrate-up
 make start
@@ -23,9 +27,7 @@ make start
 This starter assumes SQLite as the normal development and first-run path. The
 default database file is `./data/app.db`.
 
-`make init` is the intended first step for a new fork. It updates
-the module path, app branding, default email sender, default SQLite path, and
-other starter defaults before you copy `.env.example` to `.env`.
+`go-spark new` is the intended first step for a new app. It writes a plain Go project with the module path, app branding, default email sender, default SQLite path, and selected feature set already applied.
 
 The app loads `.env` when present. Existing shell environment variables still win.
 Use `LOG_FORMAT=text` locally by default; switch to `LOG_FORMAT=json` when you want machine-parseable logs during development.
@@ -36,6 +38,7 @@ Use `LOG_FORMAT=text` locally by default; switch to `LOG_FORMAT=json` when you w
 make start
 make start-web
 make start-worker
+make build-generator
 make build-prod
 make migrate-status
 make migrate-up
@@ -52,10 +55,10 @@ Notes:
 * `make start-web` starts only the HTTP server.
 * `make start-worker` starts only the background jobs worker.
 * `make build-prod` builds a release-style binary for deployment targets.
-* `make migrate-up`, `make migrate-down`, and `make migrate-status` run through the app CLI so initialization and migrations share one command surface.
+* `make migrate-up`, `make migrate-down`, and `make migrate-status` run through the app CLI so migrations share the same command surface as production.
 * `make check` runs formatting, module tidy, sqlc generation, vulncheck, and tests.
-* The app CLI now prefers explicit commands: `all`, `serve`, `worker`, `migrate`, and `init`.
-* `make init` personalizes the starter branding and rewrites the home page to a simple welcome screen for the new app.
+* The app CLI uses explicit runtime commands: `all`, `serve`, `worker`, and `migrate`.
+* The generator CLI uses `go-spark new <path>` for one-time project creation.
 
 ## Tooling
 
