@@ -22,11 +22,6 @@ const (
 )
 
 // Component describes a generator feature bundle.
-//
-// The source files are still copied from the full starter template in this
-// first refactor. These fields make the dependency and ownership model explicit
-// so later phases can move files into per-component bundles without changing
-// the CLI contract.
 type Component struct {
 	ID          string
 	Name        string
@@ -50,17 +45,16 @@ func DefaultManifest() Manifest {
 			ID:          FeatureCore,
 			Name:        "Core",
 			Description: "App shell, config basics, logging, docs, static assets, and Makefile.",
-			Files:       []string{"cmd/app", "internal/config", "embedded_assets.go", "Makefile", "README.md"},
-			Templates:   []string{"templates/layout.html", "templates/home.html", "templates/404.html"},
+			Files:       []string{".env.example", "CHANGELOG.md", "CONTRIBUTING.md", "LICENSE", "Makefile", "README.md", "SECURITY.md", "embedded_assets.go", "go.mod", "go.sum", "cmd/app", "internal/app", "internal/config"},
 			Env:         []string{"APP_ADDR", "APP_ENV", "LOG_FORMAT", "APP_BASE_URL"},
-			Docs:        []string{"docs/development.md", "docs/architecture.md"},
+			Docs:        []string{"docs/architecture.md", "docs/development.md", "docs/production.md", "docs/todo.md"},
 		},
 		{
 			ID:          FeatureSQLite,
 			Name:        "SQLite",
 			Description: "SQLite connection setup, migrations, sqlc configuration, and database packages.",
 			DependsOn:   []string{FeatureCore},
-			Files:       []string{"internal/platform/sqlite", "internal/database", "internal/db", "sqlc.yaml"},
+			Files:       []string{"sqlc.yaml", "internal/platform/sqlite", "internal/database/tx.go", "internal/db/generated/db.go", "internal/db/generated/models.go"},
 			Env:         []string{"DATABASE_PATH"},
 		},
 		{
@@ -68,15 +62,15 @@ func DefaultManifest() Manifest {
 			Name:        "Web",
 			Description: "net/http server, route registration, rendering helpers, and health pages.",
 			DependsOn:   []string{FeatureCore},
-			Files:       []string{"internal/server", "internal/paths"},
-			Templates:   []string{"templates"},
+			Files:       []string{"internal/paths", "internal/server/assets.go", "internal/server/architecture_boundary_test.go", "internal/server/constants_test.go", "internal/server/request_auth_state.go", "internal/server/request_id.go", "internal/server/request_id_context.go", "internal/server/request_id_test.go", "internal/server/server.go", "internal/server/server_test.go", "internal/server/template_constants.go", "static"},
+			Templates:   []string{"templates/404.html", "templates/breadcrumb.html", "templates/home.html", "templates/layout.html"},
 		},
 		{
 			ID:          FeatureCSRF,
 			Name:        "CSRF",
 			Description: "CSRF middleware and signing key configuration for form flows.",
 			DependsOn:   []string{FeatureWeb},
-			Files:       []string{"internal/server/csrf.go", "internal/server/csrf_context.go"},
+			Files:       []string{"internal/server/csrf.go", "internal/server/csrf_context.go", "internal/server/csrf_test.go"},
 			Env:         []string{"CSRF_SIGNING_KEY", "APP_COOKIE_SECURE"},
 		},
 		{
@@ -84,7 +78,7 @@ func DefaultManifest() Manifest {
 			Name:        "Email Outbox",
 			Description: "Transactional email templates, log/SMTP senders, outbox store, and processor.",
 			DependsOn:   []string{FeatureSQLite},
-			Files:       []string{"internal/email", "internal/database/email_outbox_store.go", "internal/db/queries/email.sql"},
+			Files:       []string{"internal/email/email.go", "internal/email/email_test.go", "internal/email/processor.go", "internal/email/processor_test.go", "internal/email/smtp.go", "internal/email/smtp_test.go", "internal/database/email_outbox_store.go", "internal/database/email_outbox_store_test.go", "internal/db/queries/email.sql", "internal/db/generated/email.sql.go", "internal/email/templates/README.md"},
 			Migrations:  []string{"migrations/00005_email_outbox_schema.sql"},
 			Env:         []string{"EMAIL_FROM", "EMAIL_PROVIDER", "EMAIL_LOG_BODY", "SMTP_HOST", "SMTP_PORT", "SMTP_USERNAME", "SMTP_PASSWORD", "SMTP_TLS"},
 			Docs:        []string{"docs/email.md"},
@@ -94,7 +88,7 @@ func DefaultManifest() Manifest {
 			Name:        "Worker",
 			Description: "Background jobs runner and worker runtime command.",
 			DependsOn:   []string{FeatureCore},
-			Files:       []string{"internal/jobs", "cmd/app"},
+			Files:       []string{"internal/jobs/email.go", "internal/jobs/runner.go", "internal/jobs/runner_logging_test.go", "internal/jobs/runner_test.go"},
 			Env:         []string{"APP_PROCESS"},
 			Docs:        []string{"docs/jobs.md"},
 		},
@@ -103,8 +97,8 @@ func DefaultManifest() Manifest {
 			Name:        "Authentication",
 			Description: "Users, sessions, registration, login, logout, account pages, rate limits, and password hashing.",
 			DependsOn:   []string{FeatureSQLite, FeatureWeb, FeatureCSRF},
-			Files:       []string{"internal/services/auth.go", "internal/services/password_hasher.go", "internal/database/auth_store.go", "internal/server/auth.go", "internal/server/auth_handlers.go", "internal/db/queries/auth.sql"},
-			Templates:   []string{"templates/account"},
+			Files:       []string{"internal/services/auth.go", "internal/services/auth_test.go", "internal/services/email_verification_policy.go", "internal/services/email_verification_policy_test.go", "internal/services/password_hasher.go", "internal/services/password_hasher_test.go", "internal/database/auth_store.go", "internal/database/auth_store_test.go", "internal/server/auth.go", "internal/server/auth_handlers.go", "internal/server/auth_routes_test.go", "internal/server/auth_test.go", "internal/server/rate_limit.go", "internal/server/rate_limit_test.go", "internal/db/queries/auth.sql", "internal/db/generated/auth.sql.go"},
+			Templates:   []string{"templates/account/account.html", "templates/account/change_password.html", "templates/account/login.html", "templates/account/register.html"},
 			Migrations:  []string{"migrations/00001_auth_schema.sql"},
 			Env:         []string{"AUTH_PASSWORD_MIN_LENGTH", "AUTH_PASSWORD_PEPPER", "RATE_LIMIT_*"},
 		},
@@ -113,8 +107,8 @@ func DefaultManifest() Manifest {
 			Name:        "Password Reset",
 			Description: "Password reset tokens, email templates, routes, service methods, and store methods.",
 			DependsOn:   []string{FeatureAuth, FeatureEmailOutbox},
-			Files:       []string{"internal/services/auth.go", "internal/database/auth_store.go", "internal/db/queries/password_reset.sql", "internal/email/templates/password_reset.*"},
-			Templates:   []string{"templates/account/forgot_password.html", "templates/account/reset_password.html"},
+			Files:       []string{"internal/db/queries/password_reset.sql", "internal/db/generated/password_reset.sql.go"},
+			Templates:   []string{"internal/email/templates/password_reset.*", "templates/account/forgot_password.html", "templates/account/reset_password.html"},
 			Migrations:  []string{"migrations/00003_password_reset_schema.sql"},
 		},
 		{
@@ -122,8 +116,8 @@ func DefaultManifest() Manifest {
 			Name:        "Email Verification",
 			Description: "Account verification and resend flows with durable email delivery.",
 			DependsOn:   []string{FeatureAuth, FeatureEmailOutbox, FeatureWorker},
-			Files:       []string{"internal/services/email_verification_policy.go", "internal/db/queries/email_verification.sql", "internal/email/templates/account_confirmation.*"},
-			Templates:   []string{"templates/account/verify_email.html", "templates/account/confirm_email.html", "templates/account/resend_verification.html"},
+			Files:       []string{"internal/db/queries/email_verification.sql", "internal/db/generated/email_verification.sql.go"},
+			Templates:   []string{"internal/email/templates/account_confirmation.*", "templates/account/confirm_email.html", "templates/account/resend_verification.html", "templates/account/verify_email.html"},
 			Migrations:  []string{"migrations/00002_email_verification_schema.sql"},
 			Env:         []string{"AUTH_EMAIL_VERIFICATION_REQUIRED"},
 		},
@@ -132,8 +126,8 @@ func DefaultManifest() Manifest {
 			Name:        "Email Change",
 			Description: "Account email change confirmation and old-address notice flows.",
 			DependsOn:   []string{FeatureAuth, FeatureEmailOutbox},
-			Files:       []string{"internal/db/queries/email_change.sql", "internal/email/templates/email_change.*", "internal/email/templates/email_change_notice.*"},
-			Templates:   []string{"templates/account/change_email.html", "templates/account/confirm_email_change.html"},
+			Files:       []string{"internal/db/queries/email_change.sql", "internal/db/generated/email_change.sql.go"},
+			Templates:   []string{"internal/email/templates/email_change.*", "internal/email/templates/email_change_notice.*", "templates/account/change_email.html", "templates/account/confirm_email_change.html"},
 			Migrations:  []string{"migrations/00004_email_change_schema.sql"},
 			Env:         []string{"AUTH_EMAIL_CHANGE_NOTICE_ENABLED"},
 		},
@@ -141,8 +135,8 @@ func DefaultManifest() Manifest {
 			ID:          FeatureCleanup,
 			Name:        "Cleanup",
 			Description: "Periodic pruning jobs for sessions, tokens, and outbox rows.",
-			DependsOn:   []string{FeatureSQLite, FeatureWorker},
-			Files:       []string{"internal/jobs/cleanup.go", "internal/database/cleanup_store.go"},
+			DependsOn:   []string{FeatureAuth, FeaturePasswordReset, FeatureEmailVerification, FeatureEmailChange, FeatureEmailOutbox, FeatureWorker},
+			Files:       []string{"internal/jobs/cleanup.go", "internal/jobs/cleanup_test.go", "internal/database/cleanup_store.go", "internal/database/cleanup_store_test.go"},
 			Env:         []string{"JOBS_CLEANUP_INTERVAL", "JOBS_CLEANUP_TOKEN_RETENTION", "JOBS_CLEANUP_SENT_EMAIL_RETENTION", "JOBS_CLEANUP_FAILED_EMAIL_RETENTION"},
 		},
 	}}

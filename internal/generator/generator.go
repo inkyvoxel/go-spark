@@ -10,6 +10,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"text/template"
@@ -25,7 +26,7 @@ const (
 	sourceModulePath        = "github.com/inkyvoxel/go-spark"
 	sourceBinaryName        = "go-spark"
 	generatedTodo           = "# TODO\n\nNo open TODOs.\n"
-	generatorImplementation = "The generator currently copies the full starter source for every resolved feature set. The manifest and dependency model are in place; per-component file pruning is tracked in docs/todo.md.\n"
+	generatorImplementation = "Copied component source bundles. Some generated feature sets still need the follow-up bootstrap refactor before they compile as standalone runtime apps.\n"
 )
 
 type ProjectOptions struct {
@@ -87,7 +88,7 @@ func (g Generator) NewProject(opts ProjectOptions) (Result, error) {
 		return Result{}, err
 	}
 
-	files, err := copyStarter(targetPath, opts)
+	files, err := copyComponents(targetPath, opts, components)
 	if err != nil {
 		return Result{}, err
 	}
@@ -177,59 +178,119 @@ func ensureWritableTarget(targetPath string, force bool) error {
 	return fmt.Errorf("read target path: %w", err)
 }
 
-func copyStarter(targetPath string, opts ProjectOptions) ([]string, error) {
-	var files []string
-	err := fs.WalkDir(appassets.StarterFS, ".", func(name string, entry fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if name == "." {
-			return nil
-		}
-		if skipStarterPath(name, entry) {
-			if entry.IsDir() {
-				return fs.SkipDir
-			}
-			return nil
-		}
+func copyComponents(targetPath string, opts ProjectOptions, components []Component) ([]string, error) {
+	sourceFiles, err := componentSourceFiles(components)
+	if err != nil {
+		return nil, err
+	}
 
-		target := filepath.Join(targetPath, filepath.FromSlash(name))
-		if entry.IsDir() {
-			return os.MkdirAll(target, 0o755)
-		}
-
+	files := make([]string, 0, len(sourceFiles))
+	for _, name := range sourceFiles {
 		body, err := fs.ReadFile(appassets.StarterFS, name)
 		if err != nil {
-			return fmt.Errorf("read template file %s: %w", name, err)
+			return nil, fmt.Errorf("read template file %s: %w", name, err)
 		}
 		body, err = renderStarterFile(name, body, opts)
 		if err != nil {
-			return err
+			return nil, err
 		}
+		target := filepath.Join(targetPath, filepath.FromSlash(name))
 		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
-			return fmt.Errorf("create parent for %s: %w", name, err)
+			return nil, fmt.Errorf("create parent for %s: %w", name, err)
 		}
 		if err := os.WriteFile(target, body, 0o644); err != nil {
-			return fmt.Errorf("write %s: %w", name, err)
+			return nil, fmt.Errorf("write %s: %w", name, err)
 		}
 		files = append(files, name)
-		return nil
-	})
-	if err != nil {
-		return nil, err
 	}
 	return files, nil
 }
 
-func skipStarterPath(name string, entry fs.DirEntry) bool {
-	base := path.Base(name)
-	if base == ".git" || base == "data" || base == "bin" {
-		return true
+func componentSourceFiles(components []Component) ([]string, error) {
+	selected := make(map[string]bool)
+	for _, component := range components {
+		for _, source := range componentSources(component) {
+			if err := addSourceFiles(selected, source); err != nil {
+				return nil, fmt.Errorf("component %s source %s: %w", component.ID, source, err)
+			}
+		}
 	}
-	if strings.HasSuffix(name, ".test") {
-		return true
+
+	files := make([]string, 0, len(selected))
+	for file := range selected {
+		files = append(files, file)
 	}
-	return false
+	sort.Strings(files)
+	return files, nil
+}
+
+func componentSources(component Component) []string {
+	total := len(component.Files) + len(component.Templates) + len(component.Migrations) + len(component.Docs) + len(component.Tests)
+	sources := make([]string, 0, total)
+	sources = append(sources, component.Files...)
+	sources = append(sources, component.Templates...)
+	sources = append(sources, component.Migrations...)
+	sources = append(sources, component.Docs...)
+	sources = append(sources, component.Tests...)
+	return sources
+}
+
+func addSourceFiles(selected map[string]bool, source string) error {
+	source = path.Clean(strings.TrimSpace(filepath.ToSlash(source)))
+	if source == "." || source == "" {
+		return fmt.Errorf("source path is required")
+	}
+	if strings.ContainsAny(source, "*?[") {
+		return addGlobbedSourceFiles(selected, source)
+	}
+
+	info, err := fs.Stat(appassets.StarterFS, source)
+	if err != nil {
+		return err
+	}
+	if !info.IsDir() {
+		selected[source] = true
+		return nil
+	}
+
+	return fs.WalkDir(appassets.StarterFS, source, func(name string, entry fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if entry.IsDir() {
+			return nil
+		}
+		selected[name] = true
+		return nil
+	})
+}
+
+func addGlobbedSourceFiles(selected map[string]bool, pattern string) error {
+	matched := false
+	err := fs.WalkDir(appassets.StarterFS, ".", func(name string, entry fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if entry.IsDir() {
+			return nil
+		}
+		ok, err := path.Match(pattern, name)
+		if err != nil {
+			return err
+		}
+		if ok {
+			matched = true
+			selected[name] = true
+		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	if !matched {
+		return fmt.Errorf("no files matched")
+	}
+	return nil
 }
 
 func renderStarterFile(name string, body []byte, opts ProjectOptions) ([]byte, error) {

@@ -58,7 +58,7 @@ go run ./cmd/go-spark new ../acme-starter \
   -yes
 ```
 
-Feature dependency resolution is implemented now. The first generator milestone still copies the full current starter for each feature set while the source tree is being split into component-owned bundles.
+Feature dependency resolution and component-owned source bundles are implemented now. Some partial feature sets still need the follow-up bootstrap refactor before they compile as standalone runtime apps.
 
 ## Process Commands
 
