@@ -3,6 +3,7 @@ package generator
 import (
 	"bytes"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -79,6 +80,56 @@ func TestNewProjectRejectsInvalidModulePath(t *testing.T) {
 	})
 	if err == nil {
 		t.Fatal("NewProject() error = nil, want invalid module path error")
+	}
+}
+
+func TestGeneratedFeatureSetsRunSQLCGenerate(t *testing.T) {
+	tests := []struct {
+		name     string
+		features []string
+	}{
+		{
+			name:     "email-verification",
+			features: []string{FeatureEmailVerification},
+		},
+		{
+			name:     "all",
+			features: []string{FeatureAll},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			target := filepath.Join(t.TempDir(), "app")
+			gen := New()
+			gen.Stdout = nil
+			_, err := gen.NewProject(ProjectOptions{
+				TargetPath:   target,
+				ProjectName:  "Generated " + tt.name,
+				ModulePath:   "github.com/example/generated-" + tt.name,
+				DatabasePath: "./data/app.db",
+				EmailFrom:    "Generated <hello@example.com>",
+				Features:     tt.features,
+				Yes:          true,
+			})
+			if err != nil {
+				t.Fatalf("NewProject() error = %v", err)
+			}
+
+			runGeneratedSQLC(t, target)
+		})
+	}
+}
+
+func runGeneratedSQLC(t *testing.T, target string) {
+	t.Helper()
+
+	cmd := exec.Command("go", "tool", "sqlc", "generate")
+	cmd.Dir = target
+	cmd.Env = append(os.Environ(), "GOCACHE="+filepath.Join(t.TempDir(), "go-build-cache"))
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("go tool sqlc generate failed: %v\n%s", err, output)
 	}
 }
 

@@ -9,7 +9,7 @@
 - [x] Remove `make init` from the generated Makefile command surface.
 - [x] Add generator unit tests for dependency resolution, validation, and generated output.
 - [x] Split the baseline migration into component-owned migration files.
-- [ ] Split SQL query files by component and verify `sqlc generate` for generated feature sets.
+- [x] Split SQL query files by component and verify `sqlc generate` for generated feature sets.
 - [ ] Move from full-template copy to per-component source bundles.
 - [ ] Refactor bootstrap so selected features register routes, stores, services, jobs, config, and migrations through explicit wiring.
 - [ ] Add generated-project smoke tests for minimal web, web+SQLite, auth without verification, auth+password reset, and full feature output.
