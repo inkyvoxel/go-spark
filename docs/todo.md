@@ -8,7 +8,7 @@
 - [x] Keep generated apps on the normal runtime CLI: `all`, `serve`, `worker`, and `migrate`.
 - [x] Remove `make init` from the generated Makefile command surface.
 - [x] Add generator unit tests for dependency resolution, validation, and generated output.
-- [ ] Split the baseline migration into component-owned migration files.
+- [x] Split the baseline migration into component-owned migration files.
 - [ ] Split SQL query files by component and verify `sqlc generate` for generated feature sets.
 - [ ] Move from full-template copy to per-component source bundles.
 - [ ] Refactor bootstrap so selected features register routes, stores, services, jobs, config, and migrations through explicit wiring.

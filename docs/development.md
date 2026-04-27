@@ -50,7 +50,7 @@ make sqlc
 
 Notes:
 
-* `make migrate-up` creates the local SQLite path and applies the baseline schema.
+* `make migrate-up` creates the local SQLite path and applies the schema migrations.
 * `make start` starts the HTTP server and background jobs worker together.
 * `make start-web` starts only the HTTP server.
 * `make start-worker` starts only the background jobs worker.
@@ -98,7 +98,7 @@ If you add a new route, update `internal/paths` first and use those constants fr
 The template is SQLite-first today.
 
 * Migrations live in `migrations`.
-* The template currently ships with one baseline schema migration for fresh projects.
+* Schema migrations are split by feature ownership so generator components can eventually copy only the migrations they need.
 * SQL queries live in `internal/db/queries`.
 * Generated code lives in `internal/db/generated`.
 * SQLite connection setup now lives under `internal/platform/sqlite`.

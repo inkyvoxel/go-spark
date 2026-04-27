@@ -61,7 +61,6 @@ func DefaultManifest() Manifest {
 			Description: "SQLite connection setup, migrations, sqlc configuration, and database packages.",
 			DependsOn:   []string{FeatureCore},
 			Files:       []string{"internal/platform/sqlite", "internal/database", "internal/db", "sqlc.yaml"},
-			Migrations:  []string{"migrations"},
 			Env:         []string{"DATABASE_PATH"},
 		},
 		{
@@ -86,7 +85,7 @@ func DefaultManifest() Manifest {
 			Description: "Transactional email templates, log/SMTP senders, outbox store, and processor.",
 			DependsOn:   []string{FeatureSQLite},
 			Files:       []string{"internal/email", "internal/database/email_outbox_store.go", "internal/db/queries/email.sql"},
-			Migrations:  []string{"email_outbox"},
+			Migrations:  []string{"migrations/00005_email_outbox_schema.sql"},
 			Env:         []string{"EMAIL_FROM", "EMAIL_PROVIDER", "EMAIL_LOG_BODY", "SMTP_HOST", "SMTP_PORT", "SMTP_USERNAME", "SMTP_PASSWORD", "SMTP_TLS"},
 			Docs:        []string{"docs/email.md"},
 		},
@@ -106,7 +105,7 @@ func DefaultManifest() Manifest {
 			DependsOn:   []string{FeatureSQLite, FeatureWeb, FeatureCSRF},
 			Files:       []string{"internal/services/auth.go", "internal/services/password_hasher.go", "internal/database/auth_store.go", "internal/server/auth.go", "internal/server/auth_handlers.go"},
 			Templates:   []string{"templates/account"},
-			Migrations:  []string{"users", "sessions"},
+			Migrations:  []string{"migrations/00001_auth_schema.sql"},
 			Env:         []string{"AUTH_PASSWORD_MIN_LENGTH", "AUTH_PASSWORD_PEPPER", "RATE_LIMIT_*"},
 		},
 		{
@@ -116,7 +115,7 @@ func DefaultManifest() Manifest {
 			DependsOn:   []string{FeatureAuth, FeatureEmailOutbox},
 			Files:       []string{"internal/services/auth.go", "internal/database/auth_store.go", "internal/email/templates/password_reset.*"},
 			Templates:   []string{"templates/account/forgot_password.html", "templates/account/reset_password.html"},
-			Migrations:  []string{"password_reset_tokens"},
+			Migrations:  []string{"migrations/00003_password_reset_schema.sql"},
 		},
 		{
 			ID:          FeatureEmailVerification,
@@ -125,7 +124,7 @@ func DefaultManifest() Manifest {
 			DependsOn:   []string{FeatureAuth, FeatureEmailOutbox, FeatureWorker},
 			Files:       []string{"internal/services/email_verification_policy.go", "internal/email/templates/account_confirmation.*"},
 			Templates:   []string{"templates/account/verify_email.html", "templates/account/confirm_email.html", "templates/account/resend_verification.html"},
-			Migrations:  []string{"email_verification_tokens"},
+			Migrations:  []string{"migrations/00002_email_verification_schema.sql"},
 			Env:         []string{"AUTH_EMAIL_VERIFICATION_REQUIRED"},
 		},
 		{
@@ -135,7 +134,7 @@ func DefaultManifest() Manifest {
 			DependsOn:   []string{FeatureAuth, FeatureEmailOutbox},
 			Files:       []string{"internal/email/templates/email_change.*", "internal/email/templates/email_change_notice.*"},
 			Templates:   []string{"templates/account/change_email.html", "templates/account/confirm_email_change.html"},
-			Migrations:  []string{"email_change_tokens"},
+			Migrations:  []string{"migrations/00004_email_change_schema.sql"},
 			Env:         []string{"AUTH_EMAIL_CHANGE_NOTICE_ENABLED"},
 		},
 		{
