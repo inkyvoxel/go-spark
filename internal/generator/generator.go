@@ -24,7 +24,6 @@ const (
 	defaultEmailFrom        = "Go Spark <hello@example.com>"
 	sourceModulePath        = "github.com/inkyvoxel/go-spark"
 	sourceBinaryName        = "go-spark"
-	generatedTodo           = "# TODO\n\nNo open TODOs.\n"
 	generatorImplementation = "Copied component source bundles and wrote explicit feature wiring.\n"
 )
 
@@ -193,7 +192,7 @@ func copyComponents(targetPath string, opts ProjectOptions, components []Compone
 		if err != nil {
 			return nil, err
 		}
-		target := filepath.Join(targetPath, filepath.FromSlash(name))
+		target := filepath.Join(targetPath, filepath.FromSlash(generatedTargetPath(name)))
 		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
 			return nil, fmt.Errorf("create parent for %s: %w", name, err)
 		}
@@ -378,16 +377,13 @@ func addGlobbedSourceFiles(selected map[string]bool, pattern string) error {
 }
 
 func renderStarterFile(name string, body []byte, opts ProjectOptions) ([]byte, error) {
-	if name == "docs/todo.md" {
-		return []byte(generatedTodo), nil
-	}
-	if name == "docs/development.md" {
+	if name == "docs/app/development.md" {
 		return []byte(generatedDevelopmentDoc()), nil
 	}
-	if name == "docs/architecture.md" {
+	if name == "docs/app/architecture.md" {
 		return []byte(generatedArchitectureDoc(opts)), nil
 	}
-	if name == "README.md" {
+	if name == "docs/app/README.md.tmpl" {
 		return []byte(generatedREADME(opts)), nil
 	}
 	if name == "go.mod" {
@@ -409,6 +405,16 @@ func renderStarterFile(name string, body []byte, opts ProjectOptions) ([]byte, e
 	content = strings.ReplaceAll(content, defaultDatabasePath, opts.DatabasePath)
 	content = strings.ReplaceAll(content, sourceBinaryName, path.Base(opts.ModulePath))
 	return []byte(content), nil
+}
+
+func generatedTargetPath(source string) string {
+	if source == "docs/app/README.md.tmpl" {
+		return "README.md"
+	}
+	if strings.HasPrefix(source, "docs/app/") {
+		return "docs/" + strings.TrimPrefix(source, "docs/app/")
+	}
+	return source
 }
 
 func escapedQuotedAddress(address string) string {
@@ -463,6 +469,8 @@ make sqlc
 
 This app is plain Go code. The generator was only used to create the initial
 project files.
+
+Created with [go-spark](https://github.com/inkyvoxel/go-spark).
 
 See `+"`docs/generated-features.md`"+` for the generated feature matrix.
 `, opts.ProjectName, path.Base(opts.ModulePath), path.Base(opts.ModulePath), path.Base(opts.ModulePath), path.Base(opts.ModulePath))

@@ -212,6 +212,10 @@ func TestGeneratedProjectsSmoke(t *testing.T) {
 			for _, relativePath := range tt.filesNotExist {
 				assertGeneratedFileNotExists(t, target, relativePath)
 			}
+			for _, maintainerFile := range []string{"CONTRIBUTING.md", "CHANGELOG.md", "docs/todo.md"} {
+				assertGeneratedFileNotExists(t, target, maintainerFile)
+			}
+			assertGeneratedFileContains(t, target, "README.md", "Created with [go-spark](https://github.com/inkyvoxel/go-spark).")
 
 			writeGeneratedSmokeTest(t, target, tt.routes)
 			runGeneratedGoTest(t, target)

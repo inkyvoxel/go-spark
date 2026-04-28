@@ -46,7 +46,7 @@ func DefaultManifest() Manifest {
 			Name:        "Core",
 			Description: "App shell, config basics, logging, docs, static assets, and Makefile.",
 			Files: []string{
-				".env.example", "CHANGELOG.md", "CONTRIBUTING.md", "LICENSE", "Makefile", "README.md", "SECURITY.md",
+				".env.example", "LICENSE", "Makefile", "SECURITY.md", "docs/app/README.md.tmpl",
 				"embedded_assets.go", "go.mod", "go.sum", "cmd/app/main.go",
 				"internal/app/build.go", "internal/config/config.go", "internal/features",
 				"internal/database/auth_store.go", "internal/database/cleanup_store.go", "internal/database/email_outbox_store.go", "internal/database/tx.go",
@@ -57,7 +57,7 @@ func DefaultManifest() Manifest {
 				"internal/services/auth.go", "internal/services/email_verification_policy.go", "internal/services/password_hasher.go",
 			},
 			Env:  []string{"APP_ADDR", "APP_ENV", "LOG_FORMAT", "APP_BASE_URL"},
-			Docs: []string{"docs/architecture.md", "docs/development.md", "docs/generated-features.md", "docs/production.md", "docs/todo.md"},
+			Docs: []string{"docs/app/architecture.md", "docs/app/development.md", "docs/app/generated-features.md", "docs/app/production.md"},
 		},
 		{
 			ID:          FeatureSQLite,
@@ -91,7 +91,7 @@ func DefaultManifest() Manifest {
 			Files:       []string{"internal/email/email.go", "internal/email/processor.go", "internal/email/smtp.go", "internal/database/email_outbox_store.go", "internal/db/queries/email.sql", "internal/db/generated/email.sql.go", "internal/email/templates/README.md"},
 			Migrations:  []string{"migrations/00005_email_outbox_schema.sql"},
 			Env:         []string{"EMAIL_FROM", "EMAIL_PROVIDER", "EMAIL_LOG_BODY", "SMTP_HOST", "SMTP_PORT", "SMTP_USERNAME", "SMTP_PASSWORD", "SMTP_TLS"},
-			Docs:        []string{"docs/email.md"},
+			Docs:        []string{"docs/app/email.md"},
 		},
 		{
 			ID:          FeatureWorker,
@@ -100,7 +100,7 @@ func DefaultManifest() Manifest {
 			DependsOn:   []string{FeatureCore},
 			Files:       []string{"internal/jobs/email.go", "internal/jobs/runner.go"},
 			Env:         []string{"APP_PROCESS"},
-			Docs:        []string{"docs/jobs.md"},
+			Docs:        []string{"docs/app/jobs.md"},
 		},
 		{
 			ID:          FeatureAuth,
