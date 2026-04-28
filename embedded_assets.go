@@ -13,5 +13,5 @@ var FS embed.FS
 // Keep this list explicit so generator-only packages are not copied into
 // generated applications.
 //
-//go:embed .env.example CHANGELOG.md CONTRIBUTING.md LICENSE Makefile README.md SECURITY.md docs embedded_assets.go go.mod go.sum sqlc.yaml cmd/app internal/app internal/config internal/database internal/db internal/email internal/jobs internal/paths internal/platform internal/server internal/services migrations static templates
+//go:embed .env.example CHANGELOG.md CONTRIBUTING.md LICENSE Makefile README.md SECURITY.md docs embedded_assets.go go.mod go.sum sqlc.yaml cmd/app internal/app internal/config internal/database internal/db internal/email internal/features internal/jobs internal/paths internal/platform internal/server internal/services migrations static templates
 var StarterFS embed.FS

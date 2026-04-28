@@ -2,21 +2,21 @@ package config
 
 import (
 	"fmt"
+	"github.com/joho/godotenv"
 	"net/mail"
 	"net/url"
 	"os"
 	"strconv"
 	"strings"
 	"time"
-
-	"github.com/inkyvoxel/go-spark/internal/email"
-	"github.com/joho/godotenv"
 )
 
 const (
-	ProcessAll    = "all"
-	ProcessWeb    = "web"
-	ProcessWorker = "worker"
+	ProcessAll        = "all"
+	ProcessWeb        = "web"
+	ProcessWorker     = "worker"
+	EmailProviderLog  = "log"
+	EmailProviderSMTP = "smtp"
 )
 
 type RateLimitPolicyConfig struct {
@@ -123,7 +123,7 @@ func FromEnvWithProcess(defaultPasswordMinLength int, processOverride string) (C
 		return Config{}, err
 	}
 
-	emailProvider, err := envEmailProvider("EMAIL_PROVIDER", email.ProviderLog)
+	emailProvider, err := envEmailProvider("EMAIL_PROVIDER", EmailProviderLog)
 	if err != nil {
 		return Config{}, err
 	}
@@ -161,13 +161,13 @@ func FromEnvWithProcess(defaultPasswordMinLength int, processOverride string) (C
 	}
 	cfg.RateLimitPolicies = rateLimitPolicies
 
-	if emailProvider != email.ProviderSMTP {
+	if emailProvider != EmailProviderSMTP {
 		return cfg, nil
 	}
 
 	smtpHost := strings.TrimSpace(os.Getenv("SMTP_HOST"))
 	if smtpHost == "" {
-		return Config{}, fmt.Errorf("SMTP_HOST is required when EMAIL_PROVIDER=%q", email.ProviderSMTP)
+		return Config{}, fmt.Errorf("SMTP_HOST is required when EMAIL_PROVIDER=%q", EmailProviderSMTP)
 	}
 
 	smtpPort, err := envInt("SMTP_PORT")
@@ -349,8 +349,8 @@ func envEmailAddress(key, fallback string) (string, error) {
 
 func envEmailProvider(key, fallback string) (string, error) {
 	provider := strings.ToLower(strings.TrimSpace(envOrDefault(key, fallback)))
-	if provider != email.ProviderLog && provider != email.ProviderSMTP {
-		return "", fmt.Errorf("%s must be %q or %q", key, email.ProviderLog, email.ProviderSMTP)
+	if provider != EmailProviderLog && provider != EmailProviderSMTP {
+		return "", fmt.Errorf("%s must be %q or %q", key, EmailProviderLog, EmailProviderSMTP)
 	}
 
 	return provider, nil

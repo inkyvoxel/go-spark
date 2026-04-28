@@ -135,9 +135,11 @@ backups, and multi-process tradeoffs.
 
 ## Project Generation
 
-`cmd/go-spark` is a one-time project generator. It copies starter source into a new directory, rewrites project defaults, and leaves the generated app as plain Go code with its own runtime CLI.
+`cmd/go-spark` is a one-time project generator. It resolves component dependencies, copies the selected source bundles into a new directory, rewrites project defaults, and leaves the generated app as plain Go code with its own runtime CLI.
 
-Generation uses a manifest of components and dependencies so features can be split into component-owned bundles over time. The first implementation copies the full starter source for every feature set while that split is underway.
+Generation uses a manifest of components and dependencies so routes, templates, docs, migrations, and runtime feature flags match the selected feature set. Some shared support packages remain present across multiple feature combinations to keep the generated app on a stable compile-time surface.
+
+See [generated-features.md](generated-features.md) for the current component matrix.
 
 ## Background Work
 

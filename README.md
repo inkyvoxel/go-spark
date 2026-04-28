@@ -46,6 +46,8 @@ The `new` command prompts for:
 * default email sender
 * feature selection
 
+Feature selection is component-based. See [docs/generated-features.md](docs/generated-features.md) for the generated file, template, migration, and docs surface for each feature.
+
 If you want a non-interactive setup, pass flags such as:
 
 ```sh
@@ -58,7 +60,8 @@ go run ./cmd/go-spark new ../acme-starter \
   -yes
 ```
 
-Feature dependency resolution and component-owned source bundles are implemented now. Some partial feature sets still need the follow-up bootstrap refactor before they compile as standalone runtime apps.
+Feature dependency resolution, component-owned source bundles, and explicit
+feature wiring are implemented now.
 
 ## Process Commands
 
@@ -115,6 +118,7 @@ Start here if you are new to the project:
 * [docs/development.md](docs/development.md) for setup and day-to-day workflow
 * [docs/production.md](docs/production.md) for production build and deployment guidance
 * [docs/architecture.md](docs/architecture.md) for the codebase shape and conventions
+* [docs/generated-features.md](docs/generated-features.md) for the generated feature matrix
 * [docs/jobs.md](docs/jobs.md) for background work patterns
 * [docs/email.md](docs/email.md) for auth email flows and outbox design
 

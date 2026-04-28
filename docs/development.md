@@ -29,6 +29,8 @@ default database file is `./data/app.db`.
 
 `go-spark new` is the intended first step for a new app. It writes a plain Go project with the module path, app branding, default email sender, default SQLite path, and selected feature set already applied.
 
+Feature selection is component-based. See [generated-features.md](generated-features.md) for the current mapping between selected features and generated docs, templates, migrations, and runtime behavior.
+
 The app loads `.env` when present. Existing shell environment variables still win.
 Use `LOG_FORMAT=text` locally by default; switch to `LOG_FORMAT=json` when you want machine-parseable logs during development.
 
@@ -59,6 +61,7 @@ Notes:
 * `make check` runs formatting, module tidy, sqlc generation, vulncheck, and tests.
 * The app CLI uses explicit runtime commands: `all`, `serve`, `worker`, and `migrate`.
 * The generator CLI uses `go-spark new <path>` for one-time project creation.
+* Generated feature flags live in `internal/features/features.go` in the created app.
 
 ## Tooling
 

@@ -38,13 +38,11 @@ func TestNewProjectGeneratesStarterApp(t *testing.T) {
 	assertGeneratedFileNotContains(t, target, "Makefile", "build-generator")
 	assertGeneratedFileNotContains(t, target, "docs/development.md", "cmd/go-spark")
 	assertGeneratedFileNotContains(t, target, "docs/architecture.md", "internal/generator")
-	assertGeneratedFileNotExists(t, target, "internal/db/queries/password_reset.sql")
-	assertGeneratedFileNotExists(t, target, "internal/db/queries/email_change.sql")
-	assertGeneratedFileNotExists(t, target, "migrations/00003_password_reset_schema.sql")
-	assertGeneratedFileNotExists(t, target, "migrations/00004_email_change_schema.sql")
+	assertGeneratedFileContains(t, target, "internal/features/features.go", "PasswordReset:     false")
+	assertGeneratedFileContains(t, target, "internal/features/features.go", "EmailChange:       false")
 	assertGeneratedFileNotExists(t, target, "templates/account/reset_password.html")
 	assertGeneratedFileNotExists(t, target, "templates/account/change_email.html")
-	assertGeneratedFileNotExists(t, target, "internal/jobs/cleanup.go")
+	assertGeneratedFileContains(t, target, "internal/features/features.go", "Cleanup:           false")
 	assertGeneratedFileNotExists(t, target, "internal/projectinit/init.go")
 
 	if len(result.Files) == 0 {

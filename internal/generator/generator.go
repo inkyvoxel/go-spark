@@ -2,7 +2,6 @@ package generator
 
 import (
 	"bufio"
-	"bytes"
 	"fmt"
 	"io"
 	"io/fs"
@@ -26,7 +25,7 @@ const (
 	sourceModulePath        = "github.com/inkyvoxel/go-spark"
 	sourceBinaryName        = "go-spark"
 	generatedTodo           = "# TODO\n\nNo open TODOs.\n"
-	generatorImplementation = "Copied component source bundles. Some generated feature sets still need the follow-up bootstrap refactor before they compile as standalone runtime apps.\n"
+	generatorImplementation = "Copied component source bundles and wrote explicit feature wiring.\n"
 )
 
 type ProjectOptions struct {
@@ -203,7 +202,92 @@ func copyComponents(targetPath string, opts ProjectOptions, components []Compone
 		}
 		files = append(files, name)
 	}
+	generated, err := writeGeneratedBootstrapFiles(targetPath, components, sourceFiles)
+	if err != nil {
+		return nil, err
+	}
+	files = append(files, generated...)
+	sort.Strings(files)
 	return files, nil
+}
+
+func writeGeneratedBootstrapFiles(targetPath string, components []Component, sourceFiles []string) ([]string, error) {
+	generated := map[string][]byte{
+		"embedded_assets.go":            []byte(generatedEmbeddedAssets()),
+		"internal/features/features.go": []byte(generatedFeaturesFile(components)),
+	}
+	written := make([]string, 0, len(generated))
+	for name, body := range generated {
+		target := filepath.Join(targetPath, filepath.FromSlash(name))
+		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+			return nil, fmt.Errorf("create parent for %s: %w", name, err)
+		}
+		if err := os.WriteFile(target, body, 0o644); err != nil {
+			return nil, fmt.Errorf("write %s: %w", name, err)
+		}
+		written = append(written, name)
+	}
+	if !hasSourcePrefix(sourceFiles, "migrations/") {
+		keep := filepath.Join(targetPath, "migrations", "00001_empty_schema.sql")
+		if err := os.MkdirAll(filepath.Dir(keep), 0o755); err != nil {
+			return nil, fmt.Errorf("create migrations directory: %w", err)
+		}
+		body := []byte("-- +goose Up\n-- No schema changes for this feature set.\n\n-- +goose Down\n-- No schema changes for this feature set.\n")
+		if err := os.WriteFile(keep, body, 0o644); err != nil {
+			return nil, fmt.Errorf("write empty schema migration: %w", err)
+		}
+		written = append(written, "migrations/00001_empty_schema.sql")
+	}
+	sort.Strings(written)
+	return written, nil
+}
+
+func generatedEmbeddedAssets() string {
+	parts := []string{"all:templates", "all:static", "all:migrations"}
+	return "package appassets\n\nimport \"embed\"\n\n// FS contains runtime templates, static assets, and migrations bundled into the binary.\n//\n//go:embed " + strings.Join(parts, " ") + "\nvar FS embed.FS\n"
+}
+
+func generatedFeaturesFile(components []Component) string {
+	enabled := resolvedFeatureSet(components)
+	return fmt.Sprintf(`package features
+
+type Flags struct {
+	Auth              bool
+	PasswordReset     bool
+	EmailOutbox       bool
+	EmailVerification bool
+	EmailChange       bool
+	Worker            bool
+	Cleanup           bool
+}
+
+var Enabled = Flags{
+	Auth:              %t,
+	PasswordReset:     %t,
+	EmailOutbox:       %t,
+	EmailVerification: %t,
+	EmailChange:       %t,
+	Worker:            %t,
+	Cleanup:           %t,
+}
+`, enabled[FeatureAuth], enabled[FeaturePasswordReset], enabled[FeatureEmailOutbox], enabled[FeatureEmailVerification], enabled[FeatureEmailChange], enabled[FeatureWorker], enabled[FeatureCleanup])
+}
+
+func resolvedFeatureSet(components []Component) map[string]bool {
+	enabled := make(map[string]bool, len(components))
+	for _, component := range components {
+		enabled[component.ID] = true
+	}
+	return enabled
+}
+
+func hasSourcePrefix(files []string, prefix string) bool {
+	for _, file := range files {
+		if strings.HasPrefix(file, prefix) {
+			return true
+		}
+	}
+	return false
 }
 
 func componentSourceFiles(components []Component) ([]string, error) {
@@ -320,10 +404,19 @@ func renderStarterFile(name string, body []byte, opts ProjectOptions) ([]byte, e
 	content = strings.ReplaceAll(content, sourceModulePath, opts.ModulePath)
 	content = strings.ReplaceAll(content, strconv.Quote(defaultEmailFrom), strconv.Quote(opts.EmailFrom))
 	content = strings.ReplaceAll(content, defaultEmailFrom, opts.EmailFrom)
+	content = strings.ReplaceAll(content, escapedQuotedAddress(defaultEmailFrom), escapedQuotedAddress(opts.EmailFrom))
 	content = strings.ReplaceAll(content, defaultProjectName, opts.ProjectName)
 	content = strings.ReplaceAll(content, defaultDatabasePath, opts.DatabasePath)
 	content = strings.ReplaceAll(content, sourceBinaryName, path.Base(opts.ModulePath))
 	return []byte(content), nil
+}
+
+func escapedQuotedAddress(address string) string {
+	parsed, err := mail.ParseAddress(address)
+	if err != nil {
+		return strings.ReplaceAll(strconv.Quote(address), "\"", "\\\"")
+	}
+	return strings.ReplaceAll(parsed.String(), "\"", "\\\"")
 }
 
 func renderGeneratedMakefile(content string) string {
@@ -370,6 +463,8 @@ make sqlc
 
 This app is plain Go code. The generator was only used to create the initial
 project files.
+
+See `+"`docs/generated-features.md`"+` for the generated feature matrix.
 `, opts.ProjectName, path.Base(opts.ModulePath), path.Base(opts.ModulePath), path.Base(opts.ModulePath), path.Base(opts.ModulePath))
 }
 
@@ -390,6 +485,8 @@ func generatedDevelopmentDoc() string {
 		"```",
 		"",
 		"The default SQLite database path is configured in `.env.example`.",
+		"",
+		"See `docs/generated-features.md` for the current mapping between selected features and generated docs, templates, migrations, and runtime behavior.",
 		"",
 		"## Common Commands",
 		"",
@@ -433,10 +530,13 @@ func generatedArchitectureDoc(opts ProjectOptions) string {
 /migrations         goose SQL migrations
 /templates          server-rendered HTML templates
 /static             CSS and static assets
+/docs/generated-features.md generated feature matrix and output notes
 `+"```"+`
 
 Handlers own HTTP concerns, services own business logic, and stores own
 persistence concerns.
+
+See `+"`docs/generated-features.md`"+` for the current component matrix.
 `, opts.ProjectName)
 }
 
@@ -454,22 +554,14 @@ func replaceModuleDeclaration(content, modulePath string) string {
 func homeTemplate(projectName string) string {
 	const tmpl = `{{ define "content" }}
 <section>
-  <h1>Welcome to {{ .ProjectName }}.</h1>
+  <h1>Welcome to __PROJECT_NAME__.</h1>
   <p>
     Your Go web app is ready. Start by replacing this page with the first workflow your users need.
   </p>
 </section>
-	{{ end }}
+{{ end }}
 `
-	var out bytes.Buffer
-	parsed := template.Must(template.New("home").Parse(tmpl))
-	err := parsed.ExecuteTemplate(&out, "content", map[string]string{
-		"ProjectName": projectName,
-	})
-	if err != nil {
-		panic(err)
-	}
-	return out.String()
+	return strings.ReplaceAll(tmpl, "__PROJECT_NAME__", template.HTMLEscapeString(projectName))
 }
 
 func promptString(reader *bufio.Reader, stdout io.Writer, label, provided, fallback string) (string, error) {
