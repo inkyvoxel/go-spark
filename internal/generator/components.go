@@ -9,9 +9,6 @@ import (
 const (
 	FeatureAll               = "all"
 	FeatureCore              = "core"
-	FeatureSQLite            = "sqlite"
-	FeatureWeb               = "web"
-	FeatureCSRF              = "csrf"
 	FeatureAuth              = "auth"
 	FeaturePasswordReset     = "password-reset"
 	FeatureEmailOutbox       = "email-outbox"
@@ -44,7 +41,7 @@ func DefaultManifest() Manifest {
 		{
 			ID:          FeatureCore,
 			Name:        "Core",
-			Description: "App shell, config basics, logging, docs, static assets, and Makefile.",
+			Description: "App shell, SQLite setup, web server, CSRF protection, docs, static assets, and Makefile.",
 			Files: []string{
 				".env.example", "LICENSE", "Makefile", "SECURITY.md", "docs/app/README.md.tmpl",
 				"embedded_assets.go", "go.mod", "go.sum", "cmd/app/main.go",
@@ -53,41 +50,24 @@ func DefaultManifest() Manifest {
 				"internal/db/generated",
 				"internal/email/email.go", "internal/email/processor.go", "internal/email/smtp.go", "internal/email/templates",
 				"internal/jobs/cleanup.go", "internal/jobs/email.go", "internal/jobs/runner.go",
+				"internal/paths",
 				"internal/platform/sqlite/open.go",
+				"internal/server/assets.go", "internal/server/auth.go", "internal/server/auth_handlers.go",
+				"internal/server/csrf.go", "internal/server/csrf_context.go", "internal/server/rate_limit.go",
+				"internal/server/request_auth_state.go", "internal/server/request_id.go", "internal/server/request_id_context.go",
+				"internal/server/server.go", "internal/server/template_constants.go",
 				"internal/services/auth.go", "internal/services/email_verification_policy.go", "internal/services/password_hasher.go",
+				"sqlc.yaml", "static",
 			},
-			Env:  []string{"APP_ADDR", "APP_ENV", "LOG_FORMAT", "APP_BASE_URL"},
+			Templates: []string{"templates/404.html", "templates/breadcrumb.html", "templates/home.html", "templates/layout.html"},
+			Env:       []string{"APP_ADDR", "APP_ENV", "LOG_FORMAT", "APP_BASE_URL", "DATABASE_PATH", "CSRF_SIGNING_KEY", "APP_COOKIE_SECURE"},
 			Docs: []string{"docs/app/architecture.md", "docs/app/development.md", "docs/app/generated-features.md", "docs/app/production.md"},
-		},
-		{
-			ID:          FeatureSQLite,
-			Name:        "SQLite",
-			Description: "SQLite connection setup, migrations, sqlc configuration, and database packages.",
-			DependsOn:   []string{FeatureCore},
-			Files:       []string{"sqlc.yaml", "internal/platform/sqlite", "internal/database/tx.go", "internal/db/generated/db.go", "internal/db/generated/models.go"},
-			Env:         []string{"DATABASE_PATH"},
-		},
-		{
-			ID:          FeatureWeb,
-			Name:        "Web",
-			Description: "net/http server, route registration, rendering helpers, and health pages.",
-			DependsOn:   []string{FeatureSQLite},
-			Files:       []string{"internal/paths", "internal/server/assets.go", "internal/server/auth.go", "internal/server/auth_handlers.go", "internal/server/csrf.go", "internal/server/csrf_context.go", "internal/server/rate_limit.go", "internal/server/request_auth_state.go", "internal/server/request_id.go", "internal/server/request_id_context.go", "internal/server/server.go", "internal/server/template_constants.go", "static"},
-			Templates:   []string{"templates/404.html", "templates/breadcrumb.html", "templates/home.html", "templates/layout.html"},
-		},
-		{
-			ID:          FeatureCSRF,
-			Name:        "CSRF",
-			Description: "CSRF middleware and signing key configuration for form flows.",
-			DependsOn:   []string{FeatureWeb},
-			Files:       []string{"internal/server/csrf.go", "internal/server/csrf_context.go"},
-			Env:         []string{"CSRF_SIGNING_KEY", "APP_COOKIE_SECURE"},
 		},
 		{
 			ID:          FeatureEmailOutbox,
 			Name:        "Email Outbox",
 			Description: "Transactional email templates, log/SMTP senders, outbox store, and processor.",
-			DependsOn:   []string{FeatureSQLite},
+			DependsOn:   []string{FeatureCore},
 			Files:       []string{"internal/email/email.go", "internal/email/processor.go", "internal/email/smtp.go", "internal/database/email_outbox_store.go", "internal/db/queries/email.sql", "internal/db/generated/email.sql.go", "internal/email/templates/README.md"},
 			Migrations:  []string{"migrations/00005_email_outbox_schema.sql"},
 			Env:         []string{"EMAIL_FROM", "EMAIL_PROVIDER", "EMAIL_LOG_BODY", "SMTP_HOST", "SMTP_PORT", "SMTP_USERNAME", "SMTP_PASSWORD", "SMTP_TLS"},
@@ -106,7 +86,7 @@ func DefaultManifest() Manifest {
 			ID:          FeatureAuth,
 			Name:        "Authentication",
 			Description: "Users, sessions, registration, login, logout, account pages, rate limits, and password hashing.",
-			DependsOn:   []string{FeatureSQLite, FeatureWeb, FeatureCSRF, FeatureEmailOutbox},
+			DependsOn:   []string{FeatureCore, FeatureEmailOutbox},
 			Files:       []string{"internal/services/auth.go", "internal/services/email_verification_policy.go", "internal/services/password_hasher.go", "internal/database/auth_store.go", "internal/server/auth.go", "internal/server/auth_handlers.go", "internal/server/rate_limit.go", "internal/db/queries/auth.sql", "internal/db/generated/auth.sql.go", "internal/db/queries/password_reset.sql", "internal/db/generated/password_reset.sql.go", "internal/db/queries/email_change.sql", "internal/db/generated/email_change.sql.go"},
 			Templates:   []string{"templates/account/account.html", "templates/account/change_password.html", "templates/account/login.html", "templates/account/register.html"},
 			Migrations:  []string{"migrations/00001_auth_schema.sql", "migrations/00003_password_reset_schema.sql", "migrations/00004_email_change_schema.sql"},

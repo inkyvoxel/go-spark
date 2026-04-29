@@ -31,8 +31,8 @@ func TestGeneratedProjectsSmoke(t *testing.T) {
 		filesNotExist   []string
 	}{
 		{
-			name:     "minimal-web",
-			features: []string{FeatureWeb},
+			name:     "core-minimal",
+			features: []string{FeatureCore},
 			routes: []generatedRouteExpectation{
 				{Path: "/", WantStatus: 200},
 				{Path: "/healthz", WantStatus: 200},

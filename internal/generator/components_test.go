@@ -2,6 +2,7 @@ package generator
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -15,11 +16,8 @@ func TestManifestResolveIncludesDependencies(t *testing.T) {
 	want := []string{
 		FeatureAuth,
 		FeatureCore,
-		FeatureCSRF,
 		FeatureEmailOutbox,
 		FeatureEmailVerification,
-		FeatureSQLite,
-		FeatureWeb,
 		FeatureWorker,
 	}
 	if !reflect.DeepEqual(got, want) {
@@ -42,5 +40,19 @@ func TestManifestResolveRejectsUnknownComponent(t *testing.T) {
 	_, err := DefaultManifest().Resolve([]string{"billing"})
 	if err == nil {
 		t.Fatal("Resolve() error = nil, want error")
+	}
+}
+
+func TestManifestResolveRejectsRemovedFoundationalComponents(t *testing.T) {
+	for _, removed := range []string{"sqlite", "web", "csrf"} {
+		t.Run(removed, func(t *testing.T) {
+			_, err := DefaultManifest().Resolve([]string{removed})
+			if err == nil {
+				t.Fatalf("Resolve(%q) error = nil, want error", removed)
+			}
+			if !strings.Contains(err.Error(), "unknown component") {
+				t.Fatalf("Resolve(%q) error = %v, want unknown component error", removed, err)
+			}
+		})
 	}
 }
