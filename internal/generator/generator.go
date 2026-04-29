@@ -269,7 +269,7 @@ var Enabled = Flags{
 	Worker:            %t,
 	Cleanup:           %t,
 }
-`, enabled[FeatureAuth], enabled[FeaturePasswordReset], enabled[FeatureEmailOutbox], enabled[FeatureEmailVerification], enabled[FeatureEmailChange], enabled[FeatureWorker], enabled[FeatureCleanup])
+`, enabled[FeatureAuth], enabled[FeatureAuth], enabled[FeatureEmailOutbox], enabled[FeatureAuth], enabled[FeatureAuth], enabled[FeatureWorker], enabled[FeatureCleanup])
 }
 
 func resolvedFeatureSet(components []Component) map[string]bool {

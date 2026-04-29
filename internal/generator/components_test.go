@@ -7,7 +7,7 @@ import (
 )
 
 func TestManifestResolveIncludesDependencies(t *testing.T) {
-	components, err := DefaultManifest().Resolve([]string{FeatureEmailVerification})
+	components, err := DefaultManifest().Resolve([]string{FeatureAuth})
 	if err != nil {
 		t.Fatalf("Resolve() error = %v", err)
 	}
@@ -17,8 +17,6 @@ func TestManifestResolveIncludesDependencies(t *testing.T) {
 		FeatureAuth,
 		FeatureCore,
 		FeatureEmailOutbox,
-		FeatureEmailVerification,
-		FeatureWorker,
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("ComponentIDs() = %v, want %v", got, want)
@@ -44,7 +42,7 @@ func TestManifestResolveRejectsUnknownComponent(t *testing.T) {
 }
 
 func TestManifestResolveRejectsRemovedFoundationalComponents(t *testing.T) {
-	for _, removed := range []string{"sqlite", "web", "csrf"} {
+	for _, removed := range []string{"sqlite", "web", "csrf", "password-reset", "email-verification", "email-change"} {
 		t.Run(removed, func(t *testing.T) {
 			_, err := DefaultManifest().Resolve([]string{removed})
 			if err == nil {

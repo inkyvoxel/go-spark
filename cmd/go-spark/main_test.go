@@ -18,7 +18,7 @@ func TestRunNewCreatesProject(t *testing.T) {
 		"-module-path", "github.com/acme/app",
 		"-database-path", "./data/acme.db",
 		"-email-from", "Acme <team@acme.test>",
-		"-features", "email-verification",
+		"-features", "auth",
 		"-yes",
 	}, strings.NewReader(""), &stdout)
 	if err != nil {

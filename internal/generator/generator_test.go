@@ -21,7 +21,7 @@ func TestNewProjectGeneratesStarterApp(t *testing.T) {
 		ModulePath:   "github.com/acme/portal",
 		DatabasePath: "./data/acme.db",
 		EmailFrom:    "Acme Portal <team@acme.test>",
-		Features:     []string{FeatureEmailVerification},
+		Features:     []string{FeatureAuth},
 		Yes:          true,
 	})
 	if err != nil {
@@ -41,10 +41,11 @@ func TestNewProjectGeneratesStarterApp(t *testing.T) {
 	assertGeneratedFileNotContains(t, target, "docs/development.md", "cmd/go-spark")
 	assertGeneratedFileNotContains(t, target, "docs/architecture.md", "internal/generator")
 	assertGeneratedFileNotContains(t, target, "docs/generated-features.md", "generator resolves")
-	assertGeneratedFileContains(t, target, "internal/features/features.go", "PasswordReset:     false")
-	assertGeneratedFileContains(t, target, "internal/features/features.go", "EmailChange:       false")
-	assertGeneratedFileNotExists(t, target, "templates/account/reset_password.html")
-	assertGeneratedFileNotExists(t, target, "templates/account/change_email.html")
+	assertGeneratedFileContains(t, target, "internal/features/features.go", "PasswordReset:     true")
+	assertGeneratedFileContains(t, target, "internal/features/features.go", "EmailVerification: true")
+	assertGeneratedFileContains(t, target, "internal/features/features.go", "EmailChange:       true")
+	assertGeneratedFileContains(t, target, "templates/account/reset_password.html", "Reset password")
+	assertGeneratedFileContains(t, target, "templates/account/change_email.html", "Change email")
 	assertGeneratedFileContains(t, target, "internal/features/features.go", "Cleanup:           false")
 	assertGeneratedFileNotExists(t, target, "internal/projectinit/init.go")
 	assertGeneratedFileNotExists(t, target, "CONTRIBUTING.md")
@@ -100,8 +101,8 @@ func TestGeneratedFeatureSetsRunSQLCGenerate(t *testing.T) {
 		features []string
 	}{
 		{
-			name:     "email-verification",
-			features: []string{FeatureEmailVerification},
+			name:     "auth",
+			features: []string{FeatureAuth},
 		},
 		{
 			name:     "all",

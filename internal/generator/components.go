@@ -10,10 +10,7 @@ const (
 	FeatureAll               = "all"
 	FeatureCore              = "core"
 	FeatureAuth              = "auth"
-	FeaturePasswordReset     = "password-reset"
 	FeatureEmailOutbox       = "email-outbox"
-	FeatureEmailVerification = "email-verification"
-	FeatureEmailChange       = "email-change"
 	FeatureWorker            = "worker"
 	FeatureCleanup           = "cleanup"
 )
@@ -85,47 +82,18 @@ func DefaultManifest() Manifest {
 		{
 			ID:          FeatureAuth,
 			Name:        "Authentication",
-			Description: "Users, sessions, registration, login, logout, account pages, rate limits, and password hashing.",
+			Description: "Users, sessions, registration, login, logout, account pages, password reset, email verification, email change, rate limits, and password hashing.",
 			DependsOn:   []string{FeatureCore, FeatureEmailOutbox},
-			Files:       []string{"internal/services/auth.go", "internal/services/email_verification_policy.go", "internal/services/password_hasher.go", "internal/database/auth_store.go", "internal/server/auth.go", "internal/server/auth_handlers.go", "internal/server/rate_limit.go", "internal/db/queries/auth.sql", "internal/db/generated/auth.sql.go", "internal/db/queries/password_reset.sql", "internal/db/generated/password_reset.sql.go", "internal/db/queries/email_change.sql", "internal/db/generated/email_change.sql.go"},
-			Templates:   []string{"templates/account/account.html", "templates/account/change_password.html", "templates/account/login.html", "templates/account/register.html"},
-			Migrations:  []string{"migrations/00001_auth_schema.sql", "migrations/00003_password_reset_schema.sql", "migrations/00004_email_change_schema.sql"},
-			Env:         []string{"AUTH_PASSWORD_MIN_LENGTH", "AUTH_PASSWORD_PEPPER", "RATE_LIMIT_*"},
-		},
-		{
-			ID:          FeaturePasswordReset,
-			Name:        "Password Reset",
-			Description: "Password reset tokens, email templates, routes, service methods, and store methods.",
-			DependsOn:   []string{FeatureAuth, FeatureEmailOutbox},
-			Files:       []string{"internal/db/queries/password_reset.sql", "internal/db/generated/password_reset.sql.go"},
-			Templates:   []string{"internal/email/templates/password_reset.*", "templates/account/forgot_password.html", "templates/account/reset_password.html"},
-			Migrations:  []string{"migrations/00003_password_reset_schema.sql"},
-		},
-		{
-			ID:          FeatureEmailVerification,
-			Name:        "Email Verification",
-			Description: "Account verification and resend flows with durable email delivery.",
-			DependsOn:   []string{FeatureAuth, FeatureEmailOutbox, FeatureWorker},
-			Files:       []string{"internal/db/queries/email_verification.sql", "internal/db/generated/email_verification.sql.go"},
-			Templates:   []string{"internal/email/templates/account_confirmation.*", "templates/account/confirm_email.html", "templates/account/resend_verification.html", "templates/account/verify_email.html"},
-			Migrations:  []string{"migrations/00002_email_verification_schema.sql"},
-			Env:         []string{"AUTH_EMAIL_VERIFICATION_REQUIRED"},
-		},
-		{
-			ID:          FeatureEmailChange,
-			Name:        "Email Change",
-			Description: "Account email change confirmation and old-address notice flows.",
-			DependsOn:   []string{FeatureAuth, FeatureEmailOutbox},
-			Files:       []string{"internal/db/queries/email_change.sql", "internal/db/generated/email_change.sql.go"},
-			Templates:   []string{"internal/email/templates/email_change.*", "internal/email/templates/email_change_notice.*", "templates/account/change_email.html", "templates/account/confirm_email_change.html"},
-			Migrations:  []string{"migrations/00004_email_change_schema.sql"},
-			Env:         []string{"AUTH_EMAIL_CHANGE_NOTICE_ENABLED"},
+			Files:       []string{"internal/services/auth.go", "internal/services/email_verification_policy.go", "internal/services/password_hasher.go", "internal/database/auth_store.go", "internal/server/auth.go", "internal/server/auth_handlers.go", "internal/server/rate_limit.go", "internal/db/queries/auth.sql", "internal/db/generated/auth.sql.go", "internal/db/queries/password_reset.sql", "internal/db/generated/password_reset.sql.go", "internal/db/queries/email_verification.sql", "internal/db/generated/email_verification.sql.go", "internal/db/queries/email_change.sql", "internal/db/generated/email_change.sql.go"},
+			Templates:   []string{"internal/email/templates/account_confirmation.*", "internal/email/templates/email_change.*", "internal/email/templates/email_change_notice.*", "internal/email/templates/password_reset.*", "templates/account/account.html", "templates/account/change_email.html", "templates/account/change_password.html", "templates/account/confirm_email.html", "templates/account/confirm_email_change.html", "templates/account/forgot_password.html", "templates/account/login.html", "templates/account/register.html", "templates/account/resend_verification.html", "templates/account/reset_password.html", "templates/account/verify_email.html"},
+			Migrations:  []string{"migrations/00001_auth_schema.sql", "migrations/00002_email_verification_schema.sql", "migrations/00003_password_reset_schema.sql", "migrations/00004_email_change_schema.sql"},
+			Env:         []string{"AUTH_PASSWORD_MIN_LENGTH", "AUTH_PASSWORD_PEPPER", "AUTH_EMAIL_VERIFICATION_REQUIRED", "AUTH_EMAIL_CHANGE_NOTICE_ENABLED", "RATE_LIMIT_*"},
 		},
 		{
 			ID:          FeatureCleanup,
 			Name:        "Cleanup",
 			Description: "Periodic pruning jobs for sessions, tokens, and outbox rows.",
-			DependsOn:   []string{FeatureAuth, FeaturePasswordReset, FeatureEmailVerification, FeatureEmailChange, FeatureEmailOutbox, FeatureWorker},
+			DependsOn:   []string{FeatureAuth, FeatureEmailOutbox, FeatureWorker},
 			Files:       []string{"internal/jobs/cleanup.go", "internal/database/cleanup_store.go"},
 			Env:         []string{"JOBS_CLEANUP_INTERVAL", "JOBS_CLEANUP_TOKEN_RETENTION", "JOBS_CLEANUP_SENT_EMAIL_RETENTION", "JOBS_CLEANUP_FAILED_EMAIL_RETENTION"},
 		},
