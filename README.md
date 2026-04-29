@@ -52,13 +52,11 @@ go run ./cmd/go-spark new ../my-app \
 `go-spark new` produces a standalone application repository:
 
 * excludes generator implementation (`cmd/go-spark`, `internal/generator`)
-* excludes maintainer-only docs/files (`CONTRIBUTING.md`, `CHANGELOG.md`, `docs/todo.md`)
+* excludes maintainer-only docs/files (`CONTRIBUTING.md`, `CHANGELOG.md`, `docs/maintainer/*`)
 * writes app-focused docs and README for the generated project
 
 ## Read Next
 
-* [docs/development.md](docs/development.md)
-* [docs/architecture.md](docs/architecture.md)
-* [docs/generated-features.md](docs/generated-features.md)
+* [docs/maintainer/development.md](docs/maintainer/development.md)
 * [docs/maintainer/README.md](docs/maintainer/README.md)
 * [CONTRIBUTING.md](CONTRIBUTING.md)
