@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	appassets "github.com/inkyvoxel/go-spark"
+	"github.com/inkyvoxel/go-spark/internal/features"
 	"github.com/inkyvoxel/go-spark/internal/paths"
 	"github.com/inkyvoxel/go-spark/internal/services"
 )
@@ -36,6 +37,7 @@ type Server struct {
 	csrfSigningKey          []byte
 	rateLimiter             rateLimitStore
 	rateLimitPolicies       RateLimitPolicies
+	features                features.Flags
 }
 
 type Options struct {
@@ -48,6 +50,7 @@ type Options struct {
 	CSRFSigningKey          string
 	PasswordMinLength       int
 	RateLimitPolicies       RateLimitPolicies
+	Features                features.Flags
 }
 
 func New(opts Options) *Server {
@@ -55,7 +58,11 @@ func New(opts Options) *Server {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	if opts.Auth == nil {
+	enabled := opts.Features
+	if enabled == (features.Flags{}) {
+		enabled = features.Enabled
+	}
+	if enabled.Auth && opts.Auth == nil {
 		panic("server auth service is required")
 	}
 
@@ -71,13 +78,14 @@ func New(opts Options) *Server {
 		auth:                    opts.Auth,
 		emailVerificationPolicy: emailVerificationPolicy(opts.EmailVerificationPolicy),
 		logger:                  logger,
-		templates:               mustParseTemplates(),
+		templates:               mustParseTemplates(enabled),
 		cookieSecure:            opts.CookieSecure,
 		appBaseOrigin:           appBaseOrigin,
 		passwordMinLength:       passwordMinLength,
 		csrfSigningKey:          csrfSigningKey,
 		rateLimiter:             newInMemoryRateLimiter(),
 		rateLimitPolicies:       rateLimitPoliciesWithDefaults(opts.RateLimitPolicies),
+		features:                enabled,
 	}
 }
 
@@ -99,8 +107,8 @@ func normalizeOrigin(raw string) string {
 	return strings.ToLower(parsed.Scheme) + "://" + strings.ToLower(parsed.Host)
 }
 
-func mustParseTemplates() map[string]*template.Template {
-	templates, err := parseTemplates()
+func mustParseTemplates(enabled features.Flags) map[string]*template.Template {
+	templates, err := parseTemplates(enabled)
 	if err != nil {
 		panic(err)
 	}
@@ -108,21 +116,29 @@ func mustParseTemplates() map[string]*template.Template {
 	return templates
 }
 
-func parseTemplates() (map[string]*template.Template, error) {
+func parseTemplates(enabled features.Flags) (map[string]*template.Template, error) {
 	pages := map[string]string{
-		templateNotFound:           "404.html",
-		templateAccount:            path.Join("account", "account.html"),
-		templateChangeEmail:        path.Join("account", "change_email.html"),
-		templateChangePassword:     path.Join("account", "change_password.html"),
-		templateConfirmEmail:       path.Join("account", "confirm_email.html"),
-		templateConfirmEmailChange: path.Join("account", "confirm_email_change.html"),
-		templateForgotPassword:     path.Join("account", "forgot_password.html"),
-		templateHome:               "home.html",
-		templateLogin:              path.Join("account", "login.html"),
-		templateResetPassword:      path.Join("account", "reset_password.html"),
-		templateRegister:           path.Join("account", "register.html"),
-		templateResendVerification: path.Join("account", "resend_verification.html"),
-		templateVerifyEmail:        path.Join("account", "verify_email.html"),
+		templateNotFound: "404.html",
+		templateHome:     "home.html",
+	}
+	if enabled.Auth {
+		pages[templateAccount] = path.Join("account", "account.html")
+		pages[templateChangePassword] = path.Join("account", "change_password.html")
+		pages[templateLogin] = path.Join("account", "login.html")
+		pages[templateRegister] = path.Join("account", "register.html")
+	}
+	if enabled.PasswordReset {
+		pages[templateForgotPassword] = path.Join("account", "forgot_password.html")
+		pages[templateResetPassword] = path.Join("account", "reset_password.html")
+	}
+	if enabled.EmailVerification {
+		pages[templateConfirmEmail] = path.Join("account", "confirm_email.html")
+		pages[templateResendVerification] = path.Join("account", "resend_verification.html")
+		pages[templateVerifyEmail] = path.Join("account", "verify_email.html")
+	}
+	if enabled.EmailChange {
+		pages[templateChangeEmail] = path.Join("account", "change_email.html")
+		pages[templateConfirmEmailChange] = path.Join("account", "confirm_email_change.html")
 	}
 	templates := make(map[string]*template.Template, len(pages))
 	layout := path.Join("templates", templateLayout)
@@ -144,6 +160,9 @@ func parseTemplates() (map[string]*template.Template, error) {
 }
 
 func (s *Server) Routes() http.Handler {
+	if s.features == (features.Flags{}) {
+		s.features = features.Enabled
+	}
 	s.ensureRateLimiting()
 
 	mux := http.NewServeMux()
@@ -153,21 +172,32 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc(route(http.MethodGet, paths.Readyz), s.readyz)
 	mux.Handle(route(http.MethodGet, paths.StaticPrefix), staticFileHandler())
 
-	// Register new protected pages with requireAuth and anonymous-only pages with requireAnonymous.
+	s.registerFeatureRoutes(dynamic)
+
+	handler := http.Handler(dynamic)
+	if s.features.Auth {
+		handler = s.loadSession(handler)
+	}
+	handler = s.csrf(handler)
+	mux.Handle(paths.Home, s.cacheControlHeaders(s.securityHeaders(s.limitRequestBody(handler))))
+
+	return s.withRequestID(s.logRequests(mux))
+}
+
+func (s *Server) registerFeatureRoutes(dynamic *http.ServeMux) {
+	if s.features.Auth {
+		s.registerAuthRoutes(dynamic)
+	}
+	dynamic.HandleFunc(route(http.MethodGet, "/{$}"), s.home)
+	dynamic.HandleFunc(route(http.MethodGet, "/{path...}"), s.notFoundPage)
+}
+
+func (s *Server) registerAuthRoutes(dynamic *http.ServeMux) {
 	dynamic.Handle(route(http.MethodGet, paths.Register), s.requireAnonymous(http.HandlerFunc(s.registerForm)))
 	dynamic.Handle(
 		route(http.MethodPost, paths.Register),
 		s.requireAnonymous(
 			s.withRateLimit("register", s.rateLimitPolicies.Register, rateLimitKeyByIPAndEmail("email"), http.HandlerFunc(s.register)),
-		),
-	)
-	dynamic.HandleFunc(route(http.MethodGet, paths.ConfirmEmail), s.confirmEmail)
-	dynamic.HandleFunc(route(http.MethodGet, paths.ConfirmEmailChange), s.confirmEmailChange)
-	dynamic.Handle(route(http.MethodGet, paths.ForgotPassword), s.requireAnonymous(http.HandlerFunc(s.forgotPasswordForm)))
-	dynamic.Handle(
-		route(http.MethodPost, paths.ForgotPassword),
-		s.requireAnonymous(
-			s.withRateLimit("forgot-password", s.rateLimitPolicies.ForgotPassword, rateLimitKeyByIPAndEmail("email"), http.HandlerFunc(s.forgotPassword)),
 		),
 	)
 	dynamic.Handle(route(http.MethodGet, paths.Login), s.requireAnonymous(http.HandlerFunc(s.loginForm)))
@@ -177,41 +207,13 @@ func (s *Server) Routes() http.Handler {
 			s.withRateLimit("login", s.rateLimitPolicies.Login, rateLimitKeyByIPAndEmail("email"), http.HandlerFunc(s.login)),
 		),
 	)
-	dynamic.Handle(route(http.MethodGet, paths.ResetPassword), s.requireAnonymous(http.HandlerFunc(s.resetPasswordForm)))
-	dynamic.Handle(
-		route(http.MethodPost, paths.ResetPassword),
-		s.requireAnonymous(
-			s.withRateLimit("reset-password", s.rateLimitPolicies.ResetPassword, rateLimitKeyByIPAndResetTokenCookie(), http.HandlerFunc(s.resetPassword)),
-		),
-	)
-	dynamic.Handle(route(http.MethodGet, paths.ResendVerification), s.requireAnonymous(http.HandlerFunc(s.resendVerificationForm)))
-	dynamic.Handle(
-		route(http.MethodPost, paths.ResendVerification),
-		s.requireAnonymous(
-			s.withRateLimit("resend-verification-public", s.rateLimitPolicies.PublicResendVerification, rateLimitKeyByIPAndEmail("email"), http.HandlerFunc(s.resendVerificationPublic)),
-		),
-	)
 	dynamic.Handle(route(http.MethodPost, paths.Logout), s.requireAuth(http.HandlerFunc(s.logout)))
-	dynamic.Handle(route(http.MethodGet, paths.VerifyEmail), s.requireAuth(http.HandlerFunc(s.verifyEmail)))
 	dynamic.Handle(route(http.MethodGet, paths.Account), s.requireVerifiedAuth(http.HandlerFunc(s.account)))
-	dynamic.Handle(route(http.MethodGet, paths.ChangeEmail), s.requireVerifiedAuth(http.HandlerFunc(s.changeEmailForm)))
 	dynamic.Handle(route(http.MethodGet, paths.ChangePassword), s.requireVerifiedAuth(http.HandlerFunc(s.changePasswordForm)))
-	dynamic.Handle(
-		route(http.MethodPost, paths.VerifyEmailResend),
-		s.requireAuth(
-			s.withRateLimit("resend-verification-account", s.rateLimitPolicies.AccountResendVerification, rateLimitKeyByIPAndUser(), http.HandlerFunc(s.resendVerification)),
-		),
-	)
 	dynamic.Handle(
 		route(http.MethodPost, paths.ChangePassword),
 		s.requireVerifiedAuth(
 			s.withRateLimit("change-password", s.rateLimitPolicies.ChangePassword, rateLimitKeyByIPAndUser(), http.HandlerFunc(s.changePassword)),
-		),
-	)
-	dynamic.Handle(
-		route(http.MethodPost, paths.ChangeEmail),
-		s.requireVerifiedAuth(
-			s.withRateLimit("change-email", s.rateLimitPolicies.ChangeEmail, rateLimitKeyByIPAndUser(), http.HandlerFunc(s.changeEmail)),
 		),
 	)
 	dynamic.Handle(
@@ -226,12 +228,49 @@ func (s *Server) Routes() http.Handler {
 			s.withRateLimit("revoke-other-sessions", s.rateLimitPolicies.RevokeOtherSessions, rateLimitKeyByIPAndUser(), http.HandlerFunc(s.revokeOtherSessions)),
 		),
 	)
-	dynamic.HandleFunc(route(http.MethodGet, "/{$}"), s.home)
-	dynamic.HandleFunc(route(http.MethodGet, "/{path...}"), s.notFoundPage)
-
-	mux.Handle(paths.Home, s.cacheControlHeaders(s.securityHeaders(s.limitRequestBody(s.csrf(s.loadSession(dynamic))))))
-
-	return s.withRequestID(s.logRequests(mux))
+	if s.features.PasswordReset {
+		dynamic.Handle(route(http.MethodGet, paths.ForgotPassword), s.requireAnonymous(http.HandlerFunc(s.forgotPasswordForm)))
+		dynamic.Handle(
+			route(http.MethodPost, paths.ForgotPassword),
+			s.requireAnonymous(
+				s.withRateLimit("forgot-password", s.rateLimitPolicies.ForgotPassword, rateLimitKeyByIPAndEmail("email"), http.HandlerFunc(s.forgotPassword)),
+			),
+		)
+		dynamic.Handle(route(http.MethodGet, paths.ResetPassword), s.requireAnonymous(http.HandlerFunc(s.resetPasswordForm)))
+		dynamic.Handle(
+			route(http.MethodPost, paths.ResetPassword),
+			s.requireAnonymous(
+				s.withRateLimit("reset-password", s.rateLimitPolicies.ResetPassword, rateLimitKeyByIPAndResetTokenCookie(), http.HandlerFunc(s.resetPassword)),
+			),
+		)
+	}
+	if s.features.EmailVerification {
+		dynamic.HandleFunc(route(http.MethodGet, paths.ConfirmEmail), s.confirmEmail)
+		dynamic.Handle(route(http.MethodGet, paths.ResendVerification), s.requireAnonymous(http.HandlerFunc(s.resendVerificationForm)))
+		dynamic.Handle(
+			route(http.MethodPost, paths.ResendVerification),
+			s.requireAnonymous(
+				s.withRateLimit("resend-verification-public", s.rateLimitPolicies.PublicResendVerification, rateLimitKeyByIPAndEmail("email"), http.HandlerFunc(s.resendVerificationPublic)),
+			),
+		)
+		dynamic.Handle(route(http.MethodGet, paths.VerifyEmail), s.requireAuth(http.HandlerFunc(s.verifyEmail)))
+		dynamic.Handle(
+			route(http.MethodPost, paths.VerifyEmailResend),
+			s.requireAuth(
+				s.withRateLimit("resend-verification-account", s.rateLimitPolicies.AccountResendVerification, rateLimitKeyByIPAndUser(), http.HandlerFunc(s.resendVerification)),
+			),
+		)
+	}
+	if s.features.EmailChange {
+		dynamic.HandleFunc(route(http.MethodGet, paths.ConfirmEmailChange), s.confirmEmailChange)
+		dynamic.Handle(route(http.MethodGet, paths.ChangeEmail), s.requireVerifiedAuth(http.HandlerFunc(s.changeEmailForm)))
+		dynamic.Handle(
+			route(http.MethodPost, paths.ChangeEmail),
+			s.requireVerifiedAuth(
+				s.withRateLimit("change-email", s.rateLimitPolicies.ChangeEmail, rateLimitKeyByIPAndUser(), http.HandlerFunc(s.changeEmail)),
+			),
+		)
+	}
 }
 
 func route(method, path string) string {

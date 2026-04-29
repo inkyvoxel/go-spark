@@ -1,13 +1,11 @@
-.PHONY: init start start-web start-worker build-prod check test fmt tidy sqlc vulncheck migrate-up migrate-down migrate-status tools
+.PHONY: start start-web start-worker build-generator build-prod check test fmt tidy sqlc vulncheck migrate-up migrate-down migrate-status tools
 
 DB_PATH ?= ./data/app.db
 PROD_GOOS ?= linux
 PROD_GOARCH ?= amd64
 PROD_CGO_ENABLED ?= 0
 PROD_BIN ?= ./bin/app
-
-init:
-	go run ./cmd/app init
+GENERATOR_BIN ?= ./bin/go-spark
 
 start:
 	go run ./cmd/app all
@@ -17,6 +15,10 @@ start-web:
 
 start-worker:
 	go run ./cmd/app worker
+
+build-generator:
+	mkdir -p $(dir $(GENERATOR_BIN))
+	go build -trimpath -o $(GENERATOR_BIN) ./cmd/go-spark
 
 build-prod:
 	mkdir -p $(dir $(PROD_BIN))

@@ -7,7 +7,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/inkyvoxel/go-spark/internal/email"
 	"github.com/inkyvoxel/go-spark/internal/services"
 )
 
@@ -137,8 +136,8 @@ func TestFromEnvUsesDefaults(t *testing.T) {
 	if cfg.EmailFrom != `"Go Spark" <hello@example.com>` {
 		t.Fatalf("EmailFrom = %q, want formatted sender", cfg.EmailFrom)
 	}
-	if cfg.EmailProvider != email.ProviderLog {
-		t.Fatalf("EmailProvider = %q, want %q", cfg.EmailProvider, email.ProviderLog)
+	if cfg.EmailProvider != EmailProviderLog {
+		t.Fatalf("EmailProvider = %q, want %q", cfg.EmailProvider, EmailProviderLog)
 	}
 	if cfg.EmailLogBody {
 		t.Fatal("EmailLogBody = true, want false")
@@ -234,8 +233,8 @@ func TestFromEnvUsesEnvironment(t *testing.T) {
 	if cfg.EmailFrom != `"Example" <mail@example.com>` {
 		t.Fatalf("EmailFrom = %q, want formatted sender", cfg.EmailFrom)
 	}
-	if cfg.EmailProvider != email.ProviderLog {
-		t.Fatalf("EmailProvider = %q, want %q", cfg.EmailProvider, email.ProviderLog)
+	if cfg.EmailProvider != EmailProviderLog {
+		t.Fatalf("EmailProvider = %q, want %q", cfg.EmailProvider, EmailProviderLog)
 	}
 	if !cfg.EmailLogBody {
 		t.Fatal("EmailLogBody = false, want true")
@@ -502,8 +501,8 @@ func TestFromEnvParsesSMTPProvider(t *testing.T) {
 		t.Fatalf("FromEnv() error = %v", err)
 	}
 
-	if cfg.EmailProvider != email.ProviderSMTP {
-		t.Fatalf("EmailProvider = %q, want %q", cfg.EmailProvider, email.ProviderSMTP)
+	if cfg.EmailProvider != EmailProviderSMTP {
+		t.Fatalf("EmailProvider = %q, want %q", cfg.EmailProvider, EmailProviderSMTP)
 	}
 	if cfg.SMTPHost != "smtp.example.com" {
 		t.Fatalf("SMTPHost = %q, want smtp.example.com", cfg.SMTPHost)
@@ -628,7 +627,7 @@ func TestFromEnvLogProviderIgnoresSMTPSettings(t *testing.T) {
 	if err != nil {
 		t.Fatalf("FromEnv() error = %v", err)
 	}
-	if cfg.EmailProvider != email.ProviderLog {
+	if cfg.EmailProvider != EmailProviderLog {
 		t.Fatalf("EmailProvider = %q, want log", cfg.EmailProvider)
 	}
 }

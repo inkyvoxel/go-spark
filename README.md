@@ -1,152 +1,62 @@
 # Go Spark
 
-A small SQLite-first starter template for server-rendered Go web
-applications.
+Go Spark is a Go web app generator and starter-template.
 
-Go Spark keeps the default shape intentionally simple:
+Generated apps include:
 
-* Go with `net/http`
 * server-rendered HTML with `html/template`
 * SQLite with `database/sql`
 * SQL-first data access with `sqlc`
 * SQL migrations with `goose`
 * structured logging with `log/slog`
-
-It includes a runnable app, basic auth flows, transactional email, and a
-small background jobs worker.
-
-The template is designed for new projects that want a solid SQLite
-foundation, minimal infrastructure, and an easy path to running as a single
-binary. It does not currently promise plug-and-play support for multiple
-database engines. If a future fork outgrows SQLite, treat that as an explicit
-refactor rather than a built-in template feature.
-
-## Quick Start
-
-```sh
-make init
-cp .env.example .env
-make migrate-up
-make start
-```
-
-Open `http://localhost:8080`.
-
-The normal first-run path uses the SQLite database at `./data/app.db`.
-If you are using this repo as a template, run `make init` first to rename the module, app branding, default database path, and other starter defaults.
-
-The `init` command prompts for:
-
-* project name
-* Go module path
-* default email sender name and address
-* default SQLite database path
-* whether email verification should be enabled by default
-
-If you want a non-interactive setup, pass flags such as:
-
-```sh
-go run ./cmd/app init \
-  -project-name "Acme Starter" \
-  -module-path github.com/acme/acme-starter \
-  -database-path ./var/acme.db
-```
-
-## Process Commands
-
-The CLI uses explicit subcommands:
-
-```sh
-./go-spark all
-./go-spark serve
-./go-spark worker
-./go-spark migrate status
-```
-
-`APP_PROCESS` still exists as an environment-level override, but the preferred
-entrypoints are the explicit CLI commands.
-
-## What’s Included
-
 * email/password authentication
 * server-side sessions
 * CSRF protection
-* account email verification
+* email verification
 * password reset
 * email outbox delivery
-* periodic SQLite-backed cleanup jobs
+* background worker and periodic cleanup jobs
 
-Email delivery defaults to `EMAIL_PROVIDER=log` for safe local development.
+This repository is for maintainers of the generator/template itself. Developers
+creating a new app should use `go-spark new <path>` to scaffold a dedicated app
+repository that does not include generator implementation code.
 
-## Commands
+## Maintainer Workflow
 
 ```sh
-make init
 make start
 make start-web
 make start-worker
-make build-prod
+make build-generator
 make check
-make test
-make fmt
-make tidy
-make sqlc
-make vulncheck
-make migrate-up
-make migrate-down
-make migrate-status
-make tools
 ```
 
-Use `make check` before opening a pull request.
+Generate a sample app locally:
+
+```sh
+go run ./cmd/go-spark new ../my-app \
+  -project-name "My App" \
+  -module-path github.com/me/my-app \
+  -yes
+```
+
+## Repository Surfaces
+
+* `cmd/go-spark` and `internal/generator`: generation workflow and component manifest
+* runtime app template source: `cmd/app`, `internal/*` runtime packages, `templates`, `static`, `migrations`
+* `docs/maintainer`: maintainer-oriented project guidance
+* `docs/app`: documentation source copied into generated apps
+
+## Generation Contract
+
+`go-spark new` produces a standalone application repository:
+
+* excludes generator implementation (`cmd/go-spark`, `internal/generator`)
+* excludes maintainer-only docs/files (`CONTRIBUTING.md`, `CHANGELOG.md`, `docs/maintainer/*`)
+* writes app-focused docs and README for the generated project
 
 ## Read Next
 
-Start here if you are new to the project:
-
-* [docs/development.md](docs/development.md) for setup and day-to-day workflow
-* [docs/production.md](docs/production.md) for production build and deployment guidance
-* [docs/architecture.md](docs/architecture.md) for the codebase shape and conventions
-* [docs/jobs.md](docs/jobs.md) for background work patterns
-* [docs/email.md](docs/email.md) for auth email flows and outbox design
-
-Reference docs:
-
+* [docs/maintainer/development.md](docs/maintainer/development.md)
+* [docs/maintainer/README.md](docs/maintainer/README.md)
 * [CONTRIBUTING.md](CONTRIBUTING.md)
-* [SECURITY.md](SECURITY.md)
-* [docs/todo.md](docs/todo.md)
-
-## Project Layout
-
-```text
-/cmd/app            application entrypoint
-/internal/app       application bootstrap and runtime assembly
-/internal/config    environment config
-/internal/database  SQLite-backed domain stores
-/internal/db        SQL queries and generated sqlc package
-/internal/email     email messages, senders, and outbox processor
-/internal/jobs      background jobs runner and jobs
-/internal/platform  engine-specific platform code such as SQLite setup
-/internal/paths     canonical public URL paths
-/internal/projectinit template initialization workflow
-/internal/server    HTTP routes and handlers
-/internal/services  business logic
-/migrations         goose SQL migrations
-/templates          server-rendered HTML templates
-/static             CSS and static assets
-/docs               onboarding and design notes
-```
-
-## Template Checklist
-
-If you use this as a template for a new project:
-
-* run `make init` first to set project name, Go module path, default sender,
-  and default database path across starter files
-* copy `.env.example` to `.env`
-* initialize the local SQLite database with `make migrate-up`
-* replace or remove example routes, templates, and branding
-* keep new public paths in `internal/paths`
-* assume SQLite is the intended foundation unless you are deliberately
-  refactoring the persistence layer
-* review production settings before deployment
