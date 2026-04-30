@@ -1,8 +1,8 @@
 # Go Spark
 
-Go Spark is a Go web app generator and starter-template.
+A Go web app starter template. Fork it, run `make init`, and you're off.
 
-Generated apps include:
+## What's Included
 
 * server-rendered HTML with `html/template`
 * SQLite with `database/sql`
@@ -14,49 +14,39 @@ Generated apps include:
 * CSRF protection
 * email verification
 * password reset
+* email change
 * email outbox delivery
 * background worker and periodic cleanup jobs
+* rate limiting
 
-This repository is for maintainers of the generator/template itself. Developers
-creating a new app should use `go-spark new <path>` to scaffold a dedicated app
-repository that does not include generator implementation code.
+## Getting Started
 
-## Maintainer Workflow
+1. Fork or clone this repository
+2. Run `make init` — prompts for your project name and Go module path, rewrites relevant files, then removes itself
+3. Copy the example env file and start the app:
 
 ```sh
+cp .env.example .env
+make migrate-up
 make start
-make start-web
-make start-worker
-make build-generator
-make check
 ```
 
-Generate a sample app locally:
+## Common Commands
 
 ```sh
-go run ./cmd/go-spark new ../my-app \
-  -project-name "My App" \
-  -module-path github.com/me/my-app \
-  -yes
+make start          # run HTTP server + background worker
+make start-web      # run HTTP server only
+make start-worker   # run background worker only
+make build-prod     # build a release binary
+make migrate-up     # apply migrations
+make migrate-status # check migration status
+make test           # run tests
+make check          # fmt + tidy + sqlc + vulncheck + test
 ```
-
-## Repository Surfaces
-
-* `cmd/go-spark` and `internal/generator`: generation workflow and component manifest
-* runtime app template source: `cmd/app`, `internal/*` runtime packages, `templates`, `static`, `migrations`
-* `docs/maintainer`: maintainer-oriented project guidance
-* `docs/app`: documentation source copied into generated apps
-
-## Generation Contract
-
-`go-spark new` produces a standalone application repository:
-
-* excludes generator implementation (`cmd/go-spark`, `internal/generator`)
-* excludes maintainer-only docs/files (`CONTRIBUTING.md`, `CHANGELOG.md`, `docs/maintainer/*`)
-* writes app-focused docs and README for the generated project
 
 ## Read Next
 
-* [docs/maintainer/development.md](docs/maintainer/development.md)
-* [docs/maintainer/README.md](docs/maintainer/README.md)
+* [docs/development.md](docs/development.md)
+* [docs/architecture.md](docs/architecture.md)
+* [docs/production.md](docs/production.md)
 * [CONTRIBUTING.md](CONTRIBUTING.md)

@@ -15,7 +15,6 @@ import (
 	"github.com/inkyvoxel/go-spark/internal/config"
 	"github.com/inkyvoxel/go-spark/internal/database"
 	"github.com/inkyvoxel/go-spark/internal/email"
-	"github.com/inkyvoxel/go-spark/internal/features"
 	"github.com/inkyvoxel/go-spark/internal/jobs"
 	"github.com/inkyvoxel/go-spark/internal/platform/sqlite"
 	"github.com/inkyvoxel/go-spark/internal/server"
@@ -63,26 +62,22 @@ func Build(cfg config.Config, logger *slog.Logger) (Runtime, error) {
 }
 
 func buildRuntime(cfg config.Config, logger *slog.Logger, db *sql.DB, csrfSigningKey string) (Runtime, error) {
-	enabled := features.Enabled
-	var auth serverAuthService
-	if enabled.Auth {
-		auth = services.NewAuthService(database.NewAuthStore(db), services.AuthOptions{
-			PasswordMinLen:           cfg.PasswordMinLength,
-			PasswordPepper:           cfg.PasswordPepper,
-			EmailVerificationPolicy:  services.NewEmailVerificationPolicy(enabled.EmailVerification && cfg.EmailVerificationRequired),
-			EmailChangeNoticeEnabled: boolPtr(enabled.EmailChange && cfg.EmailChangeNoticeEnabled),
-			ConfirmationEmail: email.AccountConfirmationOptions{
-				AppBaseURL: cfg.AppBaseURL,
-				From:       cfg.EmailFrom,
-			},
-			PasswordResetEmail: email.PasswordResetOptions{
-				AppBaseURL: cfg.AppBaseURL,
-				From:       cfg.EmailFrom,
-			},
-		})
-	}
+	auth := services.NewAuthService(database.NewAuthStore(db), services.AuthOptions{
+		PasswordMinLen:           cfg.PasswordMinLength,
+		PasswordPepper:           cfg.PasswordPepper,
+		EmailVerificationPolicy:  services.NewEmailVerificationPolicy(cfg.EmailVerificationRequired),
+		EmailChangeNoticeEnabled: boolPtr(cfg.EmailChangeNoticeEnabled),
+		ConfirmationEmail: email.AccountConfirmationOptions{
+			AppBaseURL: cfg.AppBaseURL,
+			From:       cfg.EmailFrom,
+		},
+		PasswordResetEmail: email.PasswordResetOptions{
+			AppBaseURL: cfg.AppBaseURL,
+			From:       cfg.EmailFrom,
+		},
+	})
 
-	backgroundJobs, err := buildJobs(cfg, logger, db, enabled)
+	backgroundJobs, err := buildJobs(cfg, logger, db)
 	if err != nil {
 		return Runtime{}, err
 	}
@@ -99,10 +94,9 @@ func buildRuntime(cfg config.Config, logger *slog.Logger, db *sql.DB, csrfSignin
 		AppBaseURL:              cfg.AppBaseURL,
 		CSRFSigningKey:          csrfSigningKey,
 		PasswordMinLength:       cfg.PasswordMinLength,
-		EmailVerificationPolicy: services.NewEmailVerificationPolicy(enabled.EmailVerification && cfg.EmailVerificationRequired),
+		EmailVerificationPolicy: services.NewEmailVerificationPolicy(cfg.EmailVerificationRequired),
 		RateLimitPolicies:       toServerRateLimitPolicies(cfg.RateLimitPolicies),
 		TrustedProxies:          cfg.TrustedProxies,
-		Features:                enabled,
 	})
 	if err != nil {
 		return Runtime{}, fmt.Errorf("configure web server: %w", err)
@@ -147,30 +141,29 @@ func boolPtr(v bool) *bool {
 	return &v
 }
 
-func buildJobs(cfg config.Config, logger *slog.Logger, db *sql.DB, enabled features.Flags) ([]jobs.Job, error) {
+func buildJobs(cfg config.Config, logger *slog.Logger, db *sql.DB) ([]jobs.Job, error) {
 	configured := make([]jobs.Job, 0, 2)
-	if enabled.EmailOutbox {
-		emailSender, err := newEmailSender(cfg, logger)
-		if err != nil {
-			return nil, fmt.Errorf("configure email sender: %w", err)
-		}
-		emailProcessor := email.NewProcessor(database.NewEmailOutboxStore(db), emailSender, email.ProcessorOptions{
-			Logger: logger,
-		})
-		configured = append(configured, jobs.NewEmailJob(emailProcessor, jobs.DefaultEmailInterval))
+
+	emailSender, err := newEmailSender(cfg, logger)
+	if err != nil {
+		return nil, fmt.Errorf("configure email sender: %w", err)
 	}
-	if enabled.Cleanup {
-		cleanupJob, err := jobs.NewCleanupJob(database.NewCleanupStore(db), jobs.CleanupOptions{
-			Logger:               logger,
-			TokenRetention:       cfg.CleanupTokenRetention,
-			SentEmailRetention:   cfg.CleanupSentEmailRetention,
-			FailedEmailRetention: cfg.CleanupFailedEmailRetention,
-		})
-		if err != nil {
-			return nil, fmt.Errorf("configure cleanup job: %w", err)
-		}
-		configured = append(configured, cleanupJob.Job(cfg.CleanupInterval))
+	emailProcessor := email.NewProcessor(database.NewEmailOutboxStore(db), emailSender, email.ProcessorOptions{
+		Logger: logger,
+	})
+	configured = append(configured, jobs.NewEmailJob(emailProcessor, jobs.DefaultEmailInterval))
+
+	cleanupJob, err := jobs.NewCleanupJob(database.NewCleanupStore(db), jobs.CleanupOptions{
+		Logger:               logger,
+		TokenRetention:       cfg.CleanupTokenRetention,
+		SentEmailRetention:   cfg.CleanupSentEmailRetention,
+		FailedEmailRetention: cfg.CleanupFailedEmailRetention,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("configure cleanup job: %w", err)
 	}
+	configured = append(configured, cleanupJob.Job(cfg.CleanupInterval))
+
 	return configured, nil
 }
 

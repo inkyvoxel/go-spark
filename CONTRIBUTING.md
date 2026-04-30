@@ -25,8 +25,8 @@ make check
 If you change migrations, also run:
 
 ```sh
-make migrate-up DB_PATH=/tmp/go-spark-contrib.db
-make migrate-status DB_PATH=/tmp/go-spark-contrib.db
+make migrate-up
+make migrate-status
 ```
 
 ## Guidelines

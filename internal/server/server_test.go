@@ -12,7 +12,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/inkyvoxel/go-spark/internal/features"
 	"github.com/inkyvoxel/go-spark/internal/paths"
 	"github.com/inkyvoxel/go-spark/internal/services"
 
@@ -296,7 +295,7 @@ func TestRenderReturnsInternalServerErrorForTemplateError(t *testing.T) {
 }
 
 func TestParseTemplatesIncludesBreadcrumbPartial(t *testing.T) {
-	templates, err := parseTemplates(features.Enabled)
+	templates, err := parseTemplates()
 	if err != nil {
 		t.Fatalf("parseTemplates() error = %v", err)
 	}
@@ -336,7 +335,7 @@ func TestParseTemplatesWorksOutsideProjectRoot(t *testing.T) {
 		_ = os.Chdir(originalWD)
 	})
 
-	templates, err := parseTemplates(features.Enabled)
+	templates, err := parseTemplates()
 	if err != nil {
 		t.Fatalf("parseTemplates() error = %v", err)
 	}

@@ -8,7 +8,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/inkyvoxel/go-spark/internal/features"
 	"github.com/inkyvoxel/go-spark/internal/paths"
 	"github.com/inkyvoxel/go-spark/internal/services"
 )
@@ -178,8 +177,7 @@ func (s *Server) requireAuth(next http.Handler) http.Handler {
 func (s *Server) requireAnonymous(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if user, ok := currentUser(r.Context()); ok {
-			enabled := s.enabledFeatures()
-			if !enabled.EmailVerification || s.emailVerificationPolicy.UserIsVerified(user) {
+			if s.emailVerificationPolicy.UserIsVerified(user) {
 				http.Redirect(w, r, paths.Account, http.StatusSeeOther)
 				return
 			}
@@ -202,7 +200,7 @@ func (s *Server) requireVerifiedAuth(next http.Handler) http.Handler {
 			http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
 			return
 		}
-		if s.enabledFeatures().EmailVerification && !s.emailVerificationPolicy.UserIsVerified(user) {
+		if !s.emailVerificationPolicy.UserIsVerified(user) {
 			if r.Method == http.MethodGet {
 				http.Redirect(w, r, paths.VerifyEmail, http.StatusSeeOther)
 				return
@@ -213,13 +211,6 @@ func (s *Server) requireVerifiedAuth(next http.Handler) http.Handler {
 
 		next.ServeHTTP(w, r)
 	})
-}
-
-func (s *Server) enabledFeatures() features.Flags {
-	if s.features == (features.Flags{}) {
-		return features.Enabled
-	}
-	return s.features
 }
 
 func emailVerificationPolicy(policy services.EmailVerificationPolicy) services.EmailVerificationPolicy {

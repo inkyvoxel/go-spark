@@ -4,7 +4,7 @@ This is the best place to start when onboarding to the codebase.
 
 For system design and package boundaries, see [architecture.md](architecture.md).  
 For background work patterns, see [jobs.md](jobs.md).  
-For auth email flows, see [email.md](email.md).
+For auth email flows, see [email.md](email.md).  
 For production deployment guidance, see [production.md](production.md).
 
 ## Requirements
@@ -14,22 +14,17 @@ For production deployment guidance, see [production.md](production.md).
 ## First Run
 
 ```sh
-go run ./cmd/go-spark new ../my-app \
-  -project-name "My App" \
-  -module-path github.com/me/my-app \
-  -yes
-cd ../my-app
+git clone https://github.com/you/my-app
+cd my-app
+make init
 cp .env.example .env
 make migrate-up
 make start
 ```
 
-This starter assumes SQLite as the normal development and first-run path. The
-default database file is `./data/app.db`.
+`make init` prompts for your project name and Go module path, rewrites the relevant files, and removes itself. It only needs to be run once.
 
-`go-spark new` is the intended first step for a new app. It writes a plain Go project with the module path, app branding, default email sender, default SQLite path, and selected feature set already applied.
-
-Feature selection is component-based. See [generated-features.md](generated-features.md) for the current mapping between selected features and generated docs, templates, migrations, and runtime behavior.
+The default database file is `./data/app.db`. You can override the path by setting `DATABASE_PATH` in your `.env`.
 
 The app loads `.env` when present. Existing shell environment variables still win.
 Use `LOG_FORMAT=text` locally by default; switch to `LOG_FORMAT=json` when you want machine-parseable logs during development.
@@ -40,7 +35,6 @@ Use `LOG_FORMAT=text` locally by default; switch to `LOG_FORMAT=json` when you w
 make start
 make start-web
 make start-worker
-make build-generator
 make build-prod
 make migrate-status
 make migrate-up
@@ -60,13 +54,11 @@ Notes:
 * `make migrate-up`, `make migrate-down`, and `make migrate-status` run through the app CLI so migrations share the same command surface as production.
 * `make check` runs formatting, module tidy, sqlc generation, vulncheck, and tests.
 * The app CLI uses explicit runtime commands: `all`, `serve`, `worker`, and `migrate`.
-* The generator CLI uses `go-spark new <path>` for one-time project creation.
-* Generated feature flags live in `internal/features/features.go` in the created app.
 
 ## Tooling
 
 `sqlc`, `goose`, and `govulncheck` are pinned as Go tools in `go.mod`.
-This intentionally adds a larger set of indirect dependencies to `go.mod`, because a single module keeps template setup and upgrades straightforward. Do not split tools into a separate module unless that tradeoff becomes painful for real template users.
+This intentionally adds a larger set of indirect dependencies to `go.mod`, because a single module keeps template setup and upgrades straightforward.
 
 Useful commands:
 
@@ -98,14 +90,13 @@ If you add a new route, update `internal/paths` first and use those constants fr
 
 ### Database changes
 
-The template is SQLite-first today.
+The template is SQLite-first.
 
-* Migrations live in `migrations`.
-* Schema migrations are split by feature ownership so generator components can eventually copy only the migrations they need.
-* SQL queries live in `internal/db/queries`.
-* Generated code lives in `internal/db/generated`.
-* SQLite connection setup now lives under `internal/platform/sqlite`.
-* SQLite-backed domain stores live in `internal/database`.
+* Migrations live in `migrations/`.
+* SQL queries live in `internal/db/queries/`.
+* Generated code lives in `internal/db/generated/`.
+* SQLite connection setup lives under `internal/platform/sqlite/`.
+* SQLite-backed domain stores live in `internal/database/`.
 * The default SQLite tuning is:
   `foreign_keys = ON`, `busy_timeout = 5000`, and `MaxOpenConns = 1`.
 
