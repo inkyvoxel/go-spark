@@ -7,12 +7,12 @@ import (
 )
 
 const (
-	FeatureAll               = "all"
-	FeatureCore              = "core"
-	FeatureAuth              = "auth"
-	FeatureEmailOutbox       = "email-outbox"
-	FeatureWorker            = "worker"
-	FeatureCleanup           = "cleanup"
+	FeatureAll         = "all"
+	FeatureCore        = "core"
+	FeatureAuth        = "auth"
+	FeatureEmailOutbox = "email-outbox"
+	FeatureWorker      = "worker"
+	FeatureCleanup     = "cleanup"
 )
 
 // Component describes a generator feature bundle.
@@ -58,7 +58,7 @@ func DefaultManifest() Manifest {
 			},
 			Templates: []string{"templates/404.html", "templates/breadcrumb.html", "templates/home.html", "templates/layout.html"},
 			Env:       []string{"APP_ADDR", "APP_ENV", "LOG_FORMAT", "APP_BASE_URL", "DATABASE_PATH", "CSRF_SIGNING_KEY", "APP_COOKIE_SECURE"},
-			Docs: []string{"docs/app/architecture.md", "docs/app/development.md", "docs/app/generated-features.md", "docs/app/production.md"},
+			Docs:      []string{"docs/app/architecture.md", "docs/app/development.md", "docs/app/generated-features.md", "docs/app/production.md"},
 		},
 		{
 			ID:          FeatureEmailOutbox,
