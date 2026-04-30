@@ -20,13 +20,10 @@ import (
 )
 
 func TestNewRequiresAuthService(t *testing.T) {
-	defer func() {
-		if recover() == nil {
-			t.Fatal("New() did not panic")
-		}
-	}()
-
-	New(Options{DB: testDB(t)})
+	_, err := New(Options{DB: testDB(t)})
+	if err == nil {
+		t.Fatal("New() with no auth service should return an error")
+	}
 }
 
 func TestRoutesHome(t *testing.T) {

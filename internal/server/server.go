@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"html/template"
 	"log/slog"
 	"net/http"
@@ -53,7 +54,7 @@ type Options struct {
 	Features                features.Flags
 }
 
-func New(opts Options) *Server {
+func New(opts Options) (*Server, error) {
 	logger := opts.Logger
 	if logger == nil {
 		logger = slog.Default()
@@ -63,7 +64,7 @@ func New(opts Options) *Server {
 		enabled = features.Enabled
 	}
 	if enabled.Auth && opts.Auth == nil {
-		panic("server auth service is required")
+		return nil, fmt.Errorf("server auth service is required")
 	}
 
 	passwordMinLength := opts.PasswordMinLength
@@ -73,12 +74,17 @@ func New(opts Options) *Server {
 	csrfSigningKey := []byte(strings.TrimSpace(opts.CSRFSigningKey))
 	appBaseOrigin := normalizeOrigin(opts.AppBaseURL)
 
+	templates, err := parseTemplates(enabled)
+	if err != nil {
+		return nil, fmt.Errorf("parse templates: %w", err)
+	}
+
 	return &Server{
 		db:                      opts.DB,
 		auth:                    opts.Auth,
 		emailVerificationPolicy: emailVerificationPolicy(opts.EmailVerificationPolicy),
 		logger:                  logger,
-		templates:               mustParseTemplates(enabled),
+		templates:               templates,
 		cookieSecure:            opts.CookieSecure,
 		appBaseOrigin:           appBaseOrigin,
 		passwordMinLength:       passwordMinLength,
@@ -86,7 +92,7 @@ func New(opts Options) *Server {
 		rateLimiter:             newInMemoryRateLimiter(),
 		rateLimitPolicies:       rateLimitPoliciesWithDefaults(opts.RateLimitPolicies),
 		features:                enabled,
-	}
+	}, nil
 }
 
 func normalizeOrigin(raw string) string {
@@ -105,15 +111,6 @@ func normalizeOrigin(raw string) string {
 		return ""
 	}
 	return strings.ToLower(parsed.Scheme) + "://" + strings.ToLower(parsed.Host)
-}
-
-func mustParseTemplates(enabled features.Flags) map[string]*template.Template {
-	templates, err := parseTemplates(enabled)
-	if err != nil {
-		panic(err)
-	}
-
-	return templates
 }
 
 func parseTemplates(enabled features.Flags) (map[string]*template.Template, error) {
