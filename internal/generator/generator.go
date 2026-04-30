@@ -134,12 +134,12 @@ func (g Generator) resolveOptions(opts ProjectOptions) (ProjectOptions, error) {
 	if err != nil {
 		return ProjectOptions{}, err
 	}
-	features := strings.Join(opts.Features, ",")
-	features, err = promptString(reader, g.Stdout, "Features", features, FeatureAll)
-	if err != nil {
-		return ProjectOptions{}, err
+	if len(opts.Features) == 0 {
+		opts.Features, err = g.promptFeatures(reader)
+		if err != nil {
+			return ProjectOptions{}, err
+		}
 	}
-	opts.Features = []string{features}
 	return opts, nil
 }
 
@@ -591,6 +591,61 @@ func promptString(reader *bufio.Reader, stdout io.Writer, label, provided, fallb
 		return fallback, nil
 	}
 	return line, nil
+}
+
+func promptBool(reader *bufio.Reader, w io.Writer, label string, defaultYes bool) (bool, error) {
+	hint := "[Y/n]"
+	if !defaultYes {
+		hint = "[y/N]"
+	}
+	if w != nil {
+		fmt.Fprintf(w, "%s %s: ", label, hint)
+	}
+	if reader == nil {
+		return defaultYes, nil
+	}
+	line, err := reader.ReadString('\n')
+	if err != nil && err != io.EOF {
+		return false, err
+	}
+	line = strings.ToLower(strings.TrimSpace(line))
+	if line == "" {
+		return defaultYes, nil
+	}
+	return line == "y" || line == "yes", nil
+}
+
+func (g Generator) promptFeatures(reader *bufio.Reader) ([]string, error) {
+	selectable := make([]Component, 0, len(g.Manifest.Components))
+	for _, c := range g.Manifest.Components {
+		if !c.Hidden {
+			selectable = append(selectable, c)
+		}
+	}
+
+	if g.Stdout != nil {
+		fmt.Fprintln(g.Stdout, "\nFeatures:")
+	}
+
+	var selected []string
+	for i, c := range selectable {
+		if g.Stdout != nil {
+			fmt.Fprintf(g.Stdout, "\n  (%d/%d) %s\n", i+1, len(selectable), c.Name)
+			fmt.Fprintf(g.Stdout, "        %s\n", c.Description)
+		}
+		yes, err := promptBool(reader, g.Stdout, "        Include", true)
+		if err != nil {
+			return nil, err
+		}
+		if yes {
+			selected = append(selected, c.ID)
+		}
+	}
+
+	if len(selected) == 0 {
+		return []string{FeatureCore}, nil
+	}
+	return selected, nil
 }
 
 func defaultString(value, fallback string) string {

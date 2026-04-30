@@ -27,6 +27,7 @@ type Component struct {
 	Env         []string
 	Docs        []string
 	Tests       []string
+	Hidden      bool // if true, not shown in interactive feature selection (always pulled in via dependencies)
 }
 
 type Manifest struct {
@@ -39,6 +40,7 @@ func DefaultManifest() Manifest {
 			ID:          FeatureCore,
 			Name:        "Core",
 			Description: "App shell, SQLite setup, web server, CSRF protection, docs, static assets, and Makefile.",
+			Hidden:      true,
 			Files: []string{
 				".env.example", "LICENSE", "Makefile", "SECURITY.md", "docs/app/README.md.tmpl",
 				"embedded_assets.go", "go.mod", "go.sum", "cmd/app/main.go",
