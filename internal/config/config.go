@@ -136,6 +136,23 @@ func FromEnvWithProcess(defaultPasswordMinLength int, processOverride string) (C
 		return Config{}, err
 	}
 
+	cleanupInterval, err := envDurationOrDefault("JOBS_CLEANUP_INTERVAL", time.Hour)
+	if err != nil {
+		return Config{}, err
+	}
+	cleanupTokenRetention, err := envDurationOrDefault("JOBS_CLEANUP_TOKEN_RETENTION", 24*time.Hour)
+	if err != nil {
+		return Config{}, err
+	}
+	cleanupSentEmailRetention, err := envDurationOrDefault("JOBS_CLEANUP_SENT_EMAIL_RETENTION", 7*24*time.Hour)
+	if err != nil {
+		return Config{}, err
+	}
+	cleanupFailedEmailRetention, err := envDurationOrDefault("JOBS_CLEANUP_FAILED_EMAIL_RETENTION", 14*24*time.Hour)
+	if err != nil {
+		return Config{}, err
+	}
+
 	cfg := Config{
 		Addr:                        envOrDefault("APP_ADDR", ":8080"),
 		Process:                     process,
@@ -152,10 +169,10 @@ func FromEnvWithProcess(defaultPasswordMinLength int, processOverride string) (C
 		EmailFrom:                   emailFrom,
 		EmailProvider:               emailProvider,
 		EmailLogBody:                emailLogBody,
-		CleanupInterval:             envDurationOrDefault("JOBS_CLEANUP_INTERVAL", time.Hour),
-		CleanupTokenRetention:       envDurationOrDefault("JOBS_CLEANUP_TOKEN_RETENTION", 24*time.Hour),
-		CleanupSentEmailRetention:   envDurationOrDefault("JOBS_CLEANUP_SENT_EMAIL_RETENTION", 7*24*time.Hour),
-		CleanupFailedEmailRetention: envDurationOrDefault("JOBS_CLEANUP_FAILED_EMAIL_RETENTION", 14*24*time.Hour),
+		CleanupInterval:             cleanupInterval,
+		CleanupTokenRetention:       cleanupTokenRetention,
+		CleanupSentEmailRetention:   cleanupSentEmailRetention,
+		CleanupFailedEmailRetention: cleanupFailedEmailRetention,
 	}
 
 	rateLimitPolicies, err := rateLimitPoliciesFromEnv()
@@ -314,17 +331,20 @@ func envDurationOptionalPositive(key string) (time.Duration, error) {
 	return value, nil
 }
 
-func envDurationOrDefault(key string, fallback time.Duration) time.Duration {
+func envDurationOrDefault(key string, fallback time.Duration) (time.Duration, error) {
 	raw := strings.TrimSpace(os.Getenv(key))
 	if raw == "" {
-		return fallback
+		return fallback, nil
 	}
 
 	value, err := time.ParseDuration(raw)
-	if err != nil || value <= 0 {
-		return fallback
+	if err != nil {
+		return 0, fmt.Errorf("%s must be a positive duration (e.g. 1h, 30m): %w", key, err)
 	}
-	return value
+	if value <= 0 {
+		return 0, fmt.Errorf("%s must be greater than zero", key)
+	}
+	return value, nil
 }
 
 func envURL(key, fallback string) (string, error) {
