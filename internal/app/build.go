@@ -91,7 +91,7 @@ func buildRuntime(cfg config.Config, logger *slog.Logger, db *sql.DB, csrfSignin
 		return Runtime{}, fmt.Errorf("configure background jobs runner: %w", err)
 	}
 
-	webApp := server.New(server.Options{
+	webApp, err := server.New(server.Options{
 		Logger:                  logger,
 		DB:                      db,
 		Auth:                    auth,
@@ -103,6 +103,9 @@ func buildRuntime(cfg config.Config, logger *slog.Logger, db *sql.DB, csrfSignin
 		RateLimitPolicies:       toServerRateLimitPolicies(cfg.RateLimitPolicies),
 		Features:                enabled,
 	})
+	if err != nil {
+		return Runtime{}, fmt.Errorf("configure web server: %w", err)
+	}
 
 	httpServer := &http.Server{
 		Addr:              cfg.Addr,
