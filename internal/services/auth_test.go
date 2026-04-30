@@ -345,7 +345,7 @@ func TestAuthServiceChangePasswordWrapsStoreErrors(t *testing.T) {
 	if err == nil {
 		t.Fatal("ChangePassword() error = nil, want error")
 	}
-	if !strings.Contains(err.Error(), "update user password") {
+	if !strings.Contains(err.Error(), "set password and revoke sessions") {
 		t.Fatalf("ChangePassword() error = %v, want operation context", err)
 	}
 
@@ -355,7 +355,7 @@ func TestAuthServiceChangePasswordWrapsStoreErrors(t *testing.T) {
 	if err == nil {
 		t.Fatal("ChangePassword() error = nil, want error")
 	}
-	if !strings.Contains(err.Error(), "delete sessions by user ID") {
+	if !strings.Contains(err.Error(), "set password and revoke sessions") {
 		t.Fatalf("ChangePassword() error = %v, want operation context", err)
 	}
 }
@@ -1277,6 +1277,32 @@ func (s *fakeAuthStore) UpdateUserPasswordHash(ctx context.Context, userID int64
 	user.PasswordHash = passwordHash
 	s.usersByID[userID] = user
 	s.usersByEmail[user.Email] = user
+
+	return nil
+}
+
+func (s *fakeAuthStore) SetPasswordAndRevokeSessions(ctx context.Context, userID int64, passwordHash string) error {
+	if s.updateUserPasswordHashErr != nil {
+		return s.updateUserPasswordHashErr
+	}
+	if s.deleteSessionsByUserIDErr != nil {
+		return s.deleteSessionsByUserIDErr
+	}
+
+	user, ok := s.usersByID[userID]
+	if !ok {
+		return sql.ErrNoRows
+	}
+
+	user.PasswordHash = passwordHash
+	s.usersByID[userID] = user
+	s.usersByEmail[user.Email] = user
+
+	for token, session := range s.sessions {
+		if session.UserID == userID {
+			delete(s.sessions, token)
+		}
+	}
 
 	return nil
 }

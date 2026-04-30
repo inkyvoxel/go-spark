@@ -210,6 +210,23 @@ func (s *AuthStore) UpdateUserPasswordHash(ctx context.Context, userID int64, pa
 	return nil
 }
 
+func (s *AuthStore) SetPasswordAndRevokeSessions(ctx context.Context, userID int64, passwordHash string) error {
+	return withTx(ctx, s.db, s.queries, "set password and revoke sessions", func(queries *db.Queries) error {
+		if err := queries.UpdateUserPasswordHash(ctx, db.UpdateUserPasswordHashParams{
+			PasswordHash: passwordHash,
+			ID:           userID,
+		}); err != nil {
+			return fmt.Errorf("update user password hash: %w", err)
+		}
+
+		if err := queries.DeleteSessionsByUserID(ctx, userID); err != nil {
+			return fmt.Errorf("delete sessions by user ID: %w", err)
+		}
+
+		return nil
+	})
+}
+
 func (s *AuthStore) CreatePasswordResetToken(ctx context.Context, userID int64, tokenHash string, expiresAt time.Time) (services.PasswordResetToken, error) {
 	token, err := s.queries.CreatePasswordResetToken(ctx, db.CreatePasswordResetTokenParams{
 		UserID:    userID,

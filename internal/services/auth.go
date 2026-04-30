@@ -116,6 +116,7 @@ type AuthStore interface {
 	DeleteOtherSessionsByUserIDAndTokenHash(ctx context.Context, userID int64, tokenHash string) (int64, error)
 	DeleteSessionByIDAndUserIDAndTokenHashNot(ctx context.Context, sessionID, userID int64, tokenHash string) (int64, error)
 	UpdateUserPasswordHash(ctx context.Context, userID int64, passwordHash string) error
+	SetPasswordAndRevokeSessions(ctx context.Context, userID int64, passwordHash string) error
 	CreatePasswordResetToken(ctx context.Context, userID int64, tokenHash string, expiresAt time.Time) (PasswordResetToken, error)
 	GetValidPasswordResetTokenByHash(ctx context.Context, tokenHash string, now time.Time) (PasswordResetToken, error)
 	ConsumePasswordResetToken(ctx context.Context, tokenHash string, consumedAt time.Time) (PasswordResetToken, error)
@@ -660,13 +661,8 @@ func (s *AuthService) setPasswordAndRevokeSessions(ctx context.Context, userID i
 	if err != nil {
 		return fmt.Errorf("hash password: %w", err)
 	}
-
-	if err := s.store.UpdateUserPasswordHash(ctx, userID, hash); err != nil {
-		return fmt.Errorf("update user password: %w", err)
-	}
-
-	if err := s.store.DeleteSessionsByUserID(ctx, userID); err != nil {
-		return fmt.Errorf("delete sessions by user ID: %w", err)
+	if err := s.store.SetPasswordAndRevokeSessions(ctx, userID, hash); err != nil {
+		return fmt.Errorf("set password and revoke sessions: %w", err)
 	}
 	return nil
 }
