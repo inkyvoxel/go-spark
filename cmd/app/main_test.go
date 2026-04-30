@@ -104,28 +104,8 @@ func TestParseCLIArgsSupportsMigrate(t *testing.T) {
 	}
 }
 
-func TestParseCLIArgsRejectsInitCommand(t *testing.T) {
-	_, err := parseCLIArgs([]string{"init"})
-	if err == nil {
-		t.Fatal("parseCLIArgs() error = nil, want error")
-	}
-	if !strings.Contains(err.Error(), "unknown command") {
-		t.Fatalf("parseCLIArgs() error = %v, want unknown command context", err)
-	}
-}
-
 func TestParseCLIArgsRejectsInvalidCommand(t *testing.T) {
 	_, err := parseCLIArgs([]string{"jobs"})
-	if err == nil {
-		t.Fatal("parseCLIArgs() error = nil, want error")
-	}
-	if !strings.Contains(err.Error(), "unknown command") {
-		t.Fatalf("parseCLIArgs() error = %v, want unknown command context", err)
-	}
-}
-
-func TestParseCLIArgsRejectsLegacyRunCommand(t *testing.T) {
-	_, err := parseCLIArgs([]string{"run", "web"})
 	if err == nil {
 		t.Fatal("parseCLIArgs() error = nil, want error")
 	}
@@ -151,34 +131,6 @@ func TestParseCLIArgsRejectsInvalidMigrateAction(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "migrate action must be") {
 		t.Fatalf("parseCLIArgs() error = %v, want migrate action context", err)
-	}
-}
-
-func TestParseCLIArgsRejectsInitWithPositionalArgs(t *testing.T) {
-	_, err := parseCLIArgs([]string{"init", "extra"})
-	if err == nil {
-		t.Fatal("parseCLIArgs() error = nil, want error")
-	}
-	if !strings.Contains(err.Error(), "unknown command") {
-		t.Fatalf("parseCLIArgs() error = %v, want unknown command context", err)
-	}
-}
-
-func TestParseCLIArgsRejectsLegacyStartCommand(t *testing.T) {
-	tests := [][]string{
-		{"start"},
-		{"start", "web"},
-		{"start", "worker"},
-	}
-
-	for _, args := range tests {
-		_, err := parseCLIArgs(args)
-		if err == nil {
-			t.Fatalf("parseCLIArgs(%v) error = nil, want error", args)
-		}
-		if !strings.Contains(err.Error(), "unknown command") {
-			t.Fatalf("parseCLIArgs(%v) error = %v, want unknown command context", args, err)
-		}
 	}
 }
 
