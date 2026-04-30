@@ -346,6 +346,13 @@ func (s *Server) notFoundPage(w http.ResponseWriter, r *http.Request) {
 	s.renderStatus(w, http.StatusNotFound, templateNotFound, s.newTemplateData(r, "Page Not Found"))
 }
 
+// postOnlyAllowForPath returns the Allow header value for paths that are
+// registered exclusively as POST handlers. This is needed because the catch-all
+// GET /{path...} handler shadows the mux's built-in 405 responses.
+//
+// Invariant: every path registered only as "POST <path>" that a user might
+// navigate to via GET must be listed in this switch. When adding a new
+// POST-only route to registerAuthRoutes, add its path constant here too.
 func postOnlyAllowForPath(path string) (string, bool) {
 	switch path {
 	case paths.Logout,
