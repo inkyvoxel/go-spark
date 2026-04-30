@@ -167,13 +167,13 @@ func TestResolveCSRFSigningKeyUsesConfiguredValue(t *testing.T) {
 	}
 }
 
-func TestResolveCSRFSigningKeyGeneratesEphemeralWhenUnset(t *testing.T) {
-	key, err := resolveCSRFSigningKey(config.Config{}, slog.New(slog.NewTextHandler(io.Discard, nil)))
-	if err != nil {
-		t.Fatalf("resolveCSRFSigningKey() error = %v", err)
+func TestResolveCSRFSigningKeyRequiresConfiguredValue(t *testing.T) {
+	_, err := resolveCSRFSigningKey(config.Config{}, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	if err == nil {
+		t.Fatal("resolveCSRFSigningKey() error = nil, want error")
 	}
-	if key == "" {
-		t.Fatal("resolveCSRFSigningKey() = empty, want generated key")
+	if !strings.Contains(err.Error(), "CSRF_SIGNING_KEY") {
+		t.Fatalf("resolveCSRFSigningKey() error = %v, want CSRF_SIGNING_KEY context", err)
 	}
 }
 

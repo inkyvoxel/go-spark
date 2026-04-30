@@ -2,9 +2,7 @@ package app
 
 import (
 	"context"
-	"crypto/rand"
 	"database/sql"
-	"encoding/base64"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -208,21 +206,12 @@ func validateSecurityConfig(cfg config.Config) error {
 }
 
 func resolveCSRFSigningKey(cfg config.Config, logger *slog.Logger) (string, error) {
+	_ = logger
 	key := strings.TrimSpace(cfg.CSRFSigningKey)
 	if key != "" {
 		return key, nil
 	}
-
-	random := make([]byte, 32)
-	if _, err := rand.Read(random); err != nil {
-		return "", err
-	}
-
-	ephemeralKey := base64.RawURLEncoding.EncodeToString(random)
-	if logger != nil {
-		logger.Warn("CSRF_SIGNING_KEY is not set; generated ephemeral key for non-production process startup")
-	}
-	return ephemeralKey, nil
+	return "", fmt.Errorf("CSRF_SIGNING_KEY must be set")
 }
 
 func logSecurityConfigWarnings(cfg config.Config, logger *slog.Logger) {
