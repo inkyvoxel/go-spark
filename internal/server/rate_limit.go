@@ -14,7 +14,10 @@ import (
 	"time"
 )
 
-const cleanupEveryNRateLimitCalls = 256
+const (
+	cleanupEveryNRateLimitCalls = 256
+	maxRateLimitEntries         = 50_000
+)
 
 type RateLimitPolicy struct {
 	MaxRequests int
@@ -81,10 +84,14 @@ func (l *inMemoryRateLimiter) Allow(bucketKey string, policy RateLimitPolicy, no
 	l.calls++
 	if l.calls%cleanupEveryNRateLimitCalls == 0 {
 		l.cleanupExpired(now)
+		l.calls = 0
 	}
 
 	entry, ok := l.entries[bucketKey]
 	if !ok || !now.Before(entry.ResetAt) {
+		if len(l.entries) >= maxRateLimitEntries {
+			return true, 0
+		}
 		l.entries[bucketKey] = rateLimitEntry{
 			Count:   1,
 			ResetAt: now.Add(policy.Window),
