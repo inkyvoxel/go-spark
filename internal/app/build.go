@@ -200,7 +200,7 @@ func validateSecurityConfig(cfg config.Config) error {
 		return fmt.Errorf("AUTH_PASSWORD_PEPPER must be set when APP_ENV=production")
 	}
 	if strings.TrimSpace(cfg.CSRFSigningKey) == "" {
-		return fmt.Errorf("CSRF_SIGNING_KEY must be set when APP_ENV=production")
+		return fmt.Errorf("CSRF_SIGNING_KEY must be set")
 	}
 	return nil
 }
