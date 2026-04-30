@@ -89,6 +89,7 @@ func (s *Server) setResetCookie(w http.ResponseWriter, r *http.Request, token st
 		Value:    strings.TrimSpace(token),
 		Path:     resetCookiePath,
 		Expires:  time.Now().UTC().Add(resetCookieTTL),
+		MaxAge:   int(resetCookieTTL.Seconds()),
 		HttpOnly: true,
 		Secure:   s.secureCookie(r),
 		SameSite: http.SameSiteStrictMode,
