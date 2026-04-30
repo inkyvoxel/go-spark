@@ -1,9 +1,11 @@
 package server
 
 import (
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -76,6 +78,51 @@ func TestInMemoryRateLimiterCleanupRemovesExpiredEntries(t *testing.T) {
 	}
 }
 
+func TestInMemoryRateLimiterDeniesNewKeysWhenStoreIsFull(t *testing.T) {
+	limiter := newFixedWindowRateLimiter()
+	policy := RateLimitPolicy{MaxRequests: 2, Window: 2 * time.Minute}
+	now := time.Unix(400, 0)
+
+	for i := 0; i < maxRateLimitEntries; i++ {
+		key := "key-" + strconv.Itoa(i)
+		limiter.entries[key] = rateLimitEntry{Count: 1, ResetAt: now.Add(time.Minute)}
+	}
+
+	allowed, retryAfter := limiter.Allow("new-key", policy, now)
+	if allowed {
+		t.Fatal("Allow() allowed new key with full store, want denied")
+	}
+	if retryAfter != policy.Window {
+		t.Fatalf("retryAfter = %v, want %v", retryAfter, policy.Window)
+	}
+}
+
+func TestInMemoryRateLimiterStillTracksExistingKeyWhenStoreIsFull(t *testing.T) {
+	limiter := newFixedWindowRateLimiter()
+	policy := RateLimitPolicy{MaxRequests: 2, Window: time.Minute}
+	now := time.Unix(500, 0)
+	bucketKey := "existing"
+
+	limiter.entries[bucketKey] = rateLimitEntry{Count: 1, ResetAt: now.Add(policy.Window)}
+	for i := 0; i < maxRateLimitEntries-1; i++ {
+		key := "filler-" + strconv.Itoa(i)
+		limiter.entries[key] = rateLimitEntry{Count: 1, ResetAt: now.Add(policy.Window)}
+	}
+
+	allowed, retryAfter := limiter.Allow(bucketKey, policy, now.Add(5*time.Second))
+	if !allowed || retryAfter != 0 {
+		t.Fatalf("Allow(existing) = (%v, %v), want (true, 0)", allowed, retryAfter)
+	}
+
+	allowed, retryAfter = limiter.Allow(bucketKey, policy, now.Add(10*time.Second))
+	if allowed {
+		t.Fatal("Allow(existing) over limit = allowed, want denied")
+	}
+	if retryAfter <= 0 {
+		t.Fatalf("retryAfter = %v, want > 0", retryAfter)
+	}
+}
+
 func TestRequestIPNoTrustedProxies(t *testing.T) {
 	srv := &Server{}
 
@@ -143,6 +190,29 @@ func mustServerWithTrustedProxies(t *testing.T, proxies ...string) *Server {
 		t.Fatalf("parseTrustedProxies() error = %v", err)
 	}
 	return &Server{trustedProxies: parsed}
+}
+
+func TestParseTrustedProxiesTrimsWhitespaceEntries(t *testing.T) {
+	parsed, err := parseTrustedProxies([]string{" 127.0.0.1 ", "\t10.0.0.0/8\t"})
+	if err != nil {
+		t.Fatalf("parseTrustedProxies() error = %v", err)
+	}
+	if len(parsed) != 2 {
+		t.Fatalf("len(parsed) = %d, want 2", len(parsed))
+	}
+}
+
+func TestParseTrustedProxiesTrimsWhitespaceAroundIP(t *testing.T) {
+	parsed, err := parseTrustedProxies([]string{"  127.0.0.1  "})
+	if err != nil {
+		t.Fatalf("parseTrustedProxies() error = %v", err)
+	}
+	if len(parsed) != 1 {
+		t.Fatalf("len(parsed) = %d, want 1", len(parsed))
+	}
+	if !parsed[0].Contains(net.ParseIP("127.0.0.1")) {
+		t.Fatal("parsed trusted proxy does not contain 127.0.0.1")
+	}
 }
 
 func TestNormalizedEmailForRateLimit(t *testing.T) {

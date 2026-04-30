@@ -99,6 +99,10 @@ func New(opts Options) (*Server, error) {
 func parseTrustedProxies(raw []string) ([]net.IPNet, error) {
 	result := make([]net.IPNet, 0, len(raw))
 	for _, entry := range raw {
+		entry = strings.TrimSpace(entry)
+		if entry == "" {
+			continue
+		}
 		if strings.Contains(entry, "/") {
 			_, cidr, err := net.ParseCIDR(entry)
 			if err != nil {

@@ -92,14 +92,14 @@ func (l *fixedWindowRateLimiter) Allow(bucketKey string, policy RateLimitPolicy,
 		l.calls = 0
 	}
 
-	entry, ok := l.entries[bucketKey]
-	if !ok || !now.Before(entry.ResetAt) {
-		if len(l.entries) >= maxRateLimitEntries {
-			return true, 0
-		}
-		l.entries[bucketKey] = rateLimitEntry{
-			Count:   1,
-			ResetAt: now.Add(policy.Window),
+		entry, ok := l.entries[bucketKey]
+		if !ok || !now.Before(entry.ResetAt) {
+			if len(l.entries) >= maxRateLimitEntries {
+				return false, policy.Window
+			}
+			l.entries[bucketKey] = rateLimitEntry{
+				Count:   1,
+				ResetAt: now.Add(policy.Window),
 		}
 		return true, 0
 	}
