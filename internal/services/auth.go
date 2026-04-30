@@ -498,7 +498,7 @@ func (s *AuthService) RequestEmailChange(ctx context.Context, userID int64, curr
 	if err == nil {
 		return ErrEmailUnchanged
 	}
-	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+	if !errors.Is(err, sql.ErrNoRows) {
 		return fmt.Errorf("get user by email: %w", err)
 	}
 
