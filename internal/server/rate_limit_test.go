@@ -123,6 +123,24 @@ func TestInMemoryRateLimiterStillTracksExistingKeyWhenStoreIsFull(t *testing.T) 
 	}
 }
 
+func TestInMemoryRateLimiterResetsExpiredKeyWhenStoreIsFull(t *testing.T) {
+	limiter := newFixedWindowRateLimiter()
+	policy := RateLimitPolicy{MaxRequests: 2, Window: time.Minute}
+	now := time.Unix(600, 0)
+	bucketKey := "existing"
+
+	limiter.entries[bucketKey] = rateLimitEntry{Count: 2, ResetAt: now.Add(-time.Second)}
+	for i := range maxRateLimitEntries - 1 {
+		key := "filler-" + strconv.Itoa(i)
+		limiter.entries[key] = rateLimitEntry{Count: 1, ResetAt: now.Add(time.Minute)}
+	}
+
+	allowed, retryAfter := limiter.Allow(bucketKey, policy, now)
+	if !allowed || retryAfter != 0 {
+		t.Fatalf("Allow(expired key, full store) = (%v, %v), want (true, 0): expired keys reset in place and should not be denied", allowed, retryAfter)
+	}
+}
+
 func TestRequestIPNoTrustedProxies(t *testing.T) {
 	srv := &Server{}
 
