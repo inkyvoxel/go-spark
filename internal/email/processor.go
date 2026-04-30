@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"time"
+	"unicode/utf8"
 )
 
 const (
@@ -174,5 +175,9 @@ func truncateLastError(lastError string) string {
 	if len(lastError) <= MaxLastErrorLength {
 		return lastError
 	}
-	return lastError[:MaxLastErrorLength]
+	truncated := lastError[:MaxLastErrorLength]
+	for !utf8.ValidString(truncated) {
+		truncated = truncated[:len(truncated)-1]
+	}
+	return truncated
 }
