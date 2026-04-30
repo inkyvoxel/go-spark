@@ -202,8 +202,8 @@ func TestRoutesSetSecurityHeaders(t *testing.T) {
 	if got := rec.Header().Get("X-Content-Type-Options"); got != "nosniff" {
 		t.Fatalf("X-Content-Type-Options = %q, want %q", got, "nosniff")
 	}
-	if got := rec.Header().Get("Referrer-Policy"); got != "no-referrer" {
-		t.Fatalf("Referrer-Policy = %q, want %q", got, "no-referrer")
+	if got := rec.Header().Get("Referrer-Policy"); got != "strict-origin-when-cross-origin" {
+		t.Fatalf("Referrer-Policy = %q, want %q", got, "strict-origin-when-cross-origin")
 	}
 	if got := rec.Header().Get("X-Frame-Options"); got != "DENY" {
 		t.Fatalf("X-Frame-Options = %q, want %q", got, "DENY")
