@@ -90,7 +90,7 @@ func New(opts Options) (*Server, error) {
 		appBaseOrigin:           appBaseOrigin,
 		passwordMinLength:       passwordMinLength,
 		csrfSigningKey:          csrfSigningKey,
-		rateLimiter:             newInMemoryRateLimiter(),
+		rateLimiter:             newFixedWindowRateLimiter(),
 		rateLimitPolicies:       rateLimitPoliciesWithDefaults(opts.RateLimitPolicies),
 		trustedProxies:          trustedProxies,
 	}, nil

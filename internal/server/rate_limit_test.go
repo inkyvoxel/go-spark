@@ -12,7 +12,7 @@ import (
 )
 
 func TestInMemoryRateLimiterAllowWithinLimitThenDeny(t *testing.T) {
-	limiter := newInMemoryRateLimiter()
+	limiter := newFixedWindowRateLimiter()
 	policy := RateLimitPolicy{MaxRequests: 2, Window: time.Minute}
 	now := time.Unix(100, 0)
 
@@ -36,7 +36,7 @@ func TestInMemoryRateLimiterAllowWithinLimitThenDeny(t *testing.T) {
 }
 
 func TestInMemoryRateLimiterWindowReset(t *testing.T) {
-	limiter := newInMemoryRateLimiter()
+	limiter := newFixedWindowRateLimiter()
 	policy := RateLimitPolicy{MaxRequests: 1, Window: time.Minute}
 	now := time.Unix(200, 0)
 
@@ -57,7 +57,7 @@ func TestInMemoryRateLimiterWindowReset(t *testing.T) {
 }
 
 func TestInMemoryRateLimiterCleanupRemovesExpiredEntries(t *testing.T) {
-	limiter := newInMemoryRateLimiter()
+	limiter := newFixedWindowRateLimiter()
 	now := time.Unix(300, 0)
 	limiter.entries["expired"] = rateLimitEntry{Count: 1, ResetAt: now.Add(-time.Second)}
 	limiter.entries["active"] = rateLimitEntry{Count: 1, ResetAt: now.Add(time.Minute)}

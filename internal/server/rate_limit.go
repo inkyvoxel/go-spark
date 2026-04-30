@@ -56,7 +56,12 @@ type rateLimitStore interface {
 	Allow(bucketKey string, policy RateLimitPolicy, now time.Time) (bool, time.Duration)
 }
 
-type inMemoryRateLimiter struct {
+// fixedWindowRateLimiter is a simple in-memory fixed-window counter.
+// Each bucket tracks a count and a reset time. When the window expires, the
+// count resets. Note the boundary burst: a caller can make MaxRequests calls
+// just before reset and MaxRequests calls just after, for a short burst of
+// 2×MaxRequests. The conservative default policies keep this acceptable.
+type fixedWindowRateLimiter struct {
 	mu      sync.Mutex
 	entries map[string]rateLimitEntry
 	calls   uint64
@@ -67,13 +72,13 @@ type rateLimitEntry struct {
 	ResetAt time.Time
 }
 
-func newInMemoryRateLimiter() *inMemoryRateLimiter {
-	return &inMemoryRateLimiter{
+func newFixedWindowRateLimiter() *fixedWindowRateLimiter {
+	return &fixedWindowRateLimiter{
 		entries: make(map[string]rateLimitEntry),
 	}
 }
 
-func (l *inMemoryRateLimiter) Allow(bucketKey string, policy RateLimitPolicy, now time.Time) (bool, time.Duration) {
+func (l *fixedWindowRateLimiter) Allow(bucketKey string, policy RateLimitPolicy, now time.Time) (bool, time.Duration) {
 	if policy.MaxRequests <= 0 || policy.Window <= 0 {
 		return true, 0
 	}
@@ -112,7 +117,7 @@ func (l *inMemoryRateLimiter) Allow(bucketKey string, policy RateLimitPolicy, no
 	return false, retryAfter
 }
 
-func (l *inMemoryRateLimiter) cleanupExpired(now time.Time) {
+func (l *fixedWindowRateLimiter) cleanupExpired(now time.Time) {
 	for key, entry := range l.entries {
 		if !now.Before(entry.ResetAt) {
 			delete(l.entries, key)
@@ -148,7 +153,7 @@ func mergeRateLimitPolicy(defaultPolicy, override RateLimitPolicy) RateLimitPoli
 
 func (s *Server) ensureRateLimiting() {
 	if s.rateLimiter == nil {
-		s.rateLimiter = newInMemoryRateLimiter()
+		s.rateLimiter = newFixedWindowRateLimiter()
 	}
 	s.rateLimitPolicies = rateLimitPoliciesWithDefaults(s.rateLimitPolicies)
 }
