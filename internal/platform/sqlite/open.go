@@ -24,7 +24,7 @@ const (
 // - foreign keys are always enabled
 // - busy timeout defaults to 5 seconds
 // - max open connections defaults to 1
-// - WAL is not enabled by default
+// - WAL mode is enabled by default
 type OpenOptions struct {
 	// BusyTimeoutMillis controls the PRAGMA busy_timeout value.
 	// Zero uses DefaultBusyTimeoutMillis.
@@ -80,6 +80,10 @@ func configureConnectionPool(db *sql.DB, opts OpenOptions) {
 func applyPragmas(db *sql.DB, opts OpenOptions) error {
 	if _, err := db.Exec("PRAGMA foreign_keys = ON"); err != nil {
 		return fmt.Errorf("enable sqlite foreign keys: %w", err)
+	}
+
+	if _, err := db.Exec("PRAGMA journal_mode = WAL"); err != nil {
+		return fmt.Errorf("enable sqlite WAL mode: %w", err)
 	}
 
 	busyTimeoutMillis := opts.BusyTimeoutMillis
