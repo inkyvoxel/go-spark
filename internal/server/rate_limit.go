@@ -180,9 +180,9 @@ func (s *Server) withRateLimit(policyName string, policy RateLimitPolicy, keyFn 
 	})
 }
 
-func rateLimitKeyByIPAndEmail(formField string) rateLimitKeyFunc {
+func (s *Server) rateLimitKeyByIPAndEmail(formField string) rateLimitKeyFunc {
 	return func(r *http.Request) (string, string) {
-		ip := requestIP(r)
+		ip := s.requestIP(r)
 		_ = r.ParseForm()
 		email, ok := normalizedEmailForRateLimit(r.FormValue(formField))
 		if !ok {
@@ -192,9 +192,9 @@ func rateLimitKeyByIPAndEmail(formField string) rateLimitKeyFunc {
 	}
 }
 
-func rateLimitKeyByIPAndResetTokenCookie() rateLimitKeyFunc {
+func (s *Server) rateLimitKeyByIPAndResetTokenCookie() rateLimitKeyFunc {
 	return func(r *http.Request) (string, string) {
-		ip := requestIP(r)
+		ip := s.requestIP(r)
 		token := resetTokenFromCookie(r)
 		if token == "" {
 			return "ip:" + ip, "ip"
@@ -203,9 +203,9 @@ func rateLimitKeyByIPAndResetTokenCookie() rateLimitKeyFunc {
 	}
 }
 
-func rateLimitKeyByIPAndUser() rateLimitKeyFunc {
+func (s *Server) rateLimitKeyByIPAndUser() rateLimitKeyFunc {
 	return func(r *http.Request) (string, string) {
-		ip := requestIP(r)
+		ip := s.requestIP(r)
 		user, ok := currentUser(r.Context())
 		if !ok {
 			return "ip:" + ip, "ip"
@@ -214,7 +214,7 @@ func rateLimitKeyByIPAndUser() rateLimitKeyFunc {
 	}
 }
 
-func requestIP(r *http.Request) string {
+func (s *Server) requestIP(r *http.Request) string {
 	remoteAddr := strings.TrimSpace(r.RemoteAddr)
 	if remoteAddr == "" {
 		return "unknown"
@@ -222,12 +222,41 @@ func requestIP(r *http.Request) string {
 
 	host, _, err := net.SplitHostPort(remoteAddr)
 	if err != nil {
-		return remoteAddr
+		host = remoteAddr
 	}
 	if host == "" {
-		return remoteAddr
+		host = remoteAddr
 	}
+
+	if len(s.trustedProxies) > 0 && s.isTrustedProxy(host) {
+		if ip := strings.TrimSpace(r.Header.Get("X-Real-IP")); ip != "" {
+			if parsed := net.ParseIP(ip); parsed != nil {
+				return parsed.String()
+			}
+		}
+		if xff := strings.TrimSpace(r.Header.Get("X-Forwarded-For")); xff != "" {
+			if ip := strings.TrimSpace(strings.SplitN(xff, ",", 2)[0]); ip != "" {
+				if parsed := net.ParseIP(ip); parsed != nil {
+					return parsed.String()
+				}
+			}
+		}
+	}
+
 	return host
+}
+
+func (s *Server) isTrustedProxy(host string) bool {
+	ip := net.ParseIP(host)
+	if ip == nil {
+		return false
+	}
+	for _, cidr := range s.trustedProxies {
+		if cidr.Contains(ip) {
+			return true
+		}
+	}
+	return false
 }
 
 func hashRateLimitKey(key string) string {

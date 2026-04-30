@@ -2,13 +2,15 @@ package config
 
 import (
 	"fmt"
-	"github.com/joho/godotenv"
+	"net"
 	"net/mail"
 	"net/url"
 	"os"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/joho/godotenv"
 )
 
 const (
@@ -63,6 +65,7 @@ type Config struct {
 	CleanupSentEmailRetention   time.Duration
 	CleanupFailedEmailRetention time.Duration
 	RateLimitPolicies           RateLimitPoliciesConfig
+	TrustedProxies              []string
 }
 
 func LoadDotEnv(path string) error {
@@ -160,6 +163,12 @@ func FromEnvWithProcess(defaultPasswordMinLength int, processOverride string) (C
 		return Config{}, err
 	}
 	cfg.RateLimitPolicies = rateLimitPolicies
+
+	trustedProxies, err := envTrustedProxies("TRUSTED_PROXY_IPS")
+	if err != nil {
+		return Config{}, err
+	}
+	cfg.TrustedProxies = trustedProxies
 
 	if emailProvider != EmailProviderSMTP {
 		return cfg, nil
@@ -438,6 +447,31 @@ func rateLimitPoliciesFromEnv() (RateLimitPoliciesConfig, error) {
 		RevokeSession:             revokeSession,
 		RevokeOtherSessions:       revokeOtherSessions,
 	}, nil
+}
+
+func envTrustedProxies(key string) ([]string, error) {
+	raw := os.Getenv(key)
+	if raw == "" {
+		return nil, nil
+	}
+	var result []string
+	for _, entry := range strings.Split(raw, ",") {
+		entry = strings.TrimSpace(entry)
+		if entry == "" {
+			continue
+		}
+		if strings.Contains(entry, "/") {
+			if _, _, err := net.ParseCIDR(entry); err != nil {
+				return nil, fmt.Errorf("%s contains invalid CIDR %q: %w", key, entry, err)
+			}
+		} else {
+			if net.ParseIP(entry) == nil {
+				return nil, fmt.Errorf("%s contains invalid IP address %q", key, entry)
+			}
+		}
+		result = append(result, entry)
+	}
+	return result, nil
 }
 
 func rateLimitPolicyFromEnv(prefix string) (RateLimitPolicyConfig, error) {

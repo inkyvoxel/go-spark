@@ -101,6 +101,7 @@ func buildRuntime(cfg config.Config, logger *slog.Logger, db *sql.DB, csrfSignin
 		PasswordMinLength:       cfg.PasswordMinLength,
 		EmailVerificationPolicy: services.NewEmailVerificationPolicy(enabled.EmailVerification && cfg.EmailVerificationRequired),
 		RateLimitPolicies:       toServerRateLimitPolicies(cfg.RateLimitPolicies),
+		TrustedProxies:          cfg.TrustedProxies,
 		Features:                enabled,
 	})
 	if err != nil {

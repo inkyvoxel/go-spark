@@ -632,6 +632,60 @@ func TestFromEnvLogProviderIgnoresSMTPSettings(t *testing.T) {
 	}
 }
 
+func TestFromEnvParsesTrustedProxies(t *testing.T) {
+	t.Setenv("TRUSTED_PROXY_IPS", "127.0.0.1, 10.0.0.1, 192.168.0.0/24")
+
+	cfg, err := FromEnv(services.DefaultPasswordMinLength)
+	if err != nil {
+		t.Fatalf("FromEnv() error = %v", err)
+	}
+	if len(cfg.TrustedProxies) != 3 {
+		t.Fatalf("TrustedProxies length = %d, want 3", len(cfg.TrustedProxies))
+	}
+	if cfg.TrustedProxies[0] != "127.0.0.1" {
+		t.Fatalf("TrustedProxies[0] = %q, want %q", cfg.TrustedProxies[0], "127.0.0.1")
+	}
+	if cfg.TrustedProxies[2] != "192.168.0.0/24" {
+		t.Fatalf("TrustedProxies[2] = %q, want %q", cfg.TrustedProxies[2], "192.168.0.0/24")
+	}
+}
+
+func TestFromEnvTrustedProxiesDefaultsToNil(t *testing.T) {
+	t.Setenv("TRUSTED_PROXY_IPS", "")
+
+	cfg, err := FromEnv(services.DefaultPasswordMinLength)
+	if err != nil {
+		t.Fatalf("FromEnv() error = %v", err)
+	}
+	if len(cfg.TrustedProxies) != 0 {
+		t.Fatalf("TrustedProxies = %v, want empty", cfg.TrustedProxies)
+	}
+}
+
+func TestFromEnvRejectsInvalidTrustedProxyIP(t *testing.T) {
+	t.Setenv("TRUSTED_PROXY_IPS", "not-an-ip")
+
+	_, err := FromEnv(services.DefaultPasswordMinLength)
+	if err == nil {
+		t.Fatal("FromEnv() error = nil, want error")
+	}
+	if !strings.Contains(err.Error(), "TRUSTED_PROXY_IPS") {
+		t.Fatalf("FromEnv() error = %v, want TRUSTED_PROXY_IPS context", err)
+	}
+}
+
+func TestFromEnvRejectsInvalidTrustedProxyCIDR(t *testing.T) {
+	t.Setenv("TRUSTED_PROXY_IPS", "999.999.999.0/24")
+
+	_, err := FromEnv(services.DefaultPasswordMinLength)
+	if err == nil {
+		t.Fatal("FromEnv() error = nil, want error")
+	}
+	if !strings.Contains(err.Error(), "TRUSTED_PROXY_IPS") {
+		t.Fatalf("FromEnv() error = %v, want TRUSTED_PROXY_IPS context", err)
+	}
+}
+
 func TestFromEnvRejectsInvalidEmailLogBodyBool(t *testing.T) {
 	t.Setenv("EMAIL_LOG_BODY", "sometimes")
 

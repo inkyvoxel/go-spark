@@ -89,7 +89,23 @@ WantedBy=multi-user.target
 
 Single-process `all` mode is the default recommendation for this starter. If you need stricter isolation, you can run separate `serve` and `worker` services.
 
-## 6. Put Caddy in front
+## 6. Configure trusted proxy IPs
+
+If you run the app behind a reverse proxy, set `TRUSTED_PROXY_IPS` to the proxy's IP address (or a CIDR range). This tells the app to read the real client IP from the `X-Real-IP` or `X-Forwarded-For` header instead of using `RemoteAddr`, which would always be the proxy's IP.
+
+Without this, all rate limiting collapses to a single bucket and stops working correctly.
+
+```sh
+# Single proxy on loopback
+TRUSTED_PROXY_IPS=127.0.0.1
+
+# Multiple proxies or a subnet
+TRUSTED_PROXY_IPS=10.0.0.1,172.16.0.0/12
+```
+
+Only list IPs you control. Any request arriving from a trusted proxy address will have its IP overridden by the header value, so listing untrusted addresses would allow clients to spoof their IP and bypass rate limiting.
+
+## 7. Put Caddy in front
 
 Minimal Caddy config:
 

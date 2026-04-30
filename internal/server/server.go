@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"html/template"
 	"log/slog"
+	"net"
 	"net/http"
 	"net/url"
 	"path"
@@ -38,6 +39,7 @@ type Server struct {
 	csrfSigningKey          []byte
 	rateLimiter             rateLimitStore
 	rateLimitPolicies       RateLimitPolicies
+	trustedProxies          []net.IPNet
 	features                features.Flags
 }
 
@@ -51,6 +53,7 @@ type Options struct {
 	CSRFSigningKey          string
 	PasswordMinLength       int
 	RateLimitPolicies       RateLimitPolicies
+	TrustedProxies          []string
 	Features                features.Flags
 }
 
@@ -79,6 +82,11 @@ func New(opts Options) (*Server, error) {
 		return nil, fmt.Errorf("parse templates: %w", err)
 	}
 
+	trustedProxies, err := parseTrustedProxies(opts.TrustedProxies)
+	if err != nil {
+		return nil, fmt.Errorf("parse trusted proxies: %w", err)
+	}
+
 	return &Server{
 		db:                      opts.DB,
 		auth:                    opts.Auth,
@@ -91,8 +99,34 @@ func New(opts Options) (*Server, error) {
 		csrfSigningKey:          csrfSigningKey,
 		rateLimiter:             newInMemoryRateLimiter(),
 		rateLimitPolicies:       rateLimitPoliciesWithDefaults(opts.RateLimitPolicies),
+		trustedProxies:          trustedProxies,
 		features:                enabled,
 	}, nil
+}
+
+func parseTrustedProxies(raw []string) ([]net.IPNet, error) {
+	result := make([]net.IPNet, 0, len(raw))
+	for _, entry := range raw {
+		if strings.Contains(entry, "/") {
+			_, cidr, err := net.ParseCIDR(entry)
+			if err != nil {
+				return nil, fmt.Errorf("invalid trusted proxy CIDR %q: %w", entry, err)
+			}
+			result = append(result, *cidr)
+		} else {
+			ip := net.ParseIP(entry)
+			if ip == nil {
+				return nil, fmt.Errorf("invalid trusted proxy IP %q", entry)
+			}
+			bits := 32
+			if ip.To4() == nil {
+				bits = 128
+			}
+			_, cidr, _ := net.ParseCIDR(fmt.Sprintf("%s/%d", ip.String(), bits))
+			result = append(result, *cidr)
+		}
+	}
+	return result, nil
 }
 
 func normalizeOrigin(raw string) string {
@@ -194,14 +228,14 @@ func (s *Server) registerAuthRoutes(dynamic *http.ServeMux) {
 	dynamic.Handle(
 		route(http.MethodPost, paths.Register),
 		s.requireAnonymous(
-			s.withRateLimit("register", s.rateLimitPolicies.Register, rateLimitKeyByIPAndEmail("email"), http.HandlerFunc(s.register)),
+			s.withRateLimit("register", s.rateLimitPolicies.Register, s.rateLimitKeyByIPAndEmail("email"), http.HandlerFunc(s.register)),
 		),
 	)
 	dynamic.Handle(route(http.MethodGet, paths.Login), s.requireAnonymous(http.HandlerFunc(s.loginForm)))
 	dynamic.Handle(
 		route(http.MethodPost, paths.Login),
 		s.requireAnonymous(
-			s.withRateLimit("login", s.rateLimitPolicies.Login, rateLimitKeyByIPAndEmail("email"), http.HandlerFunc(s.login)),
+			s.withRateLimit("login", s.rateLimitPolicies.Login, s.rateLimitKeyByIPAndEmail("email"), http.HandlerFunc(s.login)),
 		),
 	)
 	dynamic.Handle(route(http.MethodPost, paths.Logout), s.requireAuth(http.HandlerFunc(s.logout)))
@@ -210,19 +244,19 @@ func (s *Server) registerAuthRoutes(dynamic *http.ServeMux) {
 	dynamic.Handle(
 		route(http.MethodPost, paths.ChangePassword),
 		s.requireVerifiedAuth(
-			s.withRateLimit("change-password", s.rateLimitPolicies.ChangePassword, rateLimitKeyByIPAndUser(), http.HandlerFunc(s.changePassword)),
+			s.withRateLimit("change-password", s.rateLimitPolicies.ChangePassword, s.rateLimitKeyByIPAndUser(), http.HandlerFunc(s.changePassword)),
 		),
 	)
 	dynamic.Handle(
 		route(http.MethodPost, paths.AccountSessionsRevoke),
 		s.requireVerifiedAuth(
-			s.withRateLimit("revoke-session", s.rateLimitPolicies.RevokeSession, rateLimitKeyByIPAndUser(), http.HandlerFunc(s.revokeSession)),
+			s.withRateLimit("revoke-session", s.rateLimitPolicies.RevokeSession, s.rateLimitKeyByIPAndUser(), http.HandlerFunc(s.revokeSession)),
 		),
 	)
 	dynamic.Handle(
 		route(http.MethodPost, paths.AccountSessionsRevokeOthers),
 		s.requireVerifiedAuth(
-			s.withRateLimit("revoke-other-sessions", s.rateLimitPolicies.RevokeOtherSessions, rateLimitKeyByIPAndUser(), http.HandlerFunc(s.revokeOtherSessions)),
+			s.withRateLimit("revoke-other-sessions", s.rateLimitPolicies.RevokeOtherSessions, s.rateLimitKeyByIPAndUser(), http.HandlerFunc(s.revokeOtherSessions)),
 		),
 	)
 	if s.features.PasswordReset {
@@ -230,14 +264,14 @@ func (s *Server) registerAuthRoutes(dynamic *http.ServeMux) {
 		dynamic.Handle(
 			route(http.MethodPost, paths.ForgotPassword),
 			s.requireAnonymous(
-				s.withRateLimit("forgot-password", s.rateLimitPolicies.ForgotPassword, rateLimitKeyByIPAndEmail("email"), http.HandlerFunc(s.forgotPassword)),
+				s.withRateLimit("forgot-password", s.rateLimitPolicies.ForgotPassword, s.rateLimitKeyByIPAndEmail("email"), http.HandlerFunc(s.forgotPassword)),
 			),
 		)
 		dynamic.Handle(route(http.MethodGet, paths.ResetPassword), s.requireAnonymous(http.HandlerFunc(s.resetPasswordForm)))
 		dynamic.Handle(
 			route(http.MethodPost, paths.ResetPassword),
 			s.requireAnonymous(
-				s.withRateLimit("reset-password", s.rateLimitPolicies.ResetPassword, rateLimitKeyByIPAndResetTokenCookie(), http.HandlerFunc(s.resetPassword)),
+				s.withRateLimit("reset-password", s.rateLimitPolicies.ResetPassword, s.rateLimitKeyByIPAndResetTokenCookie(), http.HandlerFunc(s.resetPassword)),
 			),
 		)
 	}
@@ -247,14 +281,14 @@ func (s *Server) registerAuthRoutes(dynamic *http.ServeMux) {
 		dynamic.Handle(
 			route(http.MethodPost, paths.ResendVerification),
 			s.requireAnonymous(
-				s.withRateLimit("resend-verification-public", s.rateLimitPolicies.PublicResendVerification, rateLimitKeyByIPAndEmail("email"), http.HandlerFunc(s.resendVerificationPublic)),
+				s.withRateLimit("resend-verification-public", s.rateLimitPolicies.PublicResendVerification, s.rateLimitKeyByIPAndEmail("email"), http.HandlerFunc(s.resendVerificationPublic)),
 			),
 		)
 		dynamic.Handle(route(http.MethodGet, paths.VerifyEmail), s.requireAuth(http.HandlerFunc(s.verifyEmail)))
 		dynamic.Handle(
 			route(http.MethodPost, paths.VerifyEmailResend),
 			s.requireAuth(
-				s.withRateLimit("resend-verification-account", s.rateLimitPolicies.AccountResendVerification, rateLimitKeyByIPAndUser(), http.HandlerFunc(s.resendVerification)),
+				s.withRateLimit("resend-verification-account", s.rateLimitPolicies.AccountResendVerification, s.rateLimitKeyByIPAndUser(), http.HandlerFunc(s.resendVerification)),
 			),
 		)
 	}
@@ -264,7 +298,7 @@ func (s *Server) registerAuthRoutes(dynamic *http.ServeMux) {
 		dynamic.Handle(
 			route(http.MethodPost, paths.ChangeEmail),
 			s.requireVerifiedAuth(
-				s.withRateLimit("change-email", s.rateLimitPolicies.ChangeEmail, rateLimitKeyByIPAndUser(), http.HandlerFunc(s.changeEmail)),
+				s.withRateLimit("change-email", s.rateLimitPolicies.ChangeEmail, s.rateLimitKeyByIPAndUser(), http.HandlerFunc(s.changeEmail)),
 			),
 		)
 	}

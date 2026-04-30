@@ -99,7 +99,7 @@ func (s *Server) logRequests(next http.Handler) http.Handler {
 			"status", rec.status,
 			"duration_ms", time.Since(start).Milliseconds(),
 			"response_bytes", rec.written,
-			"remote_ip", requestIP(r),
+			"remote_ip", s.requestIP(r),
 			"authenticated", authenticated,
 		}
 

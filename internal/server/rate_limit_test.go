@@ -76,6 +76,75 @@ func TestInMemoryRateLimiterCleanupRemovesExpiredEntries(t *testing.T) {
 	}
 }
 
+func TestRequestIPNoTrustedProxies(t *testing.T) {
+	srv := &Server{}
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.RemoteAddr = "1.2.3.4:5678"
+	req.Header.Set("X-Real-IP", "9.9.9.9")
+
+	if got := srv.requestIP(req); got != "1.2.3.4" {
+		t.Fatalf("requestIP() = %q, want %q (should ignore header when no trusted proxies)", got, "1.2.3.4")
+	}
+}
+
+func TestRequestIPTrustedProxyReadsXRealIP(t *testing.T) {
+	srv := mustServerWithTrustedProxies(t, "127.0.0.1")
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.RemoteAddr = "127.0.0.1:5678"
+	req.Header.Set("X-Real-IP", "9.9.9.9")
+
+	if got := srv.requestIP(req); got != "9.9.9.9" {
+		t.Fatalf("requestIP() = %q, want %q", got, "9.9.9.9")
+	}
+}
+
+func TestRequestIPTrustedProxyFallsBackToXForwardedFor(t *testing.T) {
+	srv := mustServerWithTrustedProxies(t, "127.0.0.1")
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.RemoteAddr = "127.0.0.1:5678"
+	req.Header.Set("X-Forwarded-For", "5.5.5.5, 10.0.0.1")
+
+	if got := srv.requestIP(req); got != "5.5.5.5" {
+		t.Fatalf("requestIP() = %q, want leftmost X-Forwarded-For entry %q", got, "5.5.5.5")
+	}
+}
+
+func TestRequestIPTrustedProxyCIDR(t *testing.T) {
+	srv := mustServerWithTrustedProxies(t, "10.0.0.0/8")
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.RemoteAddr = "10.1.2.3:5678"
+	req.Header.Set("X-Real-IP", "203.0.113.1")
+
+	if got := srv.requestIP(req); got != "203.0.113.1" {
+		t.Fatalf("requestIP() = %q, want %q", got, "203.0.113.1")
+	}
+}
+
+func TestRequestIPUntrustedProxyIgnoresHeader(t *testing.T) {
+	srv := mustServerWithTrustedProxies(t, "127.0.0.1")
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.RemoteAddr = "1.2.3.4:5678"
+	req.Header.Set("X-Real-IP", "9.9.9.9")
+
+	if got := srv.requestIP(req); got != "1.2.3.4" {
+		t.Fatalf("requestIP() = %q, want %q (untrusted proxy, should use RemoteAddr)", got, "1.2.3.4")
+	}
+}
+
+func mustServerWithTrustedProxies(t *testing.T, proxies ...string) *Server {
+	t.Helper()
+	parsed, err := parseTrustedProxies(proxies)
+	if err != nil {
+		t.Fatalf("parseTrustedProxies() error = %v", err)
+	}
+	return &Server{trustedProxies: parsed}
+}
+
 func TestNormalizedEmailForRateLimit(t *testing.T) {
 	tests := []struct {
 		name  string
