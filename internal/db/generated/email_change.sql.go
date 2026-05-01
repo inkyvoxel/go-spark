@@ -83,6 +83,16 @@ func (q *Queries) CreateEmailChangeToken(ctx context.Context, arg CreateEmailCha
 	return i, err
 }
 
+const deleteEmailChangeTokensByUserID = `-- name: DeleteEmailChangeTokensByUserID :exec
+DELETE FROM email_change_tokens
+WHERE user_id = ?
+`
+
+func (q *Queries) DeleteEmailChangeTokensByUserID(ctx context.Context, userID int64) error {
+	_, err := q.db.ExecContext(ctx, deleteEmailChangeTokensByUserID, userID)
+	return err
+}
+
 const pruneEmailChangeTokens = `-- name: PruneEmailChangeTokens :execrows
 DELETE FROM email_change_tokens
 WHERE expires_at <= ?1

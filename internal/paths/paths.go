@@ -22,6 +22,7 @@ const (
 	ConfirmEmailChange          = Account + "/confirm-email-change"
 	AccountSessionsRevoke       = Account + "/sessions/revoke"
 	AccountSessionsRevokeOthers = Account + "/sessions/revoke-others"
+	AccountDelete               = Account + "/delete"
 )
 
 type TemplateRouteSet struct {
@@ -41,6 +42,7 @@ type TemplateRouteSet struct {
 	ConfirmEmailChange          string
 	AccountSessionsRevoke       string
 	AccountSessionsRevokeOthers string
+	AccountDelete               string
 }
 
 var TemplateRoutes = TemplateRouteSet{
@@ -60,4 +62,5 @@ var TemplateRoutes = TemplateRouteSet{
 	ConfirmEmailChange:          ConfirmEmailChange,
 	AccountSessionsRevoke:       AccountSessionsRevoke,
 	AccountSessionsRevokeOthers: AccountSessionsRevokeOthers,
+	AccountDelete:               AccountDelete,
 }

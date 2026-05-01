@@ -16,4 +16,5 @@ const (
 	templateRegister           = "register.html"
 	templateResendVerification = "resend_verification.html"
 	templateVerifyEmail        = "verify_email.html"
+	templateDeleteAccount      = "delete_account.html"
 )

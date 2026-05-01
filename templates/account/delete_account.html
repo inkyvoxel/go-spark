@@ -1,0 +1,25 @@
+{{ define "content" }}
+<article>
+  {{ template "breadcrumb" . }}
+  <h1>Delete account</h1>
+  {{ template "delete_account_form_section" . }}
+  <p><a href="{{ .Routes.Account }}">Back to account</a></p>
+</article>
+{{ end }}
+
+{{ define "delete_account_form_section" }}
+<section id="account-delete-section">
+  <p>This will permanently delete your account and all associated data. This action cannot be undone.</p>
+  {{ if .Error }}<p role="alert">{{ .Error }}</p>{{ end }}
+  <form method="post" action="{{ .Routes.AccountDelete }}">
+    <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
+    <label>
+      Current password
+      <input type="password" name="current_password" autocomplete="current-password" {{ if index
+        .FieldErrors "current_password" }}aria-invalid="true" {{ end }} required>
+      {{ with index .FieldErrors "current_password" }}<small role="alert">{{ . }}</small>{{ end }}
+    </label>
+    <button type="submit" class="secondary">Delete account</button>
+  </form>
+</section>
+{{ end }}

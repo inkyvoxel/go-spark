@@ -158,6 +158,7 @@ func parseTemplates() (map[string]*template.Template, error) {
 		templateVerifyEmail:        path.Join("account", "verify_email.html"),
 		templateChangeEmail:        path.Join("account", "change_email.html"),
 		templateConfirmEmailChange: path.Join("account", "confirm_email_change.html"),
+		templateDeleteAccount:      path.Join("account", "delete_account.html"),
 	}
 	templates := make(map[string]*template.Template, len(pages))
 	layout := path.Join("templates", templateLayout)
@@ -270,6 +271,13 @@ func (s *Server) registerAuthRoutes(dynamic *http.ServeMux) {
 		route(http.MethodPost, paths.ChangeEmail),
 		s.requireVerifiedAuth(
 			s.withRateLimit("change-email", s.rateLimitPolicies.ChangeEmail, s.rateLimitKeyByIPAndUser(), http.HandlerFunc(s.changeEmail)),
+		),
+	)
+	dynamic.Handle(route(http.MethodGet, paths.AccountDelete), s.requireVerifiedAuth(http.HandlerFunc(s.deleteAccountForm)))
+	dynamic.Handle(
+		route(http.MethodPost, paths.AccountDelete),
+		s.requireVerifiedAuth(
+			s.withRateLimit("delete-account", s.rateLimitPolicies.DeleteAccount, s.rateLimitKeyByIPAndUser(), http.HandlerFunc(s.deleteAccount)),
 		),
 	)
 }

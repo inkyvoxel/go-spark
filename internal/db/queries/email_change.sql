@@ -20,6 +20,10 @@ WHERE token_hash = ?
   AND expires_at > ?
 RETURNING id, user_id, new_email, token_hash, expires_at, consumed_at, created_at;
 
+-- name: DeleteEmailChangeTokensByUserID :exec
+DELETE FROM email_change_tokens
+WHERE user_id = ?;
+
 -- name: PruneEmailChangeTokens :execrows
 DELETE FROM email_change_tokens
 WHERE expires_at <= sqlc.arg(expired_before)

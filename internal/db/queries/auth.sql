@@ -74,3 +74,7 @@ WHERE id = ?
 UPDATE users
 SET password_hash = ?
 WHERE id = ?;
+
+-- name: DeleteUserByID :exec
+DELETE FROM users
+WHERE id = ?;

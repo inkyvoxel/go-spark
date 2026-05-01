@@ -73,6 +73,16 @@ func (q *Queries) CreateEmailVerificationToken(ctx context.Context, arg CreateEm
 	return i, err
 }
 
+const deleteEmailVerificationTokensByUserID = `-- name: DeleteEmailVerificationTokensByUserID :exec
+DELETE FROM email_verification_tokens
+WHERE user_id = ?
+`
+
+func (q *Queries) DeleteEmailVerificationTokensByUserID(ctx context.Context, userID int64) error {
+	_, err := q.db.ExecContext(ctx, deleteEmailVerificationTokensByUserID, userID)
+	return err
+}
+
 const markUserEmailVerified = `-- name: MarkUserEmailVerified :one
 UPDATE users
 SET email_verified_at = ?

@@ -23,6 +23,10 @@ DELETE FROM email_verification_tokens
 WHERE expires_at <= sqlc.arg(expired_before)
    OR (consumed_at IS NOT NULL AND consumed_at <= sqlc.arg(consumed_before));
 
+-- name: DeleteEmailVerificationTokensByUserID :exec
+DELETE FROM email_verification_tokens
+WHERE user_id = ?;
+
 -- name: MarkUserEmailVerified :one
 UPDATE users
 SET email_verified_at = ?

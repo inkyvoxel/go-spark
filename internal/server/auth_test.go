@@ -537,6 +537,10 @@ func (f *fakeAuthLookup) RevokeSessionByID(ctx context.Context, userID int64, cu
 	return f.revokeSessionErr
 }
 
+func (f *fakeAuthLookup) DeleteAccount(ctx context.Context, userID int64, currentPassword string) error {
+	return nil
+}
+
 func newAuthMiddlewareTestServer(auth authService) *Server {
 	return &Server{
 		auth:                    auth,

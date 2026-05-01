@@ -738,6 +738,52 @@ func (s *Server) resendVerificationPublic(w http.ResponseWriter, r *http.Request
 	http.Redirect(w, r, withQueryParam(paths.ResendVerification, queryKeyStatus, statusSent), http.StatusSeeOther)
 }
 
+func (s *Server) deleteAccountForm(w http.ResponseWriter, r *http.Request) {
+	s.render(w, templateDeleteAccount, s.newDeleteAccountTemplateData(r))
+}
+
+func (s *Server) deleteAccount(w http.ResponseWriter, r *http.Request) {
+	user, ok := currentUser(r.Context())
+	if !ok {
+		http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+		return
+	}
+
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+		return
+	}
+
+	currentPassword := r.FormValue("current_password")
+	if currentPassword == "" {
+		data := s.newDeleteAccountTemplateData(r)
+		data.Error = "Check your details and try again."
+		data.FieldErrors = map[string]string{"current_password": "Enter your current password."}
+		s.renderStatus(w, http.StatusUnprocessableEntity, templateDeleteAccount, data)
+		return
+	}
+
+	if err := s.auth.DeleteAccount(r.Context(), user.ID, currentPassword); err != nil {
+		data := s.newDeleteAccountTemplateData(r)
+		switch {
+		case errors.Is(err, services.ErrCurrentPasswordIncorrect):
+			data.Error = "Check your details and try again."
+			data.FieldErrors = map[string]string{"current_password": "Current password is not correct."}
+			s.renderStatus(w, http.StatusUnprocessableEntity, templateDeleteAccount, data)
+			return
+		default:
+			s.loggerForRequest(r).Error("delete account", "user_id", user.ID, "err", err)
+			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+			return
+		}
+	}
+
+	s.clearSessionCookie(w, r)
+	s.clearCSRFCookie(w, r)
+	s.loggerForRequest(r).Info("auth account deleted", "user_id", user.ID)
+	http.Redirect(w, r, paths.Home, http.StatusSeeOther)
+}
+
 func (s *Server) handleAuthFormError(w http.ResponseWriter, templateName string, data templateData, err error) {
 	if errors.Is(err, services.ErrInvalidEmail) {
 		data.Error = "Check your details and try again."
@@ -859,6 +905,15 @@ func (s *Server) newChangeEmailTemplateData(r *http.Request) templateData {
 	data.Breadcrumbs = []breadcrumbItem{
 		{Label: "Account", URL: paths.Account},
 		{Label: "Change email", Current: true},
+	}
+	return data
+}
+
+func (s *Server) newDeleteAccountTemplateData(r *http.Request) templateData {
+	data := s.newTemplateData(r, "Delete Account")
+	data.Breadcrumbs = []breadcrumbItem{
+		{Label: "Account", URL: paths.Account},
+		{Label: "Delete account", Current: true},
 	}
 	return data
 }

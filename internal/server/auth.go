@@ -36,6 +36,7 @@ type authService interface {
 	UserBySessionToken(context.Context, string) (services.User, error)
 	ValidatePasswordResetToken(context.Context, string) error
 	VerifyEmail(context.Context, string) (services.User, error)
+	DeleteAccount(context.Context, int64, string) error
 }
 
 type authContextKey struct{}

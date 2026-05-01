@@ -1459,6 +1459,16 @@ func (s *fakeAuthStore) ConfirmEmailChange(ctx context.Context, params ConfirmEm
 	return userFromDB(user), nil
 }
 
+func (s *fakeAuthStore) DeleteAccount(ctx context.Context, userID int64) error {
+	delete(s.usersByID, userID)
+	for email, u := range s.usersByEmail {
+		if u.ID == userID {
+			delete(s.usersByEmail, email)
+		}
+	}
+	return nil
+}
+
 func (s *fakeAuthStore) VerifyEmailByTokenHash(ctx context.Context, tokenHash string, verifiedAt time.Time) (User, error) {
 	token, ok := s.verificationTokens[tokenHash]
 	if !ok || token.ConsumedAt.Valid || !token.ExpiresAt.After(verifiedAt) {

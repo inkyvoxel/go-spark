@@ -367,6 +367,27 @@ func (s *AuthStore) ResendEmailVerification(ctx context.Context, params services
 	})
 }
 
+func (s *AuthStore) DeleteAccount(ctx context.Context, userID int64) error {
+	return withTx(ctx, s.db, s.queries, "delete account", func(queries *db.Queries) error {
+		if err := queries.DeleteSessionsByUserID(ctx, userID); err != nil {
+			return fmt.Errorf("delete sessions: %w", err)
+		}
+		if err := queries.DeleteEmailVerificationTokensByUserID(ctx, userID); err != nil {
+			return fmt.Errorf("delete email verification tokens: %w", err)
+		}
+		if err := queries.DeletePasswordResetTokensByUserID(ctx, userID); err != nil {
+			return fmt.Errorf("delete password reset tokens: %w", err)
+		}
+		if err := queries.DeleteEmailChangeTokensByUserID(ctx, userID); err != nil {
+			return fmt.Errorf("delete email change tokens: %w", err)
+		}
+		if err := queries.DeleteUserByID(ctx, userID); err != nil {
+			return fmt.Errorf("delete user: %w", err)
+		}
+		return nil
+	})
+}
+
 func (s *AuthStore) VerifyEmailByTokenHash(ctx context.Context, tokenHash string, verifiedAt time.Time) (services.User, error) {
 	return withTxResult(ctx, s.db, s.queries, "verify email", func(queries *db.Queries) (services.User, error) {
 		token, err := queries.ConsumeEmailVerificationToken(ctx, db.ConsumeEmailVerificationTokenParams{

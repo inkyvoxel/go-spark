@@ -73,6 +73,16 @@ func (q *Queries) CreatePasswordResetToken(ctx context.Context, arg CreatePasswo
 	return i, err
 }
 
+const deletePasswordResetTokensByUserID = `-- name: DeletePasswordResetTokensByUserID :exec
+DELETE FROM password_reset_tokens
+WHERE user_id = ?
+`
+
+func (q *Queries) DeletePasswordResetTokensByUserID(ctx context.Context, userID int64) error {
+	_, err := q.db.ExecContext(ctx, deletePasswordResetTokensByUserID, userID)
+	return err
+}
+
 const getValidPasswordResetTokenByHash = `-- name: GetValidPasswordResetTokenByHash :one
 SELECT id, user_id, token_hash, expires_at, consumed_at, created_at
 FROM password_reset_tokens

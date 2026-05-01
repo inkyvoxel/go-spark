@@ -26,6 +26,10 @@ WHERE token_hash = ?
   AND expires_at > ?
 RETURNING id, user_id, token_hash, expires_at, consumed_at, created_at;
 
+-- name: DeletePasswordResetTokensByUserID :exec
+DELETE FROM password_reset_tokens
+WHERE user_id = ?;
+
 -- name: PrunePasswordResetTokens :execrows
 DELETE FROM password_reset_tokens
 WHERE expires_at <= sqlc.arg(expired_before)

@@ -35,6 +35,7 @@ type RateLimitPolicies struct {
 	ChangeEmail               RateLimitPolicy
 	RevokeSession             RateLimitPolicy
 	RevokeOtherSessions       RateLimitPolicy
+	DeleteAccount             RateLimitPolicy
 }
 
 var defaultRateLimitPolicies = RateLimitPolicies{
@@ -48,6 +49,7 @@ var defaultRateLimitPolicies = RateLimitPolicies{
 	ChangeEmail:               RateLimitPolicy{MaxRequests: 5, Window: 15 * time.Minute},
 	RevokeSession:             RateLimitPolicy{MaxRequests: 20, Window: 15 * time.Minute},
 	RevokeOtherSessions:       RateLimitPolicy{MaxRequests: 10, Window: 15 * time.Minute},
+	DeleteAccount:             RateLimitPolicy{MaxRequests: 3, Window: 15 * time.Minute},
 }
 
 type rateLimitKeyFunc func(*http.Request) (key string, keyType string)
@@ -138,6 +140,7 @@ func rateLimitPoliciesWithDefaults(policies RateLimitPolicies) RateLimitPolicies
 		ChangeEmail:               mergeRateLimitPolicy(defaultRateLimitPolicies.ChangeEmail, policies.ChangeEmail),
 		RevokeSession:             mergeRateLimitPolicy(defaultRateLimitPolicies.RevokeSession, policies.RevokeSession),
 		RevokeOtherSessions:       mergeRateLimitPolicy(defaultRateLimitPolicies.RevokeOtherSessions, policies.RevokeOtherSessions),
+		DeleteAccount:             mergeRateLimitPolicy(defaultRateLimitPolicies.DeleteAccount, policies.DeleteAccount),
 	}
 }
 

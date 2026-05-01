@@ -127,6 +127,7 @@ type AuthStore interface {
 	CreateEmailVerificationToken(ctx context.Context, userID int64, tokenHash string, expiresAt time.Time) (EmailVerificationToken, error)
 	ResendEmailVerification(ctx context.Context, params ResendEmailVerificationParams) error
 	VerifyEmailByTokenHash(ctx context.Context, tokenHash string, verifiedAt time.Time) (User, error)
+	DeleteAccount(ctx context.Context, userID int64) error
 }
 
 type CreateUserWithEmailVerificationParams struct {
@@ -735,6 +736,27 @@ func (s *AuthService) ResendVerificationEmail(ctx context.Context, userID int64)
 		EmailAvailableAt:  now,
 	}); err != nil {
 		return fmt.Errorf("resend email verification: %w", err)
+	}
+
+	return nil
+}
+
+func (s *AuthService) DeleteAccount(ctx context.Context, userID int64, currentPassword string) error {
+	user, err := s.store.GetUserByID(ctx, userID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return ErrCurrentPasswordIncorrect
+	}
+	if err != nil {
+		return fmt.Errorf("get user by ID: %w", err)
+	}
+
+	matches, err := s.passwordHasher.Verify(user.PasswordHash, currentPassword)
+	if err != nil || !matches {
+		return ErrCurrentPasswordIncorrect
+	}
+
+	if err := s.store.DeleteAccount(ctx, userID); err != nil {
+		return fmt.Errorf("delete account: %w", err)
 	}
 
 	return nil

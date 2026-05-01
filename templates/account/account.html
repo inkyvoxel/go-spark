@@ -5,6 +5,7 @@
   <ul>
     <li><a href="{{ .Routes.ChangePassword }}">Change password</a></li>
     <li><a href="{{ .Routes.ChangeEmail }}">Change email address</a></li>
+    <li><a href="{{ .Routes.AccountDelete }}">Delete account</a></li>
   </ul>
   {{ template "account_sessions_section" . }}
 </article>
@@ -42,9 +43,9 @@
         {{ range .ManagedSessions }}
         <tr>
           <td>{{ if .Current }}Current session{{ else }}Active session{{ end }}</td>
-          <td><time datetime="{{ .CreatedAt.UTC.Format "2006-01-02T15:04:05Z07:00" }}">{{ .CreatedAt.UTC.Format
+          <td><time datetime="{{ .CreatedAt.UTC.Format " 2006-01-02T15:04:05Z07:00" }}">{{ .CreatedAt.UTC.Format
               "2006-01-02 15:04 UTC" }}</time></td>
-          <td><time datetime="{{ .ExpiresAt.UTC.Format "2006-01-02T15:04:05Z07:00" }}">{{ .ExpiresAt.UTC.Format
+          <td><time datetime="{{ .ExpiresAt.UTC.Format " 2006-01-02T15:04:05Z07:00" }}">{{ .ExpiresAt.UTC.Format
               "2006-01-02 15:04 UTC" }}</time></td>
           <td>
             {{ if .Current }}
