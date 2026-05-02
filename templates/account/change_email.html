@@ -9,13 +9,6 @@
 
 {{ define "change_email_form_section" }}
 <section id="account-change-email-section">
-  {{ if eq .ChangeEmailStatus "sent" }}
-  {{ if .EmailVerificationRequired }}
-  <p role="status">Check your new email address for a verification link.</p>
-  {{ else }}
-  <p role="status">Your email address has been updated. Please sign in again.</p>
-  {{ end }}
-  {{ else }}
   {{ if .Error }}<p role="alert">{{ .Error }}</p>{{ end }}
   <form method="post" action="{{ .Routes.ChangeEmail }}">
     <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
@@ -34,6 +27,5 @@
     <button type="submit">{{ if .EmailVerificationRequired }}Send verification email{{ else }}Change email address{{ end
       }}</button>
   </form>
-  {{ end }}
 </section>
 {{ end }}

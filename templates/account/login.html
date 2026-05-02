@@ -12,9 +12,6 @@
 
 {{ define "login_form_section" }}
 <section id="login-form-section">
-  {{ if eq .LoginStatus "password-changed" }}<p role="status">Your password has changed. Sign in with your new password.
-  </p>{{ end }}
-  {{ if eq .LoginStatus "email-changed" }}<p role="status">Your email address has changed. Sign in again.</p>{{ end }}
   {{ if .Error }}<p role="alert">{{ .Error }}</p>{{ end }}
   <form method="post" action="{{ .Routes.Login }}">
     <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">

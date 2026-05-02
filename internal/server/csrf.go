@@ -321,8 +321,8 @@ func (s *Server) rotateCSRFCookieForSession(w http.ResponseWriter, r *http.Reque
 }
 
 func (s *Server) csrfSigningSecret() []byte {
-	if len(s.csrfSigningKey) != 0 {
-		return s.csrfSigningKey
+	if len(s.csrfKey) != 0 {
+		return s.csrfKey
 	}
 	return []byte(defaultTestCSRFSigningKey)
 }

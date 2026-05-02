@@ -5,6 +5,7 @@ const (
 	templateNotFound           = "404.html"
 	templateAccount            = "account.html"
 	templateBreadcrumb         = "breadcrumb.html"
+	templateFlash              = "flash.html"
 	templateChangeEmail        = "change_email.html"
 	templateChangePassword     = "change_password.html"
 	templateConfirmEmail       = "confirm_email.html"

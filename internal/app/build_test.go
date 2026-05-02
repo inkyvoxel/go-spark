@@ -78,18 +78,18 @@ func TestValidateSecurityConfigRequiresHTTPSAppBaseURLInProduction(t *testing.T)
 	assertValidateSecurityConfigErrorContains(t, cfg, "APP_BASE_URL")
 }
 
-func TestValidateSecurityConfigRequiresCSRFSigningKeyInProduction(t *testing.T) {
+func TestValidateSecurityConfigRequiresSecretKeyBaseInProduction(t *testing.T) {
 	cfg := productionSecurityConfig()
-	cfg.CSRFSigningKey = ""
+	cfg.SecretKeyBase = ""
 
-	assertValidateSecurityConfigErrorContains(t, cfg, "CSRF_SIGNING_KEY")
+	assertValidateSecurityConfigErrorContains(t, cfg, "SECRET_KEY_BASE")
 }
 
-func TestValidateSecurityConfigRejectsWhitespaceCSRFSigningKeyInProduction(t *testing.T) {
+func TestValidateSecurityConfigRejectsWhitespaceSecretKeyBaseInProduction(t *testing.T) {
 	cfg := productionSecurityConfig()
-	cfg.CSRFSigningKey = " \n\t "
+	cfg.SecretKeyBase = " \n\t "
 
-	assertValidateSecurityConfigErrorContains(t, cfg, "CSRF_SIGNING_KEY")
+	assertValidateSecurityConfigErrorContains(t, cfg, "SECRET_KEY_BASE")
 }
 
 func TestValidateSecurityConfigAllowsProductionWithSecureBaseline(t *testing.T) {
@@ -155,25 +155,25 @@ func TestSecurityConfigWarningsNonProductionReturnsNone(t *testing.T) {
 	}
 }
 
-func TestResolveCSRFSigningKeyUsesConfiguredValue(t *testing.T) {
-	key, err := resolveCSRFSigningKey(config.Config{
-		CSRFSigningKey: "configured-key",
+func TestResolveSecretKeyBaseUsesConfiguredValue(t *testing.T) {
+	key, err := resolveSecretKeyBase(config.Config{
+		SecretKeyBase: "configured-key",
 	}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	if err != nil {
-		t.Fatalf("resolveCSRFSigningKey() error = %v", err)
+		t.Fatalf("resolveSecretKeyBase() error = %v", err)
 	}
 	if key != "configured-key" {
-		t.Fatalf("resolveCSRFSigningKey() = %q, want configured key", key)
+		t.Fatalf("resolveSecretKeyBase() = %q, want configured key", key)
 	}
 }
 
-func TestResolveCSRFSigningKeyRequiresConfiguredValue(t *testing.T) {
-	_, err := resolveCSRFSigningKey(config.Config{}, slog.New(slog.NewTextHandler(io.Discard, nil)))
+func TestResolveSecretKeyBaseRequiresConfiguredValue(t *testing.T) {
+	_, err := resolveSecretKeyBase(config.Config{}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	if err == nil {
-		t.Fatal("resolveCSRFSigningKey() error = nil, want error")
+		t.Fatal("resolveSecretKeyBase() error = nil, want error")
 	}
-	if !strings.Contains(err.Error(), "CSRF_SIGNING_KEY") {
-		t.Fatalf("resolveCSRFSigningKey() error = %v, want CSRF_SIGNING_KEY context", err)
+	if !strings.Contains(err.Error(), "SECRET_KEY_BASE") {
+		t.Fatalf("resolveSecretKeyBase() error = %v, want SECRET_KEY_BASE context", err)
 	}
 }
 
@@ -181,7 +181,7 @@ func productionSecurityConfig() config.Config {
 	return config.Config{
 		Env:            "production",
 		CookieSecure:   true,
-		CSRFSigningKey: "csrf-key",
+		SecretKeyBase:  "csrf-key",
 		AppBaseURL:     "https://app.example.com",
 		PasswordPepper: "pepper",
 	}

@@ -46,7 +46,7 @@ type Config struct {
 	LogFormat                   string
 	DatabasePath                string
 	CookieSecure                bool
-	CSRFSigningKey              string
+	SecretKeyBase               string
 	EmailVerificationRequired   bool
 	EmailChangeNoticeEnabled    bool
 	PasswordMinLength           int
@@ -160,7 +160,7 @@ func FromEnvWithProcess(defaultPasswordMinLength int, processOverride string) (C
 		LogFormat:                   logFormat,
 		DatabasePath:                envOrDefault("DATABASE_PATH", "./data/app.db"),
 		CookieSecure:                cookieSecure,
-		CSRFSigningKey:              strings.TrimSpace(os.Getenv("CSRF_SIGNING_KEY")),
+		SecretKeyBase:               strings.TrimSpace(os.Getenv("SECRET_KEY_BASE")),
 		EmailVerificationRequired:   emailVerificationRequired,
 		EmailChangeNoticeEnabled:    emailChangeNoticeEnabled,
 		PasswordMinLength:           passwordMinLength,

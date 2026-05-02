@@ -14,15 +14,7 @@
 {{ define "account_sessions_section" }}
 <section id="account-sessions-section">
   <h2>Sessions</h2>
-  {{ if eq .SessionManagementStatus "session-revoked" }}
-  <p role="status">Session revoked.</p>
-  {{ end }}
-  {{ if eq .SessionManagementStatus "sessions-revoked" }}
-  <p role="status">Signed out other sessions.</p>
-  {{ end }}
-  {{ if .SessionManagementError }}
-  <p role="alert">{{ .SessionManagementError }}</p>
-  {{ end }}
+  {{ if .Error }}<p role="alert">{{ .Error }}</p>{{ end }}
 
   <form method="post" action="{{ .Routes.AccountSessionsRevokeOthers }}">
     <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">

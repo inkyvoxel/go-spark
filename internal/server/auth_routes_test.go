@@ -267,10 +267,11 @@ func TestRoutesLoginFormShowsForgotPasswordLink(t *testing.T) {
 	}
 }
 
-func TestRoutesLoginFormShowsPasswordChangedStatus(t *testing.T) {
+func TestRoutesLoginFormShowsPasswordChangedFlash(t *testing.T) {
 	srv := newAuthRouteTestServer(t, &fakeAuthLookup{})
 
-	req := httptest.NewRequest(http.MethodGet, loginPathWithStatusChanged, nil)
+	req := httptest.NewRequest(http.MethodGet, paths.Login, nil)
+	req.AddCookie(testFlashCookie(srv, flashSuccess("Your password has been changed. Sign in with your new password.")))
 	rec := httptest.NewRecorder()
 
 	srv.Routes().ServeHTTP(rec, req)
@@ -278,15 +279,16 @@ func TestRoutesLoginFormShowsPasswordChangedStatus(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
 	}
-	if !strings.Contains(rec.Body.String(), "login-status=password-changed") {
-		t.Fatalf("body = %q, want password-changed login status", rec.Body.String())
+	if !strings.Contains(rec.Body.String(), "flash=success:Your password has been changed.") {
+		t.Fatalf("body = %q, want password-changed flash", rec.Body.String())
 	}
 }
 
-func TestRoutesLoginFormShowsEmailChangedStatus(t *testing.T) {
+func TestRoutesLoginFormShowsEmailChangedFlash(t *testing.T) {
 	srv := newAuthRouteTestServer(t, &fakeAuthLookup{})
 
-	req := httptest.NewRequest(http.MethodGet, paths.Login+"?"+queryKeyStatus+"="+statusEmailChanged, nil)
+	req := httptest.NewRequest(http.MethodGet, paths.Login, nil)
+	req.AddCookie(testFlashCookie(srv, flashSuccess("Your email address has been changed. Sign in again.")))
 	rec := httptest.NewRecorder()
 
 	srv.Routes().ServeHTTP(rec, req)
@@ -294,8 +296,8 @@ func TestRoutesLoginFormShowsEmailChangedStatus(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
 	}
-	if !strings.Contains(rec.Body.String(), "login-status="+statusEmailChanged) {
-		t.Fatalf("body = %q, want email-changed login status", rec.Body.String())
+	if !strings.Contains(rec.Body.String(), "flash=success:Your email address has been changed.") {
+		t.Fatalf("body = %q, want email-changed flash", rec.Body.String())
 	}
 }
 
@@ -902,8 +904,8 @@ func TestRoutesRevokeOtherSessionsRedirects(t *testing.T) {
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusSeeOther)
 	}
-	if location := rec.Header().Get("Location"); location != withQueryParam(paths.Account, queryKeyStatus, statusSessionsRevoked) {
-		t.Fatalf("Location = %q, want %q", location, withQueryParam(paths.Account, queryKeyStatus, statusSessionsRevoked))
+	if location := rec.Header().Get("Location"); location != paths.Account {
+		t.Fatalf("Location = %q, want %q", location, paths.Account)
 	}
 	if !auth.revokeOtherCalled {
 		t.Fatal("RevokeOtherSessions() was not called")
@@ -1137,7 +1139,7 @@ func TestRoutesChangeEmail(t *testing.T) {
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusSeeOther)
 	}
-	if location := rec.Header().Get("Location"); location != withQueryParam(paths.ChangeEmail, queryKeyStatus, statusSent) {
+	if location := rec.Header().Get("Location"); location != paths.Account {
 		t.Fatalf("Location = %q, want sent redirect", location)
 	}
 	if !auth.changeEmailCalled {
@@ -1170,8 +1172,8 @@ func TestRoutesChangeEmailOptionalModeSignsUserOutToLogin(t *testing.T) {
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusSeeOther)
 	}
-	if location := rec.Header().Get("Location"); location != loginPathWithEmailChanged {
-		t.Fatalf("Location = %q, want %q", location, loginPathWithEmailChanged)
+	if location := rec.Header().Get("Location"); location != paths.Login {
+		t.Fatalf("Location = %q, want %q", location, paths.Login)
 	}
 	if !auth.changeEmailCalled {
 		t.Fatal("RequestEmailChange() was not called")
@@ -1321,8 +1323,8 @@ func TestRoutesResendVerification(t *testing.T) {
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusSeeOther)
 	}
-	if location := rec.Header().Get("Location"); location != withQueryParam(paths.VerifyEmail, queryKeyResend, statusSent) {
-		t.Fatalf("Location = %q, want %q", location, withQueryParam(paths.VerifyEmail, queryKeyResend, statusSent))
+	if location := rec.Header().Get("Location"); location != paths.VerifyEmail {
+		t.Fatalf("Location = %q, want %q", location, paths.VerifyEmail)
 	}
 	if !auth.resendCalled {
 		t.Fatal("ResendVerificationEmail() was not called")
@@ -1351,8 +1353,8 @@ func TestRoutesResendVerificationHandlesError(t *testing.T) {
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusSeeOther)
 	}
-	if location := rec.Header().Get("Location"); location != withQueryParam(paths.VerifyEmail, queryKeyResend, statusError) {
-		t.Fatalf("Location = %q, want %q", location, withQueryParam(paths.VerifyEmail, queryKeyResend, statusError))
+	if location := rec.Header().Get("Location"); location != paths.VerifyEmail {
+		t.Fatalf("Location = %q, want %q", location, paths.VerifyEmail)
 	}
 }
 
@@ -1413,8 +1415,8 @@ func TestRoutesChangePassword(t *testing.T) {
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusSeeOther)
 	}
-	if location := rec.Header().Get("Location"); location != loginPathWithStatusChanged {
-		t.Fatalf("Location = %q, want %q", location, loginPathWithStatusChanged)
+	if location := rec.Header().Get("Location"); location != paths.Login {
+		t.Fatalf("Location = %q, want %q", location, paths.Login)
 	}
 	if !auth.changePasswordCalled {
 		t.Fatal("ChangePassword() was not called")
@@ -1667,8 +1669,8 @@ func TestRoutesPublicResendVerification(t *testing.T) {
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusSeeOther)
 	}
-	if location := rec.Header().Get("Location"); location != withQueryParam(paths.ResendVerification, queryKeyStatus, statusSent) {
-		t.Fatalf("Location = %q, want %q", location, withQueryParam(paths.ResendVerification, queryKeyStatus, statusSent))
+	if location := rec.Header().Get("Location"); location != paths.ResendVerification {
+		t.Fatalf("Location = %q, want %q", location, paths.ResendVerification)
 	}
 	if auth.publicResendCalls != 1 {
 		t.Fatalf("public resend calls = %d, want 1", auth.publicResendCalls)
@@ -1723,8 +1725,8 @@ func TestRoutesPublicResendVerificationHandlesError(t *testing.T) {
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusSeeOther)
 	}
-	if location := rec.Header().Get("Location"); location != withQueryParam(paths.ResendVerification, queryKeyStatus, statusError) {
-		t.Fatalf("Location = %q, want %q", location, withQueryParam(paths.ResendVerification, queryKeyStatus, statusError))
+	if location := rec.Header().Get("Location"); location != paths.ResendVerification {
+		t.Fatalf("Location = %q, want %q", location, paths.ResendVerification)
 	}
 }
 
@@ -1797,8 +1799,8 @@ func TestRoutesForgotPassword(t *testing.T) {
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusSeeOther)
 	}
-	if location := rec.Header().Get("Location"); location != withQueryParam(paths.ForgotPassword, queryKeyStatus, statusSent) {
-		t.Fatalf("Location = %q, want %q", location, withQueryParam(paths.ForgotPassword, queryKeyStatus, statusSent))
+	if location := rec.Header().Get("Location"); location != paths.ForgotPassword {
+		t.Fatalf("Location = %q, want %q", location, paths.ForgotPassword)
 	}
 	if auth.requestResetEmail != "user@example.com" {
 		t.Fatalf("request reset email = %q, want %q", auth.requestResetEmail, "user@example.com")
@@ -1850,8 +1852,8 @@ func TestRoutesForgotPasswordHandlesError(t *testing.T) {
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusSeeOther)
 	}
-	if location := rec.Header().Get("Location"); location != withQueryParam(paths.ForgotPassword, queryKeyStatus, statusError) {
-		t.Fatalf("Location = %q, want %q", location, withQueryParam(paths.ForgotPassword, queryKeyStatus, statusError))
+	if location := rec.Header().Get("Location"); location != paths.ForgotPassword {
+		t.Fatalf("Location = %q, want %q", location, paths.ForgotPassword)
 	}
 }
 
@@ -2026,8 +2028,8 @@ func TestRoutesResetPassword(t *testing.T) {
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusSeeOther)
 	}
-	if location := rec.Header().Get("Location"); location != loginPathWithStatusChanged {
-		t.Fatalf("Location = %q, want %q", location, loginPathWithStatusChanged)
+	if location := rec.Header().Get("Location"); location != paths.Login {
+		t.Fatalf("Location = %q, want %q", location, paths.Login)
 	}
 	if auth.resetToken != "raw-token" || auth.resetNewPassword != "new-password" {
 		t.Fatalf("reset inputs = %q/%q", auth.resetToken, auth.resetNewPassword)
@@ -2137,20 +2139,20 @@ func newAuthRouteTestServer(t *testing.T, auth authService) *Server {
 		auth:                    auth,
 		emailVerificationPolicy: services.DefaultEmailVerificationPolicy(),
 		logger:                  slog.New(slog.NewTextHandler(io.Discard, nil)),
-		csrfSigningKey:          []byte("test-csrf-signing-key"),
+		csrfKey:                 []byte("test-csrf-signing-key"),
 		templates: testTemplates(t, map[string]string{
 			templateHome:               `home {{ if .Authenticated }}Account Sign out {{ .User.Email }}{{ else }}Sign in Create account{{ end }}`,
 			templateRegister:           `{{ define "content" }}{{ template "register_form_section" . }}{{ end }}{{ define "register_form_section" }}register {{ .Error }} {{ with index .FieldErrors "email" }}{{ . }}{{ end }} {{ with index .FieldErrors "password" }}{{ . }}{{ end }} {{ with index .FieldErrors "confirm_password" }}{{ . }}{{ end }} {{ .Email }} {{ .PasswordMinLength }} {{ .CSRFToken }}{{ end }}`,
-			templateLogin:              `{{ define "content" }}{{ template "login_form_section" . }} ` + paths.ForgotPassword + ` {{ if .EmailVerificationRequired }}` + paths.ResendVerification + `{{ end }}{{ end }}{{ define "login_form_section" }}login {{ .Error }} {{ with index .FieldErrors "email" }}{{ . }}{{ end }} {{ with index .FieldErrors "password" }}{{ . }}{{ end }} {{ .CSRFToken }} {{ .Next }} login-status={{ .LoginStatus }}{{ end }}`,
-			templateAccount:            `{{ define "content" }}account {{ .User.Email }} {{ .Routes.ChangePassword }} {{ .Routes.ChangeEmail }} {{ .CSRFToken }} {{ template "account_sessions_section" . }}{{ end }}{{ define "account_sessions_section" }}sessions status={{ .SessionManagementStatus }} error={{ .SessionManagementError }} revoke={{ .Routes.AccountSessionsRevoke }} revoke-others={{ .Routes.AccountSessionsRevokeOthers }} {{ range .ManagedSessions }}session={{ .ID }}:{{ .Current }} {{ end }}{{ end }}`,
-			templateChangeEmail:        `{{ define "content" }}change-email-page {{ .Routes.Account }} {{ range .Breadcrumbs }}breadcrumb={{ .Label }}:{{ .URL }}:{{ .Current }} {{ end }}{{ template "change_email_form_section" . }}{{ end }}{{ define "change_email_form_section" }}change-email-visible button-label={{ if .EmailVerificationRequired }}send-verification{{ else }}change-email{{ end }} change-email-status={{ .ChangeEmailStatus }} {{ .Error }} {{ .Email }} {{ with index .FieldErrors "email" }}{{ . }}{{ end }} {{ with index .FieldErrors "current_password" }}{{ . }}{{ end }}{{ end }}`,
+			templateLogin:              `{{ define "content" }}{{ template "login_form_section" . }} ` + paths.ForgotPassword + ` {{ if .EmailVerificationRequired }}` + paths.ResendVerification + `{{ end }}{{ end }}{{ define "login_form_section" }}login {{ .Error }} {{ with index .FieldErrors "email" }}{{ . }}{{ end }} {{ with index .FieldErrors "password" }}{{ . }}{{ end }} {{ .CSRFToken }} {{ .Next }} flash={{ if .Flash }}{{ .Flash.Type }}:{{ .Flash.Message }}{{ end }}{{ end }}`,
+			templateAccount:            `{{ define "content" }}account {{ .User.Email }} {{ .Routes.ChangePassword }} {{ .Routes.ChangeEmail }} {{ .CSRFToken }} flash={{ if .Flash }}{{ .Flash.Type }}:{{ .Flash.Message }}{{ end }} {{ template "account_sessions_section" . }}{{ end }}{{ define "account_sessions_section" }}sessions {{ if .Error }}error={{ .Error }}{{ end }} revoke={{ .Routes.AccountSessionsRevoke }} revoke-others={{ .Routes.AccountSessionsRevokeOthers }} {{ range .ManagedSessions }}session={{ .ID }}:{{ .Current }} {{ end }}{{ end }}`,
+			templateChangeEmail:        `{{ define "content" }}change-email-page {{ .Routes.Account }} {{ range .Breadcrumbs }}breadcrumb={{ .Label }}:{{ .URL }}:{{ .Current }} {{ end }}{{ template "change_email_form_section" . }}{{ end }}{{ define "change_email_form_section" }}change-email-visible button-label={{ if .EmailVerificationRequired }}send-verification{{ else }}change-email{{ end }} {{ .Error }} {{ .Email }} {{ with index .FieldErrors "email" }}{{ . }}{{ end }} {{ with index .FieldErrors "current_password" }}{{ . }}{{ end }}{{ end }}`,
 			templateChangePassword:     `{{ define "content" }}change-password-page {{ .Routes.Account }} {{ range .Breadcrumbs }}breadcrumb={{ .Label }}:{{ .URL }}:{{ .Current }} {{ end }}{{ template "change_password_form_section" . }}{{ end }}{{ define "change_password_form_section" }}change-password-visible {{ .Error }} {{ with index .FieldErrors "current_password" }}{{ . }}{{ end }} {{ with index .FieldErrors "new_password" }}{{ . }}{{ end }} {{ with index .FieldErrors "confirm_password" }}{{ . }}{{ end }}{{ end }}`,
 			templateConfirmEmail:       `confirm {{ if .Error }}{{ .Error }} {{ if .Authenticated }}Go to your account{{ else }}Sign in{{ end }}{{ else }}Email confirmed{{ end }}`,
 			templateConfirmEmailChange: `confirm-email-change {{ .Error }} authenticated={{ .Authenticated }} {{ .Routes.Login }}`,
-			templateForgotPassword:     `{{ define "content" }}{{ template "forgot_password_form_section" . }}{{ end }}{{ define "forgot_password_form_section" }}forgot-form {{ .Error }} {{ with index .FieldErrors "email" }}{{ . }}{{ end }} {{ .Email }} forgot-status={{ .ForgotPasswordStatus }} {{ .CSRFToken }}{{ end }}`,
+			templateForgotPassword:     `{{ define "content" }}{{ template "forgot_password_form_section" . }}{{ end }}{{ define "forgot_password_form_section" }}forgot-form {{ .Error }} {{ with index .FieldErrors "email" }}{{ . }}{{ end }} {{ .Email }} flash={{ if .Flash }}{{ .Flash.Type }}:{{ .Flash.Message }}{{ end }} {{ .CSRFToken }}{{ end }}`,
 			templateResetPassword:      `{{ define "content" }}{{ if .ResetTokenInvalid }}{{ .Error }}{{ else }}{{ template "reset_password_form_section" . }}{{ end }}{{ end }}{{ define "reset_password_form_section" }}reset-form {{ .Error }} {{ with index .FieldErrors "new_password" }}{{ . }}{{ end }} {{ with index .FieldErrors "confirm_password" }}{{ . }}{{ end }} {{ if .ResetTokenInvalid }}invalid or has expired{{ end }} {{ .CSRFToken }}{{ end }}`,
-			templateResendVerification: `{{ define "content" }}{{ template "resend_verification_form_section" . }}{{ end }}{{ define "resend_verification_form_section" }}resend-form {{ .Error }} {{ with index .FieldErrors "email" }}{{ . }}{{ end }} {{ .Email }} resend-status={{ .ResendStatus }} {{ .CSRFToken }}{{ end }}`,
-			templateVerifyEmail:        `{{ define "content" }}verify-email {{ .User.Email }} {{ template "verify_email_resend_section" . }}{{ end }}{{ define "verify_email_resend_section" }}resend-status={{ .ResendStatus }}{{ end }}`,
+			templateResendVerification: `{{ define "content" }}{{ template "resend_verification_form_section" . }}{{ end }}{{ define "resend_verification_form_section" }}resend-form {{ .Error }} {{ with index .FieldErrors "email" }}{{ . }}{{ end }} {{ .Email }} flash={{ if .Flash }}{{ .Flash.Type }}:{{ .Flash.Message }}{{ end }} {{ .CSRFToken }}{{ end }}`,
+			templateVerifyEmail:        `{{ define "content" }}verify-email {{ .User.Email }} {{ template "verify_email_resend_section" . }}{{ end }}{{ define "verify_email_resend_section" }}flash={{ if .Flash }}{{ .Flash.Type }}:{{ .Flash.Message }}{{ end }}{{ end }}`,
 		}),
 		passwordMinLength: 8,
 	}
@@ -2162,6 +2164,18 @@ func newAuthRouteTestServerOptional(t *testing.T, auth authService) *Server {
 	srv := newAuthRouteTestServer(t, auth)
 	srv.emailVerificationPolicy = services.NewEmailVerificationPolicy(false)
 	return srv
+}
+
+func testFlashCookie(srv *Server, msg flashMessage) *http.Cookie {
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	srv.setFlash(rec, req, msg)
+	for _, c := range rec.Result().Cookies() {
+		if c.Name == flashCookieName {
+			return c
+		}
+	}
+	return nil
 }
 
 func cookieFromRecorder(t *testing.T, rec *httptest.ResponseRecorder, name string) *http.Cookie {

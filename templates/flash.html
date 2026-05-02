@@ -1,0 +1,9 @@
+{{ define "flash" }}
+{{ if .Flash }}
+{{ if or (eq .Flash.Type "success") (eq .Flash.Type "info") }}
+<p role="status">{{ .Flash.Message }}</p>
+{{ else }}
+<p role="alert">{{ .Flash.Message }}</p>
+{{ end }}
+{{ end }}
+{{ end }}

@@ -73,19 +73,3 @@ func TestTemplateRoutesUseCanonicalPaths(t *testing.T) {
 		}
 	}
 }
-
-func TestQueryDerivedConstants(t *testing.T) {
-	if loginPathWithStatusChanged == "" {
-		t.Fatal("loginPathWithStatusChanged is empty")
-	}
-
-	wantLoginChanged := paths.Login + "?" + queryKeyStatus + "=" + statusChanged
-	if loginPathWithStatusChanged != wantLoginChanged {
-		t.Fatalf("loginPathWithStatusChanged = %q, want %q", loginPathWithStatusChanged, wantLoginChanged)
-	}
-
-	wantResendSent := paths.VerifyEmail + "?" + queryKeyResend + "=" + statusSent
-	if got := withQueryParam(paths.VerifyEmail, queryKeyResend, statusSent); got != wantResendSent {
-		t.Fatalf("verify-email sent URL = %q, want %q", got, wantResendSent)
-	}
-}

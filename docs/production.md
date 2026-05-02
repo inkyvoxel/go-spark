@@ -34,7 +34,7 @@ Create a production env file (for example `/etc/go-spark/go-spark.env`) and set 
 * `APP_COOKIE_SECURE=true`
 * `APP_BASE_URL=https://your-domain.example`
 * `AUTH_PASSWORD_PEPPER=<long-random-secret>`
-* `CSRF_SIGNING_KEY=<long-random-secret>`
+* `SECRET_KEY_BASE=<long-random-secret>` — root signing key; generate with `openssl rand -hex 32`
 
 Strongly recommended:
 

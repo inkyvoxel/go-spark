@@ -9,10 +9,6 @@
 
 {{ define "resend_verification_form_section" }}
 <section id="resend-verification-form-section">
-  {{ if eq .ResendStatus "sent" }}<p role="status">If that email can be verified, we sent a confirmation link.</p>{{ end
-  }}
-  {{ if eq .ResendStatus "error" }}<p role="alert">We couldn't send a verification email right now. Please try again.
-  </p>{{ end }}
   {{ if .Error }}<p role="alert">{{ .Error }}</p>{{ end }}
   <form method="post" action="{{ .Routes.ResendVerification }}">
     <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">

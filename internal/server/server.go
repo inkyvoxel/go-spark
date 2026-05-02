@@ -35,7 +35,8 @@ type Server struct {
 	cookieSecure            bool
 	appBaseOrigin           string
 	passwordMinLength       int
-	csrfSigningKey          []byte
+	csrfKey                 []byte
+	flashKey                []byte
 	rateLimiter             rateLimitStore
 	rateLimitPolicies       RateLimitPolicies
 	trustedProxies          []net.IPNet
@@ -48,7 +49,7 @@ type Options struct {
 	Logger                  *slog.Logger
 	CookieSecure            bool
 	AppBaseURL              string
-	CSRFSigningKey          string
+	SecretKeyBase           string
 	PasswordMinLength       int
 	RateLimitPolicies       RateLimitPolicies
 	TrustedProxies          []string
@@ -67,7 +68,9 @@ func New(opts Options) (*Server, error) {
 	if passwordMinLength == 0 {
 		passwordMinLength = services.DefaultPasswordMinLength
 	}
-	csrfSigningKey := []byte(strings.TrimSpace(opts.CSRFSigningKey))
+	secretKeyBase := []byte(strings.TrimSpace(opts.SecretKeyBase))
+	csrfKey := deriveKey(secretKeyBase, "csrf")
+	flashKey := deriveKey(secretKeyBase, "flash")
 	appBaseOrigin := normalizeOrigin(opts.AppBaseURL)
 
 	templates, err := parseTemplates()
@@ -89,7 +92,8 @@ func New(opts Options) (*Server, error) {
 		cookieSecure:            opts.CookieSecure,
 		appBaseOrigin:           appBaseOrigin,
 		passwordMinLength:       passwordMinLength,
-		csrfSigningKey:          csrfSigningKey,
+		csrfKey:                 csrfKey,
+		flashKey:                flashKey,
 		rateLimiter:             newFixedWindowRateLimiter(),
 		rateLimitPolicies:       rateLimitPoliciesWithDefaults(opts.RateLimitPolicies),
 		trustedProxies:          trustedProxies,
@@ -164,6 +168,7 @@ func parseTemplates() (map[string]*template.Template, error) {
 	layout := path.Join("templates", templateLayout)
 	partials := []string{
 		path.Join("templates", templateBreadcrumb),
+		path.Join("templates", templateFlash),
 	}
 
 	for name, filePath := range pages {
@@ -320,7 +325,7 @@ func (w *staticCacheHeaderResponseWriter) Write(data []byte) (int, error) {
 }
 
 func (s *Server) home(w http.ResponseWriter, r *http.Request) {
-	s.render(w, templateHome, s.newTemplateData(r, "Go Spark"))
+	s.render(w, templateHome, s.newTemplateData(w, r, "Go Spark"))
 }
 
 func (s *Server) healthz(w http.ResponseWriter, _ *http.Request) {
@@ -355,7 +360,7 @@ func (s *Server) notFoundPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.renderStatus(w, http.StatusNotFound, templateNotFound, s.newTemplateData(r, "Page Not Found"))
+	s.renderStatus(w, http.StatusNotFound, templateNotFound, s.newTemplateData(w, r, "Page Not Found"))
 }
 
 // postOnlyAllowForPath returns the Allow header value for paths that are

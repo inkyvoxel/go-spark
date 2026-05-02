@@ -40,9 +40,9 @@ func Build(cfg config.Config, logger *slog.Logger) (Runtime, error) {
 	}
 	logSecurityConfigWarnings(cfg, logger)
 
-	csrfSigningKey, err := resolveCSRFSigningKey(cfg, logger)
+	secretKeyBase, err := resolveSecretKeyBase(cfg, logger)
 	if err != nil {
-		return Runtime{}, fmt.Errorf("resolve CSRF signing key: %w", err)
+		return Runtime{}, fmt.Errorf("resolve secret key base: %w", err)
 	}
 
 	db, err := sqlite.Open(cfg.DatabasePath)
@@ -50,7 +50,7 @@ func Build(cfg config.Config, logger *slog.Logger) (Runtime, error) {
 		return Runtime{}, fmt.Errorf("open database: %w", err)
 	}
 
-	runtime, err := buildRuntime(cfg, logger, db, csrfSigningKey)
+	runtime, err := buildRuntime(cfg, logger, db, secretKeyBase)
 	if err != nil {
 		db.Close()
 		return Runtime{}, err
@@ -59,7 +59,7 @@ func Build(cfg config.Config, logger *slog.Logger) (Runtime, error) {
 	return runtime, nil
 }
 
-func buildRuntime(cfg config.Config, logger *slog.Logger, db *sql.DB, csrfSigningKey string) (Runtime, error) {
+func buildRuntime(cfg config.Config, logger *slog.Logger, db *sql.DB, secretKeyBase string) (Runtime, error) {
 	auth := services.NewAuthService(database.NewAuthStore(db), services.AuthOptions{
 		PasswordMinLen:           cfg.PasswordMinLength,
 		PasswordPepper:           cfg.PasswordPepper,
@@ -90,7 +90,7 @@ func buildRuntime(cfg config.Config, logger *slog.Logger, db *sql.DB, csrfSignin
 		Auth:                    auth,
 		CookieSecure:            cfg.CookieSecure,
 		AppBaseURL:              cfg.AppBaseURL,
-		CSRFSigningKey:          csrfSigningKey,
+		SecretKeyBase:           secretKeyBase,
 		PasswordMinLength:       cfg.PasswordMinLength,
 		EmailVerificationPolicy: services.NewEmailVerificationPolicy(cfg.EmailVerificationRequired),
 		RateLimitPolicies:       toServerRateLimitPolicies(cfg.RateLimitPolicies),
@@ -199,19 +199,19 @@ func validateSecurityConfig(cfg config.Config) error {
 	if strings.TrimSpace(cfg.PasswordPepper) == "" {
 		return fmt.Errorf("AUTH_PASSWORD_PEPPER must be set when APP_ENV=production")
 	}
-	if strings.TrimSpace(cfg.CSRFSigningKey) == "" {
-		return fmt.Errorf("CSRF_SIGNING_KEY must be set")
+	if strings.TrimSpace(cfg.SecretKeyBase) == "" {
+		return fmt.Errorf("SECRET_KEY_BASE must be set")
 	}
 	return nil
 }
 
-func resolveCSRFSigningKey(cfg config.Config, logger *slog.Logger) (string, error) {
+func resolveSecretKeyBase(cfg config.Config, logger *slog.Logger) (string, error) {
 	_ = logger
-	key := strings.TrimSpace(cfg.CSRFSigningKey)
+	key := strings.TrimSpace(cfg.SecretKeyBase)
 	if key != "" {
 		return key, nil
 	}
-	return "", fmt.Errorf("CSRF_SIGNING_KEY must be set")
+	return "", fmt.Errorf("SECRET_KEY_BASE must be set")
 }
 
 func logSecurityConfigWarnings(cfg config.Config, logger *slog.Logger) {

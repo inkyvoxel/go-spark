@@ -352,7 +352,7 @@ func testServer(t *testing.T) *Server {
 		db:                      testDB(t),
 		emailVerificationPolicy: services.DefaultEmailVerificationPolicy(),
 		logger:                  slog.New(slog.NewTextHandler(io.Discard, nil)),
-		csrfSigningKey:          []byte("test-csrf-signing-key"),
+		csrfKey:                 []byte("test-csrf-signing-key"),
 		templates: testTemplates(t, map[string]string{
 			templateHome:     `<h1>{{ .Title }}</h1>`,
 			templateNotFound: `<h1>Page not found</h1>`,
