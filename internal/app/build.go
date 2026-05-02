@@ -40,10 +40,7 @@ func Build(cfg config.Config, logger *slog.Logger) (Runtime, error) {
 	}
 	logSecurityConfigWarnings(cfg, logger)
 
-	secretKeyBase, err := resolveSecretKeyBase(cfg, logger)
-	if err != nil {
-		return Runtime{}, fmt.Errorf("resolve secret key base: %w", err)
-	}
+	secretKeyBase := strings.TrimSpace(cfg.SecretKeyBase)
 
 	db, err := sqlite.Open(cfg.DatabasePath)
 	if err != nil {
@@ -187,6 +184,12 @@ func newEmailSender(cfg config.Config, logger *slog.Logger) (email.Sender, error
 }
 
 func validateSecurityConfig(cfg config.Config) error {
+	if strings.TrimSpace(cfg.PasswordPepper) == "" {
+		return fmt.Errorf("AUTH_PASSWORD_PEPPER must be set")
+	}
+	if strings.TrimSpace(cfg.SecretKeyBase) == "" {
+		return fmt.Errorf("SECRET_KEY_BASE must be set")
+	}
 	if cfg.Env != "production" {
 		return nil
 	}
@@ -196,22 +199,7 @@ func validateSecurityConfig(cfg config.Config) error {
 	if !isHTTPSURL(cfg.AppBaseURL) {
 		return fmt.Errorf("APP_BASE_URL must use https when APP_ENV=production")
 	}
-	if strings.TrimSpace(cfg.PasswordPepper) == "" {
-		return fmt.Errorf("AUTH_PASSWORD_PEPPER must be set when APP_ENV=production")
-	}
-	if strings.TrimSpace(cfg.SecretKeyBase) == "" {
-		return fmt.Errorf("SECRET_KEY_BASE must be set")
-	}
 	return nil
-}
-
-func resolveSecretKeyBase(cfg config.Config, logger *slog.Logger) (string, error) {
-	_ = logger
-	key := strings.TrimSpace(cfg.SecretKeyBase)
-	if key != "" {
-		return key, nil
-	}
-	return "", fmt.Errorf("SECRET_KEY_BASE must be set")
 }
 
 func logSecurityConfigWarnings(cfg config.Config, logger *slog.Logger) {

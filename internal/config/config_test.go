@@ -302,18 +302,6 @@ func TestFromEnvParsesCookieSecureBool(t *testing.T) {
 	}
 }
 
-func TestFromEnvAllowsBlankPasswordPepper(t *testing.T) {
-	t.Setenv("AUTH_PASSWORD_PEPPER", "")
-
-	cfg, err := FromEnv(services.DefaultPasswordMinLength)
-	if err != nil {
-		t.Fatalf("FromEnv() error = %v", err)
-	}
-	if cfg.PasswordPepper != "" {
-		t.Fatalf("PasswordPepper = %q, want empty", cfg.PasswordPepper)
-	}
-}
-
 func TestFromEnvRejectsInvalidPasswordMinLength(t *testing.T) {
 	t.Setenv("AUTH_PASSWORD_MIN_LENGTH", "nope")
 

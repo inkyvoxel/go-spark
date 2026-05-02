@@ -50,16 +50,14 @@ func TestNewEmailSenderRejectsUnknownProvider(t *testing.T) {
 	}
 }
 
-func TestValidateSecurityConfigRequiresPepperInProduction(t *testing.T) {
-	cfg := productionSecurityConfig()
-	cfg.PasswordPepper = ""
+func TestValidateSecurityConfigRequiresPepper(t *testing.T) {
+	cfg := config.Config{PasswordPepper: ""}
 
 	assertValidateSecurityConfigErrorContains(t, cfg, "AUTH_PASSWORD_PEPPER")
 }
 
-func TestValidateSecurityConfigRejectsWhitespacePepperInProduction(t *testing.T) {
-	cfg := productionSecurityConfig()
-	cfg.PasswordPepper = " \t "
+func TestValidateSecurityConfigRejectsWhitespacePepper(t *testing.T) {
+	cfg := config.Config{PasswordPepper: " \t "}
 
 	assertValidateSecurityConfigErrorContains(t, cfg, "AUTH_PASSWORD_PEPPER")
 }
@@ -78,32 +76,20 @@ func TestValidateSecurityConfigRequiresHTTPSAppBaseURLInProduction(t *testing.T)
 	assertValidateSecurityConfigErrorContains(t, cfg, "APP_BASE_URL")
 }
 
-func TestValidateSecurityConfigRequiresSecretKeyBaseInProduction(t *testing.T) {
-	cfg := productionSecurityConfig()
-	cfg.SecretKeyBase = ""
+func TestValidateSecurityConfigRequiresSecretKeyBase(t *testing.T) {
+	cfg := config.Config{PasswordPepper: "pepper", SecretKeyBase: ""}
 
 	assertValidateSecurityConfigErrorContains(t, cfg, "SECRET_KEY_BASE")
 }
 
-func TestValidateSecurityConfigRejectsWhitespaceSecretKeyBaseInProduction(t *testing.T) {
-	cfg := productionSecurityConfig()
-	cfg.SecretKeyBase = " \n\t "
+func TestValidateSecurityConfigRejectsWhitespaceSecretKeyBase(t *testing.T) {
+	cfg := config.Config{PasswordPepper: "pepper", SecretKeyBase: " \n\t "}
 
 	assertValidateSecurityConfigErrorContains(t, cfg, "SECRET_KEY_BASE")
 }
 
 func TestValidateSecurityConfigAllowsProductionWithSecureBaseline(t *testing.T) {
 	err := validateSecurityConfig(productionSecurityConfig())
-	if err != nil {
-		t.Fatalf("validateSecurityConfig() error = %v, want nil", err)
-	}
-}
-
-func TestValidateSecurityConfigAllowsNonProductionWithoutPepper(t *testing.T) {
-	err := validateSecurityConfig(config.Config{
-		Env:            "development",
-		PasswordPepper: "",
-	})
 	if err != nil {
 		t.Fatalf("validateSecurityConfig() error = %v, want nil", err)
 	}
@@ -152,28 +138,6 @@ func TestSecurityConfigWarningsNonProductionReturnsNone(t *testing.T) {
 
 	if len(warnings) != 0 {
 		t.Fatalf("warning count = %d, want 0", len(warnings))
-	}
-}
-
-func TestResolveSecretKeyBaseUsesConfiguredValue(t *testing.T) {
-	key, err := resolveSecretKeyBase(config.Config{
-		SecretKeyBase: "configured-key",
-	}, slog.New(slog.NewTextHandler(io.Discard, nil)))
-	if err != nil {
-		t.Fatalf("resolveSecretKeyBase() error = %v", err)
-	}
-	if key != "configured-key" {
-		t.Fatalf("resolveSecretKeyBase() = %q, want configured key", key)
-	}
-}
-
-func TestResolveSecretKeyBaseRequiresConfiguredValue(t *testing.T) {
-	_, err := resolveSecretKeyBase(config.Config{}, slog.New(slog.NewTextHandler(io.Discard, nil)))
-	if err == nil {
-		t.Fatal("resolveSecretKeyBase() error = nil, want error")
-	}
-	if !strings.Contains(err.Error(), "SECRET_KEY_BASE") {
-		t.Fatalf("resolveSecretKeyBase() error = %v, want SECRET_KEY_BASE context", err)
 	}
 }
 
