@@ -30,3 +30,4 @@ This project follows a simple, human-written changelog format.
 * GitHub Actions test workflow.
 * `make init` script for one-time project setup (module path and project name).
 * Rate limiting with configurable policies and trusted proxy support.
+* Two-factor authentication (TOTP) with QR code setup, code confirmation, backup codes (8 per user), disable flow, and mid-login challenge.
