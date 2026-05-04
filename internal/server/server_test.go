@@ -79,6 +79,28 @@ func TestRoutesReadyz(t *testing.T) {
 	}
 }
 
+func TestRoutesRobotsTxt(t *testing.T) {
+	srv := testServer(t)
+
+	req := httptest.NewRequest(http.MethodGet, paths.RobotsTxt, nil)
+	rec := httptest.NewRecorder()
+
+	srv.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	if got := rec.Header().Get("Content-Type"); got != "text/plain; charset=utf-8" {
+		t.Fatalf("Content-Type = %q, want %q", got, "text/plain; charset=utf-8")
+	}
+	body := rec.Body.String()
+	for _, disallowed := range []string{"/login", "/register", "/logout", "/account/", "/healthz", "/readyz"} {
+		if !strings.Contains(body, "Disallow: "+disallowed) {
+			t.Fatalf("robots.txt body missing %q disallow directive", disallowed)
+		}
+	}
+}
+
 func TestRoutesReadyzReturnsServiceUnavailableWhenNotReady(t *testing.T) {
 	srv := testServer(t)
 	srv.db = nil

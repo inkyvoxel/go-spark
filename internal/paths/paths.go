@@ -4,6 +4,7 @@ const (
 	Home                        = "/"
 	Healthz                     = "/healthz"
 	Readyz                      = "/readyz"
+	RobotsTxt                   = "/robots.txt"
 	StaticPrefix                = "/static/"
 	StaticPicoCSS               = StaticPrefix + "vendor/pico/pico.min.css"
 	StaticStyles                = StaticPrefix + "styles.css"

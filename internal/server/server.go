@@ -195,6 +195,7 @@ func (s *Server) Routes() http.Handler {
 
 	mux.HandleFunc(route(http.MethodGet, paths.Healthz), s.healthz)
 	mux.HandleFunc(route(http.MethodGet, paths.Readyz), s.readyz)
+	mux.HandleFunc(route(http.MethodGet, paths.RobotsTxt), s.robotsTxt)
 	mux.Handle(route(http.MethodGet, paths.StaticPrefix), staticFileHandler())
 
 	s.registerAuthRoutes(dynamic)
@@ -365,6 +366,18 @@ func (s *Server) readyz(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writePlaintext(w, http.StatusOK, "ok")
+}
+
+const robotsTxtContent = "User-agent: *\n" +
+	"Disallow: /login\n" +
+	"Disallow: /register\n" +
+	"Disallow: /logout\n" +
+	"Disallow: /account/\n" +
+	"Disallow: /healthz\n" +
+	"Disallow: /readyz\n"
+
+func (s *Server) robotsTxt(w http.ResponseWriter, _ *http.Request) {
+	writePlaintext(w, http.StatusOK, robotsTxtContent)
 }
 
 func (s *Server) isReady(ctx context.Context) bool {
