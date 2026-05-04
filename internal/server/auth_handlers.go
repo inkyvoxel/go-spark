@@ -103,7 +103,7 @@ func (s *Server) register(w http.ResponseWriter, r *http.Request) {
 	if _, err := s.auth.Register(r.Context(), email, password); err != nil {
 		data := s.newTemplateData(w, r, "Create Account")
 		data.Email = strings.TrimSpace(email)
-		s.handleAuthFormError(w, templateRegister, data, err)
+		s.handleAuthFormError(w, r, templateRegister, data, err)
 		return
 	}
 
@@ -111,14 +111,14 @@ func (s *Server) register(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		data := s.newTemplateData(w, r, "Create Account")
 		data.Email = strings.TrimSpace(email)
-		s.handleAuthFormError(w, templateRegister, data, err)
+		s.handleAuthFormError(w, r, templateRegister, data, err)
 		return
 	}
 
 	s.setSessionCookie(w, r, session, false)
 	if err := s.rotateCSRFCookieForSession(w, r, session.Token); err != nil {
 		s.loggerForRequest(r).Error("rotate csrf token after register login", "err", err)
-		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		s.internalServerError(w, r)
 		return
 	}
 	s.loggerForRequest(r).Info("auth register succeeded", "user_id", user.ID)
@@ -181,7 +181,7 @@ func (s *Server) resetPasswordForm(w http.ResponseWriter, r *http.Request) {
 			}
 
 			s.loggerForRequest(r).Error("validate password reset token", "err", err)
-			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+			s.internalServerError(w, r)
 			return
 		}
 		s.setResetCookie(w, r, token)
@@ -200,7 +200,7 @@ func (s *Server) resetPasswordForm(w http.ResponseWriter, r *http.Request) {
 		}
 
 		s.loggerForRequest(r).Error("validate password reset token", "err", err)
-		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		s.internalServerError(w, r)
 		return
 	}
 
@@ -316,7 +316,7 @@ func (s *Server) confirmEmailToken(
 		}
 
 		s.loggerForRequest(r).Error(logMessage, "err", err)
-		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		s.internalServerError(w, r)
 		return false
 	}
 
@@ -348,7 +348,7 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 		data := s.newTemplateData(w, r, "Sign In")
 		data.Email = strings.TrimSpace(r.FormValue("email"))
 		data.Next = safeRedirectPath(r.FormValue("next"))
-		s.handleAuthFormError(w, templateLogin, data, err)
+		s.handleAuthFormError(w, r, templateLogin, data, err)
 		return
 	}
 
@@ -362,7 +362,7 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 	s.setSessionCookie(w, r, session, rememberMe)
 	if err := s.rotateCSRFCookieForSession(w, r, session.Token); err != nil {
 		s.loggerForRequest(r).Error("rotate csrf token after login", "err", err)
-		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		s.internalServerError(w, r)
 		return
 	}
 	s.loggerForRequest(r).Info("auth login succeeded", "user_id", user.ID)
@@ -378,7 +378,7 @@ func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
 	if err == nil {
 		if err := s.auth.Logout(r.Context(), cookie.Value); err != nil && !errors.Is(err, services.ErrInvalidSession) {
 			s.loggerForRequest(r).Error("logout", "err", err)
-			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+			s.internalServerError(w, r)
 			return
 		}
 	}
@@ -435,7 +435,7 @@ func (s *Server) revokeSession(w http.ResponseWriter, r *http.Request) {
 			data.Error = "The selected session is no longer available."
 		default:
 			s.loggerForRequest(r).Error("revoke session", "user_id", user.ID, "session_id", sessionID, "err", err)
-			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+			s.internalServerError(w, r)
 			return
 		}
 
@@ -467,7 +467,7 @@ func (s *Server) revokeOtherSessions(w http.ResponseWriter, r *http.Request) {
 			return
 		default:
 			s.loggerForRequest(r).Error("revoke other sessions", "user_id", user.ID, "err", err)
-			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+			s.internalServerError(w, r)
 			return
 		}
 	}
@@ -572,7 +572,7 @@ func (s *Server) changePassword(w http.ResponseWriter, r *http.Request) {
 			return
 		default:
 			s.loggerForRequest(r).Error("change password", "user_id", user.ID, "err", err)
-			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+			s.internalServerError(w, r)
 			return
 		}
 	}
@@ -630,7 +630,7 @@ func (s *Server) changeEmail(w http.ResponseWriter, r *http.Request) {
 			data.FieldErrors = map[string]string{"email": "An account with this email already exists."}
 		default:
 			s.loggerForRequest(r).Error("change email", "user_id", user.ID, "err", err)
-			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+			s.internalServerError(w, r)
 			return
 		}
 		s.renderStatus(w, http.StatusUnprocessableEntity, templateChangeEmail, data)
@@ -686,7 +686,7 @@ func (s *Server) resetPassword(w http.ResponseWriter, r *http.Request) {
 			return
 		default:
 			s.loggerForRequest(r).Error("reset password", "err", err)
-			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+			s.internalServerError(w, r)
 			return
 		}
 	}
@@ -769,7 +769,7 @@ func (s *Server) deleteAccount(w http.ResponseWriter, r *http.Request) {
 			return
 		default:
 			s.loggerForRequest(r).Error("delete account", "user_id", user.ID, "err", err)
-			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+			s.internalServerError(w, r)
 			return
 		}
 	}
@@ -780,7 +780,7 @@ func (s *Server) deleteAccount(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, paths.Home, http.StatusSeeOther)
 }
 
-func (s *Server) handleAuthFormError(w http.ResponseWriter, templateName string, data templateData, err error) {
+func (s *Server) handleAuthFormError(w http.ResponseWriter, r *http.Request, templateName string, data templateData, err error) {
 	if errors.Is(err, services.ErrInvalidEmail) {
 		data.Error = "Check your details and try again."
 		data.FieldErrors = map[string]string{"email": "Enter a valid email address."}
@@ -805,8 +805,8 @@ func (s *Server) handleAuthFormError(w http.ResponseWriter, templateName string,
 		return
 	}
 
-	s.loggerForRequestID(data.RequestID).Error("auth form", "err", err)
-	http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+	s.loggerForRequest(r).Error("auth form", "err", err)
+	s.internalServerError(w, r)
 }
 
 func (s *Server) validateRegistrationForm(email, password, confirmPassword string) map[string]string {
@@ -838,7 +838,7 @@ func (s *Server) populateAccountSessions(w http.ResponseWriter, r *http.Request,
 		}
 
 		s.loggerForRequest(r).Error("list account sessions", "user_id", user.ID, "err", err)
-		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		s.internalServerError(w, r)
 		return false
 	}
 

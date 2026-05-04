@@ -3,6 +3,7 @@ package server
 const (
 	templateLayout               = "layout.html"
 	templateNotFound             = "404.html"
+	templateInternalError        = "500.html"
 	templateAccount              = "account.html"
 	templateBreadcrumb           = "breadcrumb.html"
 	templateFlash                = "flash.html"

@@ -21,7 +21,7 @@ func (s *Server) withRequestID(next http.Handler) http.Handler {
 			generatedID, err := newRequestID()
 			if err != nil {
 				s.logger.Error("generate request id", "err", err)
-				http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+				s.internalServerError(w, r)
 				return
 			}
 			id = generatedID

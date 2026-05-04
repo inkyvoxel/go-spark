@@ -321,6 +321,42 @@ func TestRoutesDoNotSetNoStoreCacheHeadersForPublicGet(t *testing.T) {
 	}
 }
 
+func TestInternalServerErrorRendersCustomPage(t *testing.T) {
+	srv := testServer(t)
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+
+	srv.internalServerError(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusInternalServerError)
+	}
+	if got := rec.Header().Get("Content-Type"); got != "text/html; charset=utf-8" {
+		t.Fatalf("Content-Type = %q, want %q", got, "text/html; charset=utf-8")
+	}
+	if !strings.Contains(rec.Body.String(), "Something went wrong") {
+		t.Fatalf("body = %q, want custom 500 content", rec.Body.String())
+	}
+}
+
+func TestInternalServerErrorFallsBackToPlainTextWhenTemplateMissing(t *testing.T) {
+	srv := testServer(t)
+	delete(srv.templates, templateInternalError)
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+
+	srv.internalServerError(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusInternalServerError)
+	}
+	if rec.Body.String() != http.StatusText(http.StatusInternalServerError)+"\n" {
+		t.Fatalf("body = %q, want plain text fallback", rec.Body.String())
+	}
+}
+
 func TestRenderReturnsInternalServerErrorForTemplateError(t *testing.T) {
 	srv := testServer(t)
 
@@ -421,8 +457,9 @@ func testServer(t *testing.T) *Server {
 		logger:                  slog.New(slog.NewTextHandler(io.Discard, nil)),
 		csrfKey:                 []byte("test-csrf-signing-key"),
 		templates: testTemplates(t, map[string]string{
-			templateHome:     `<h1>{{ .Title }}</h1>`,
-			templateNotFound: `<h1>Page not found</h1>`,
+			templateHome:          `<h1>{{ .Title }}</h1>`,
+			templateNotFound:      `<h1>Page not found</h1>`,
+			templateInternalError: `<h1>Something went wrong</h1>`,
 		}),
 	}
 }

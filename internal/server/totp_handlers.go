@@ -31,7 +31,7 @@ func (s *Server) twoFactorPage(w http.ResponseWriter, r *http.Request) {
 	pending, enabled, err := s.auth.TOTPSetupState(r.Context(), user.ID)
 	if err != nil {
 		s.loggerForRequest(r).Error("get TOTP setup state", "user_id", user.ID, "err", err)
-		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		s.internalServerError(w, r)
 		return
 	}
 
@@ -42,7 +42,7 @@ func (s *Server) twoFactorPage(w http.ResponseWriter, r *http.Request) {
 		_, remaining, err := s.auth.GetTOTPStatus(r.Context(), user.ID)
 		if err != nil {
 			s.loggerForRequest(r).Error("get TOTP status", "user_id", user.ID, "err", err)
-			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+			s.internalServerError(w, r)
 			return
 		}
 		data.TOTPBackupCodesRemaining = remaining
@@ -52,7 +52,7 @@ func (s *Server) twoFactorPage(w http.ResponseWriter, r *http.Request) {
 		secret, uri, err := s.auth.GetTOTPSetupInfo(r.Context(), user.ID)
 		if err != nil {
 			s.loggerForRequest(r).Error("get TOTP setup info", "user_id", user.ID, "err", err)
-			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+			s.internalServerError(w, r)
 			return
 		}
 		data.TOTPSecret = secret
@@ -72,7 +72,7 @@ func (s *Server) twoFactorSetup(w http.ResponseWriter, r *http.Request) {
 
 	if _, _, err := s.auth.BeginTOTPSetup(r.Context(), user.ID); err != nil {
 		s.loggerForRequest(r).Error("begin TOTP setup", "user_id", user.ID, "err", err)
-		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		s.internalServerError(w, r)
 		return
 	}
 
@@ -110,14 +110,14 @@ func (s *Server) twoFactorConfirm(w http.ResponseWriter, r *http.Request) {
 			return
 		default:
 			s.loggerForRequest(r).Error("confirm TOTP setup", "user_id", user.ID, "err", err)
-			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+			s.internalServerError(w, r)
 			return
 		}
 		// Re-fetch setup info to re-render the QR code.
 		secret, uri, infoErr := s.auth.GetTOTPSetupInfo(r.Context(), user.ID)
 		if infoErr != nil {
 			s.loggerForRequest(r).Error("get TOTP setup info after confirm error", "user_id", user.ID, "err", infoErr)
-			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+			s.internalServerError(w, r)
 			return
 		}
 		data.TOTPSecret = secret
@@ -159,7 +159,7 @@ func (s *Server) twoFactorDisable(w http.ResponseWriter, r *http.Request) {
 			return
 		default:
 			s.loggerForRequest(r).Error("disable TOTP", "user_id", user.ID, "err", err)
-			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+			s.internalServerError(w, r)
 			return
 		}
 		_, remaining, _ := s.auth.GetTOTPStatus(r.Context(), user.ID)
@@ -210,7 +210,7 @@ func (s *Server) twoFactorChallenge(w http.ResponseWriter, r *http.Request) {
 			data.Error = "That code is incorrect. Try again or use a backup code."
 		default:
 			s.loggerForRequest(r).Error("verify TOTP login", "user_id", pendingLogin.UserID, "err", err)
-			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+			s.internalServerError(w, r)
 			return
 		}
 		s.renderStatus(w, http.StatusUnprocessableEntity, templateTwoFactorChallenge, data)
@@ -221,7 +221,7 @@ func (s *Server) twoFactorChallenge(w http.ResponseWriter, r *http.Request) {
 	s.setSessionCookie(w, r, session, pendingLogin.RememberMe)
 	if err := s.rotateCSRFCookieForSession(w, r, session.Token); err != nil {
 		s.loggerForRequest(r).Error("rotate csrf token after TOTP login", "err", err)
-		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		s.internalServerError(w, r)
 		return
 	}
 

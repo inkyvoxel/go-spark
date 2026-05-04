@@ -150,6 +150,7 @@ func normalizeOrigin(raw string) string {
 func parseTemplates() (map[string]*template.Template, error) {
 	pages := map[string]string{
 		templateNotFound:             "404.html",
+		templateInternalError:        "500.html",
 		templateHome:                 "home.html",
 		templateAccount:              path.Join("account", "account.html"),
 		templateChangePassword:       path.Join("account", "change_password.html"),
@@ -391,6 +392,10 @@ func writePlaintext(w http.ResponseWriter, status int, body string) {
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	w.WriteHeader(status)
 	_, _ = w.Write([]byte(body))
+}
+
+func (s *Server) internalServerError(w http.ResponseWriter, r *http.Request) {
+	s.renderStatus(w, http.StatusInternalServerError, templateInternalError, s.newTemplateData(w, r, "Something went wrong"))
 }
 
 func (s *Server) notFoundPage(w http.ResponseWriter, r *http.Request) {
