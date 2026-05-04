@@ -541,6 +541,34 @@ func (f *fakeAuthLookup) DeleteAccount(ctx context.Context, userID int64, curren
 	return nil
 }
 
+func (f *fakeAuthLookup) BeginTOTPSetup(ctx context.Context, userID int64) (string, string, error) {
+	return "", "", nil
+}
+
+func (f *fakeAuthLookup) GetTOTPSetupInfo(ctx context.Context, userID int64) (string, string, error) {
+	return "", "", nil
+}
+
+func (f *fakeAuthLookup) ConfirmTOTPSetup(ctx context.Context, userID int64, code string) ([]string, error) {
+	return nil, nil
+}
+
+func (f *fakeAuthLookup) DisableTOTP(ctx context.Context, userID int64, password string) error {
+	return nil
+}
+
+func (f *fakeAuthLookup) GetTOTPStatus(ctx context.Context, userID int64) (bool, int, error) {
+	return false, 0, nil
+}
+
+func (f *fakeAuthLookup) TOTPSetupState(ctx context.Context, userID int64) (bool, bool, error) {
+	return false, false, nil
+}
+
+func (f *fakeAuthLookup) VerifyTOTPLogin(ctx context.Context, userID int64, code string) (services.AuthSession, error) {
+	return services.AuthSession{}, nil
+}
+
 func newAuthMiddlewareTestServer(auth authService) *Server {
 	return &Server{
 		auth:                    auth,

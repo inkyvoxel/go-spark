@@ -1,0 +1,20 @@
+{{ define "content" }}
+<article>
+  <h1>Two-factor authentication</h1>
+  <section id="totp-challenge-section">
+    {{ if .Error }}<p role="alert">{{ .Error }}</p>{{ end }}
+    <p>Enter the 6-digit code from your authenticator app, or one of your backup codes.</p>
+    <form method="post" action="{{ .Routes.AccountTwoFactorChallenge }}{{ if .Next }}?next={{ .Next }}{{ end }}">
+      <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
+      <label>
+        Code
+        <input type="text" name="code" inputmode="numeric" autocomplete="one-time-code"
+          maxlength="10" placeholder="000000"
+          {{ if .Error }}aria-invalid="true"{{ end }} required autofocus>
+      </label>
+      <button type="submit">Continue</button>
+    </form>
+    <p><a href="{{ .Routes.Login }}">Back to sign in</a></p>
+  </section>
+</article>
+{{ end }}

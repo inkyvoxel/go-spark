@@ -63,10 +63,26 @@ type Session struct {
 	CreatedAt time.Time
 }
 
+type TotpBackupCode struct {
+	ID        int64
+	UserID    int64
+	CodeHash  string
+	UsedAt    sql.NullTime
+	CreatedAt time.Time
+}
+
 type User struct {
 	ID              int64
 	Email           string
 	PasswordHash    string
 	EmailVerifiedAt sql.NullTime
 	CreatedAt       time.Time
+}
+
+type UserTotp struct {
+	ID        int64
+	UserID    int64
+	Secret    string
+	EnabledAt sql.NullTime
+	CreatedAt time.Time
 }

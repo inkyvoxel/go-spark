@@ -36,6 +36,11 @@ var (
 	ErrCannotRevokeCurrentSession = errors.New("cannot revoke current session")
 	ErrInvalidEmailChangeToken    = errors.New("invalid email change token")
 	ErrInvalidVerificationToken   = errors.New("invalid verification token")
+	ErrTOTPRequired               = errors.New("TOTP required")
+	ErrInvalidTOTPCode            = errors.New("invalid TOTP code")
+	ErrTOTPAlreadyEnabled         = errors.New("TOTP already enabled")
+	ErrTOTPNotEnabled             = errors.New("TOTP not enabled")
+	ErrTOTPSetupNotStarted        = errors.New("TOTP setup not started")
 )
 
 type AuthService struct {
@@ -50,6 +55,15 @@ type AuthService struct {
 	passwordHasher                 passwordHasher
 	tokenBytes                     int
 	passwordMinLen                 int
+	totpIssuer                     string
+}
+
+type TOTPRecord struct {
+	ID        int64
+	UserID    int64
+	Secret    string
+	EnabledAt sql.NullTime
+	CreatedAt time.Time
 }
 
 type AuthSession struct {
@@ -128,6 +142,14 @@ type AuthStore interface {
 	ResendEmailVerification(ctx context.Context, params ResendEmailVerificationParams) error
 	VerifyEmailByTokenHash(ctx context.Context, tokenHash string, verifiedAt time.Time) (User, error)
 	DeleteAccount(ctx context.Context, userID int64) error
+	// TOTP
+	GetTOTPByUserID(ctx context.Context, userID int64) (TOTPRecord, error)
+	GetEnabledTOTPByUserID(ctx context.Context, userID int64) (TOTPRecord, error)
+	UpsertPendingTOTP(ctx context.Context, userID int64, secret string) error
+	EnableTOTPWithBackupCodes(ctx context.Context, userID int64, enabledAt time.Time, codeHashes []string) error
+	DeleteTOTPAndBackupCodes(ctx context.Context, userID int64) error
+	ConsumeTOTPBackupCode(ctx context.Context, userID int64, codeHash string, usedAt time.Time) (bool, error)
+	CountUnusedTOTPBackupCodes(ctx context.Context, userID int64) (int64, error)
 }
 
 type CreateUserWithEmailVerificationParams struct {
@@ -155,6 +177,7 @@ type AuthOptions struct {
 	PasswordResetEmail             email.PasswordResetOptions
 	EmailVerificationPolicy        EmailVerificationPolicy
 	EmailChangeNoticeEnabled       *bool
+	TOTPIssuer                     string
 }
 
 type ResendEmailVerificationParams struct {
@@ -245,6 +268,7 @@ func NewAuthService(store AuthStore, opts AuthOptions) *AuthService {
 		passwordHasher:                 newArgon2idHasher(opts),
 		tokenBytes:                     tokenBytes,
 		passwordMinLen:                 passwordMinLen,
+		totpIssuer:                     strings.TrimSpace(opts.TOTPIssuer),
 	}
 }
 
@@ -321,21 +345,32 @@ func (s *AuthService) Login(ctx context.Context, email, password string) (User, 
 		return User{}, AuthSession{}, ErrInvalidCredentials
 	}
 
+	_, err = s.store.GetEnabledTOTPByUserID(ctx, user.ID)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return User{}, AuthSession{}, fmt.Errorf("check TOTP status: %w", err)
+	}
+	if err == nil {
+		return user.User, AuthSession{}, ErrTOTPRequired
+	}
+
+	session, err := s.createSessionForUser(ctx, user.ID)
+	if err != nil {
+		return User{}, AuthSession{}, err
+	}
+
+	return user.User, session, nil
+}
+
+func (s *AuthService) createSessionForUser(ctx context.Context, userID int64) (AuthSession, error) {
 	token, err := generateToken(s.tokenBytes)
 	if err != nil {
-		return User{}, AuthSession{}, fmt.Errorf("generate session token: %w", err)
+		return AuthSession{}, fmt.Errorf("generate session token: %w", err)
 	}
-
 	expiresAt := time.Now().UTC().Add(s.sessionDuration)
-	_, err = s.store.CreateSession(ctx, user.ID, hashToken(token), expiresAt)
-	if err != nil {
-		return User{}, AuthSession{}, fmt.Errorf("create session: %w", err)
+	if _, err := s.store.CreateSession(ctx, userID, hashToken(token), expiresAt); err != nil {
+		return AuthSession{}, fmt.Errorf("create session: %w", err)
 	}
-
-	return user.User, AuthSession{
-		Token:     token,
-		ExpiresAt: expiresAt,
-	}, nil
+	return AuthSession{Token: token, ExpiresAt: expiresAt}, nil
 }
 
 func (s *AuthService) UserBySessionToken(ctx context.Context, token string) (User, error) {

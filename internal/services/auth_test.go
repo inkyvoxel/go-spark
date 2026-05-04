@@ -13,6 +13,25 @@ import (
 	"github.com/inkyvoxel/go-spark/internal/paths"
 )
 
+func TestAuthServiceBeginTOTPSetupUsesConfiguredIssuer(t *testing.T) {
+	store := newFakeAuthStore()
+	service := NewAuthService(store, AuthOptions{TOTPIssuer: "Acme Corp"})
+
+	user, err := store.CreateUser(context.Background(), "user@example.com", "hash")
+	if err != nil {
+		t.Fatalf("CreateUser() error = %v", err)
+	}
+
+	_, uri, err := service.BeginTOTPSetup(context.Background(), user.ID)
+	if err != nil {
+		t.Fatalf("BeginTOTPSetup() error = %v", err)
+	}
+
+	if !strings.Contains(uri, "Acme+Corp") && !strings.Contains(uri, "Acme%20Corp") && !strings.Contains(uri, "Acme Corp") {
+		t.Fatalf("otpauth URI = %q, want issuer %q in URI", uri, "Acme Corp")
+	}
+}
+
 func TestAuthServiceRegisterHashesPassword(t *testing.T) {
 	service := newTestAuthService(t)
 
@@ -1080,18 +1099,26 @@ func boolPtr(v bool) *bool {
 	return &v
 }
 
+type backupCode struct {
+	hash   string
+	usedAt sql.NullTime
+}
+
 type fakeAuthStore struct {
 	nextUserID                int64
 	nextSessionID             int64
 	nextVerificationTokenID   int64
 	nextPasswordResetTokenID  int64
 	nextEmailChangeTokenID    int64
+	nextTOTPID                int64
 	usersByEmail              map[string]db.User
 	usersByID                 map[int64]db.User
 	sessions                  map[string]db.Session
 	verificationTokens        map[string]db.EmailVerificationToken
 	passwordResetTokens       map[string]db.PasswordResetToken
 	emailChangeTokens         map[string]db.EmailChangeToken
+	totpByUserID              map[int64]TOTPRecord
+	backupCodesByUserID       map[int64][]backupCode
 	outbox                    []email.Message
 	getUserByEmailErr         error
 	resendErr                 error
@@ -1110,12 +1137,15 @@ func newFakeAuthStore() *fakeAuthStore {
 		nextVerificationTokenID:  1,
 		nextPasswordResetTokenID: 1,
 		nextEmailChangeTokenID:   1,
+		nextTOTPID:               1,
 		usersByEmail:             make(map[string]db.User),
 		usersByID:                make(map[int64]db.User),
 		sessions:                 make(map[string]db.Session),
 		verificationTokens:       make(map[string]db.EmailVerificationToken),
 		passwordResetTokens:      make(map[string]db.PasswordResetToken),
 		emailChangeTokens:        make(map[string]db.EmailChangeToken),
+		totpByUserID:             make(map[int64]TOTPRecord),
+		backupCodesByUserID:      make(map[int64][]backupCode),
 	}
 }
 
@@ -1547,4 +1577,83 @@ func passwordResetTokenFromDB(row db.PasswordResetToken) PasswordResetToken {
 		ConsumedAt: row.ConsumedAt,
 		CreatedAt:  row.CreatedAt,
 	}
+}
+
+func (s *fakeAuthStore) GetTOTPByUserID(ctx context.Context, userID int64) (TOTPRecord, error) {
+	totp, ok := s.totpByUserID[userID]
+	if !ok {
+		return TOTPRecord{}, sql.ErrNoRows
+	}
+	return totp, nil
+}
+
+func (s *fakeAuthStore) GetEnabledTOTPByUserID(ctx context.Context, userID int64) (TOTPRecord, error) {
+	totp, ok := s.totpByUserID[userID]
+	if !ok || !totp.EnabledAt.Valid {
+		return TOTPRecord{}, sql.ErrNoRows
+	}
+	return totp, nil
+}
+
+func (s *fakeAuthStore) UpsertPendingTOTP(ctx context.Context, userID int64, secret string) error {
+	if existing, ok := s.totpByUserID[userID]; ok {
+		existing.Secret = secret
+		existing.EnabledAt = sql.NullTime{}
+		s.totpByUserID[userID] = existing
+	} else {
+		s.totpByUserID[userID] = TOTPRecord{
+			ID:        s.nextTOTPID,
+			UserID:    userID,
+			Secret:    secret,
+			CreatedAt: time.Now().UTC(),
+		}
+		s.nextTOTPID++
+	}
+	return nil
+}
+
+func (s *fakeAuthStore) EnableTOTPWithBackupCodes(ctx context.Context, userID int64, enabledAt time.Time, codeHashes []string) error {
+	totp, ok := s.totpByUserID[userID]
+	if !ok {
+		return sql.ErrNoRows
+	}
+	totp.EnabledAt = sql.NullTime{Time: enabledAt, Valid: true}
+	s.totpByUserID[userID] = totp
+	codes := make([]backupCode, len(codeHashes))
+	for i, h := range codeHashes {
+		codes[i] = backupCode{hash: h}
+	}
+	s.backupCodesByUserID[userID] = codes
+	return nil
+}
+
+func (s *fakeAuthStore) DeleteTOTPAndBackupCodes(ctx context.Context, userID int64) error {
+	delete(s.totpByUserID, userID)
+	delete(s.backupCodesByUserID, userID)
+	return nil
+}
+
+func (s *fakeAuthStore) ConsumeTOTPBackupCode(ctx context.Context, userID int64, codeHash string, usedAt time.Time) (bool, error) {
+	codes, ok := s.backupCodesByUserID[userID]
+	if !ok {
+		return false, nil
+	}
+	for i, code := range codes {
+		if code.hash == codeHash && !code.usedAt.Valid {
+			codes[i].usedAt = sql.NullTime{Time: usedAt, Valid: true}
+			s.backupCodesByUserID[userID] = codes
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+func (s *fakeAuthStore) CountUnusedTOTPBackupCodes(ctx context.Context, userID int64) (int64, error) {
+	var count int64
+	for _, code := range s.backupCodesByUserID[userID] {
+		if !code.usedAt.Valid {
+			count++
+		}
+	}
+	return count, nil
 }

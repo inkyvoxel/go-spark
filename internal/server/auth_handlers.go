@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"html/template"
 	"io"
 	"net/http"
 	"strconv"
@@ -36,6 +37,13 @@ type templateData struct {
 	User                      services.User
 	PasswordMinLength         int
 	ManagedSessions           []services.ManagedSession
+	// TOTP
+	TOTPEnabled              bool
+	TOTPPending              bool
+	TOTPSecret               string
+	TOTPOtpAuthURI           template.URL
+	TOTPBackupCodes          []string
+	TOTPBackupCodesRemaining int
 }
 
 type breadcrumbItem struct {
@@ -323,6 +331,16 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 
 	user, session, err := s.auth.Login(r.Context(), r.FormValue("email"), r.FormValue("password"))
 	if err != nil {
+		if errors.Is(err, services.ErrTOTPRequired) {
+			next := safeRedirectPath(r.FormValue("next"))
+			s.setTOTPPendingCookie(w, r, user.ID)
+			challengeURL := paths.AccountTwoFactorChallenge
+			if next != "" {
+				challengeURL += "?next=" + next
+			}
+			http.Redirect(w, r, challengeURL, http.StatusSeeOther)
+			return
+		}
 		if errors.Is(err, services.ErrInvalidCredentials) {
 			s.loggerForRequest(r).Info("auth login failed")
 		}

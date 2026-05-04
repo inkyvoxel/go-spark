@@ -66,6 +66,7 @@ type Config struct {
 	CleanupFailedEmailRetention time.Duration
 	RateLimitPolicies           RateLimitPoliciesConfig
 	TrustedProxies              []string
+	TOTPIssuer                  string
 }
 
 func LoadDotEnv(path string) error {
@@ -165,6 +166,7 @@ func FromEnvWithProcess(defaultPasswordMinLength int, processOverride string) (C
 		EmailChangeNoticeEnabled:    emailChangeNoticeEnabled,
 		PasswordMinLength:           passwordMinLength,
 		PasswordPepper:              os.Getenv("AUTH_PASSWORD_PEPPER"),
+		TOTPIssuer:                  strings.TrimSpace(os.Getenv("AUTH_TOTP_ISSUER")),
 		AppBaseURL:                  appBaseURL,
 		EmailFrom:                   emailFrom,
 		EmailProvider:               emailProvider,

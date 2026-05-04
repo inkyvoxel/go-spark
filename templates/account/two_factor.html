@@ -1,0 +1,83 @@
+{{ define "content" }}
+<article>
+  {{ template "breadcrumb" . }}
+  <h1>Two-factor authentication</h1>
+
+  {{ if .TOTPEnabled }}
+  {{ template "totp_enabled_section" . }}
+  {{ else if .TOTPPending }}
+  {{ template "totp_setup_section" . }}
+  {{ else }}
+  {{ template "totp_disabled_section" . }}
+  {{ end }}
+
+  <p><a href="{{ .Routes.Account }}">Back to account</a></p>
+</article>
+{{ end }}
+
+{{ define "totp_disabled_section" }}
+<section id="totp-disabled-section">
+  <p>Two-factor authentication adds an extra layer of security to your account. When enabled, you'll need your
+    authenticator app in addition to your password to sign in.</p>
+  <form method="post" action="{{ .Routes.AccountTwoFactorSetup }}">
+    <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
+    <button type="submit">Enable two-factor authentication</button>
+  </form>
+</section>
+{{ end }}
+
+{{ define "totp_setup_section" }}
+<section id="totp-setup-section">
+  {{ if .Error }}<p role="alert">{{ .Error }}</p>{{ end }}
+  <p>Scan this QR code with your authenticator app, then enter the 6-digit code it shows to confirm setup.</p>
+
+  <div id="totp-qr" data-otpauth-uri="{{ .TOTPOtpAuthURI }}"></div>
+
+  <details>
+    <summary>Can't scan the QR code?</summary>
+    <p>Enter this key manually in your authenticator app:</p>
+    <pre><code>{{ .TOTPSecret }}</code></pre>
+  </details>
+
+  <form method="post" action="{{ .Routes.AccountTwoFactorConfirm }}">
+    <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
+    <label>
+      Verification code
+      <input type="text" name="code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6"
+        placeholder="000000" {{ if .Error }}aria-invalid="true" {{ end }} required autofocus>
+    </label>
+    <button type="submit">Confirm and enable</button>
+  </form>
+  <form method="post" action="{{ .Routes.AccountTwoFactorSetup }}">
+    <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
+    <button type="submit" class="secondary outline">Generate a new code</button>
+  </form>
+</section>
+{{ end }}
+
+{{ define "totp_enabled_section" }}
+<section id="totp-enabled-section">
+  {{ if .Error }}<p role="alert">{{ .Error }}</p>{{ end }}
+  <p>Two-factor authentication is <strong>enabled</strong>.</p>
+  <p>Backup codes remaining: <strong>{{ .TOTPBackupCodesRemaining }}</strong></p>
+
+  <h2>Disable two-factor authentication</h2>
+  <p>Enter a code from your authenticator app to disable two-factor authentication.</p>
+  <form method="post" action="{{ .Routes.AccountTwoFactorDisable }}">
+    <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
+    <label>
+      Authenticator code
+      <input type="text" name="code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6"
+        placeholder="000000" {{ if .Error }}aria-invalid="true" {{ end }} required>
+    </label>
+    <button type="submit" class="secondary">Disable two-factor authentication</button>
+  </form>
+</section>
+{{ end }}
+
+{{ define "scripts" }}
+{{ if .TOTPPending }}
+<script src="{{ .Routes.StaticQRCodeJS }}"></script>
+<script src="{{ .Routes.StaticTOTPSetupJS }}"></script>
+{{ end }}
+{{ end }}

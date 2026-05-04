@@ -10,6 +10,7 @@ A Go web app starter template. Fork it, run `make init`, and you're off.
 * SQL migrations with `goose`
 * structured logging with `log/slog`
 * email/password authentication
+* two-factor authentication (TOTP) with backup codes
 * server-side sessions
 * CSRF protection
 * email verification

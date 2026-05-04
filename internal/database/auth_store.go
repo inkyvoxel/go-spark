@@ -381,6 +381,12 @@ func (s *AuthStore) DeleteAccount(ctx context.Context, userID int64) error {
 		if err := queries.DeleteEmailChangeTokensByUserID(ctx, userID); err != nil {
 			return fmt.Errorf("delete email change tokens: %w", err)
 		}
+		if err := queries.DeleteTOTPBackupCodesByUserID(ctx, userID); err != nil {
+			return fmt.Errorf("delete TOTP backup codes: %w", err)
+		}
+		if err := queries.DeleteTOTPByUserID(ctx, userID); err != nil {
+			return fmt.Errorf("delete TOTP: %w", err)
+		}
 		if err := queries.DeleteUserByID(ctx, userID); err != nil {
 			return fmt.Errorf("delete user: %w", err)
 		}

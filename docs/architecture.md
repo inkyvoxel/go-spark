@@ -74,10 +74,13 @@ Important conventions:
 The starter uses:
 
 * email and password login
+* two-factor authentication (TOTP) with backup codes — optional per user, enforced at login when enabled
 * server-side sessions stored in SQLite
 * HTTP-only session cookies
 * email verification
 * password reset by email
+
+TOTP follows a three-step flow: the user initiates setup (secret generated and stored as pending), scans the QR code in their authenticator app, then confirms with a valid code — at which point 8 one-time backup codes are generated and shown once. At login, users with 2FA enabled are issued a short-lived pending cookie and redirected to a challenge page before a full session is created.
 
 It intentionally does not use JWTs or a large auth framework for the default server-rendered flow.
 
