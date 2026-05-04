@@ -11,6 +11,7 @@ import (
 	db "github.com/inkyvoxel/go-spark/internal/db/generated"
 	"github.com/inkyvoxel/go-spark/internal/email"
 	"github.com/inkyvoxel/go-spark/internal/paths"
+	"github.com/inkyvoxel/go-spark/internal/totp"
 )
 
 func TestAuthServiceBeginTOTPSetupUsesConfiguredIssuer(t *testing.T) {
@@ -30,6 +31,70 @@ func TestAuthServiceBeginTOTPSetupUsesConfiguredIssuer(t *testing.T) {
 	if !strings.Contains(uri, "Acme+Corp") && !strings.Contains(uri, "Acme%20Corp") && !strings.Contains(uri, "Acme Corp") {
 		t.Fatalf("otpauth URI = %q, want issuer %q in URI", uri, "Acme Corp")
 	}
+}
+
+func TestBeginTOTPSetup_WhenAlreadyEnabled_ReturnsError(t *testing.T) {
+	service := newTestAuthService(t)
+	store := service.store.(*fakeAuthStore)
+
+	user, err := store.CreateUser(context.Background(), "user@example.com", "hash")
+	if err != nil {
+		t.Fatalf("CreateUser() error = %v", err)
+	}
+
+	if _, _, err := service.BeginTOTPSetup(context.Background(), user.ID); err != nil {
+		t.Fatalf("BeginTOTPSetup() first call error = %v", err)
+	}
+	if codes, err := service.ConfirmTOTPSetup(context.Background(), user.ID, validTOTPCode(t, store, user.ID)); err != nil || len(codes) == 0 {
+		t.Fatalf("ConfirmTOTPSetup() error = %v, codes = %v", err, codes)
+	}
+
+	_, _, err = service.BeginTOTPSetup(context.Background(), user.ID)
+	if !errors.Is(err, ErrTOTPAlreadyEnabled) {
+		t.Fatalf("BeginTOTPSetup() when already enabled = %v, want ErrTOTPAlreadyEnabled", err)
+	}
+}
+
+func TestBeginTOTPSetup_WhenAlreadyEnabled_DoesNotClearEnabledAt(t *testing.T) {
+	service := newTestAuthService(t)
+	store := service.store.(*fakeAuthStore)
+
+	user, err := store.CreateUser(context.Background(), "user@example.com", "hash")
+	if err != nil {
+		t.Fatalf("CreateUser() error = %v", err)
+	}
+
+	if _, _, err := service.BeginTOTPSetup(context.Background(), user.ID); err != nil {
+		t.Fatalf("BeginTOTPSetup() first call error = %v", err)
+	}
+	if codes, err := service.ConfirmTOTPSetup(context.Background(), user.ID, validTOTPCode(t, store, user.ID)); err != nil || len(codes) == 0 {
+		t.Fatalf("ConfirmTOTPSetup() error = %v, codes = %v", err, codes)
+	}
+
+	before := store.totpByUserID[user.ID]
+	service.BeginTOTPSetup(context.Background(), user.ID) //nolint:errcheck
+	after := store.totpByUserID[user.ID]
+
+	if after.Secret != before.Secret {
+		t.Errorf("Secret changed after rejected setup: got %q, want %q", after.Secret, before.Secret)
+	}
+	if !after.EnabledAt.Valid || after.EnabledAt.Time != before.EnabledAt.Time {
+		t.Errorf("EnabledAt changed after rejected setup: got %v, want %v", after.EnabledAt, before.EnabledAt)
+	}
+}
+
+// validTOTPCode generates a valid TOTP code for the pending secret stored in the fake store.
+func validTOTPCode(t *testing.T, store *fakeAuthStore, userID int64) string {
+	t.Helper()
+	record, ok := store.totpByUserID[userID]
+	if !ok {
+		t.Fatal("no TOTP record found for user")
+	}
+	code, err := totp.Generate(record.Secret)
+	if err != nil {
+		t.Fatalf("totp.Generate() error = %v", err)
+	}
+	return code
 }
 
 func TestAuthServiceRegisterHashesPassword(t *testing.T) {

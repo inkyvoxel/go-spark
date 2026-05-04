@@ -27,6 +27,14 @@ func (s *AuthService) BeginTOTPSetup(ctx context.Context, userID int64) (secret,
 		return "", "", fmt.Errorf("get user: %w", err)
 	}
 
+	existing, err := s.store.GetTOTPByUserID(ctx, userID)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return "", "", fmt.Errorf("get TOTP record: %w", err)
+	}
+	if err == nil && existing.EnabledAt.Valid {
+		return "", "", ErrTOTPAlreadyEnabled
+	}
+
 	// crypto/rand bytes → base32 secret via totp package's BuildURI helper.
 	// We generate the secret manually here so we can store it and return it.
 	rawSecret, err := generateTOTPSecret()

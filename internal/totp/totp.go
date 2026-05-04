@@ -29,6 +29,15 @@ func BuildURI(issuer, account, secret string) string {
 	return "otpauth://totp/" + label + "?" + q.Encode()
 }
 
+// Generate returns the current 6-digit TOTP code for the given base32-encoded secret.
+func Generate(secret string) (string, error) {
+	key, err := decodeSecret(secret)
+	if err != nil {
+		return "", fmt.Errorf("decode secret: %w", err)
+	}
+	return hotp(key, time.Now().Unix()/period), nil
+}
+
 // Verify checks a 6-digit TOTP code against a base32-encoded secret.
 // It accepts codes from the previous, current, and next 30-second windows
 // to tolerate clock skew.

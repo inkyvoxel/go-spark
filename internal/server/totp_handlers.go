@@ -71,6 +71,10 @@ func (s *Server) twoFactorSetup(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if _, _, err := s.auth.BeginTOTPSetup(r.Context(), user.ID); err != nil {
+		if errors.Is(err, services.ErrTOTPAlreadyEnabled) {
+			http.Redirect(w, r, paths.AccountTwoFactor, http.StatusSeeOther)
+			return
+		}
 		s.loggerForRequest(r).Error("begin TOTP setup", "user_id", user.ID, "err", err)
 		s.internalServerError(w, r)
 		return
