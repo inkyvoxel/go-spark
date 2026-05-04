@@ -2,6 +2,7 @@ package server
 
 import (
 	"errors"
+	"html/template"
 	"net/http"
 
 	"github.com/inkyvoxel/go-spark/internal/paths"
@@ -55,7 +56,7 @@ func (s *Server) twoFactorPage(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		data.TOTPSecret = secret
-		data.TOTPOtpAuthURI = uri
+		data.TOTPOtpAuthURI = template.URL(uri)
 	}
 
 	s.render(w, templateTwoFactor, data)
@@ -120,7 +121,7 @@ func (s *Server) twoFactorConfirm(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		data.TOTPSecret = secret
-		data.TOTPOtpAuthURI = uri
+		data.TOTPOtpAuthURI = template.URL(uri)
 		s.renderStatus(w, http.StatusUnprocessableEntity, templateTwoFactor, data)
 		return
 	}

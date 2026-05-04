@@ -256,11 +256,6 @@ func NewAuthService(store AuthStore, opts AuthOptions) *AuthService {
 		passwordResetEmail.From = opts.ConfirmationEmail.From
 	}
 
-	totpIssuer := strings.TrimSpace(opts.TOTPIssuer)
-	if totpIssuer == "" {
-		totpIssuer = "Go Spark"
-	}
-
 	return &AuthService{
 		store:                          store,
 		emailVerificationPolicy:        emailVerificationPolicy(opts.EmailVerificationPolicy),
@@ -273,7 +268,7 @@ func NewAuthService(store AuthStore, opts AuthOptions) *AuthService {
 		passwordHasher:                 newArgon2idHasher(opts),
 		tokenBytes:                     tokenBytes,
 		passwordMinLen:                 passwordMinLen,
-		totpIssuer:                     totpIssuer,
+		totpIssuer:                     strings.TrimSpace(opts.TOTPIssuer),
 	}
 }
 

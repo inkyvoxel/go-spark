@@ -18,13 +18,13 @@ import (
 )
 
 const (
-	sessionCookieName       = "session"
-	resetCookieName         = "reset_token"
-	resetCookiePath         = "/account/reset-password"
-	resetCookieTTL          = 10 * time.Minute
-	totpPendingCookieName   = "totp_pending"
-	totpPendingCookiePath   = "/account/two-factor/challenge"
-	totpPendingCookieTTL    = 5 * time.Minute
+	sessionCookieName     = "session"
+	resetCookieName       = "reset_token"
+	resetCookiePath       = "/account/reset-password"
+	resetCookieTTL        = 10 * time.Minute
+	totpPendingCookieName = "totp_pending"
+	totpPendingCookiePath = "/account/two-factor/challenge"
+	totpPendingCookieTTL  = 5 * time.Minute
 )
 
 type authService interface {

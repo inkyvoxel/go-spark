@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"html/template"
 	"io"
 	"net/http"
 	"strconv"
@@ -40,7 +41,7 @@ type templateData struct {
 	TOTPEnabled              bool
 	TOTPPending              bool
 	TOTPSecret               string
-	TOTPOtpAuthURI           string
+	TOTPOtpAuthURI           template.URL
 	TOTPBackupCodes          []string
 	TOTPBackupCodesRemaining int
 }

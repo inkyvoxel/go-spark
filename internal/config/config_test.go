@@ -84,6 +84,7 @@ func TestFromEnvUsesDefaults(t *testing.T) {
 	t.Setenv("APP_BASE_URL", "")
 	t.Setenv("AUTH_EMAIL_VERIFICATION_REQUIRED", "")
 	t.Setenv("AUTH_EMAIL_CHANGE_NOTICE_ENABLED", "")
+	t.Setenv("AUTH_TOTP_ISSUER", "")
 	t.Setenv("EMAIL_FROM", "")
 	t.Setenv("EMAIL_PROVIDER", "")
 	t.Setenv("EMAIL_LOG_BODY", "")
@@ -154,6 +155,9 @@ func TestFromEnvUsesDefaults(t *testing.T) {
 	if cfg.CleanupFailedEmailRetention != 14*24*time.Hour {
 		t.Fatalf("CleanupFailedEmailRetention = %v, want %v", cfg.CleanupFailedEmailRetention, 14*24*time.Hour)
 	}
+	if cfg.TOTPIssuer != "Go Spark" {
+		t.Fatalf("TOTPIssuer = %q, want %q", cfg.TOTPIssuer, "Go Spark")
+	}
 }
 
 func TestFromEnvUsesEnvironment(t *testing.T) {
@@ -169,6 +173,7 @@ func TestFromEnvUsesEnvironment(t *testing.T) {
 	t.Setenv("AUTH_EMAIL_VERIFICATION_REQUIRED", "false")
 	t.Setenv("AUTH_EMAIL_CHANGE_NOTICE_ENABLED", "false")
 	t.Setenv("AUTH_PASSWORD_PEPPER", "super-secret-pepper")
+	t.Setenv("AUTH_TOTP_ISSUER", "My App")
 	t.Setenv("EMAIL_FROM", "Example <mail@example.com>")
 	t.Setenv("EMAIL_PROVIDER", "LOG")
 	t.Setenv("EMAIL_LOG_BODY", "true")
@@ -226,6 +231,9 @@ func TestFromEnvUsesEnvironment(t *testing.T) {
 	}
 	if cfg.PasswordPepper != "super-secret-pepper" {
 		t.Fatalf("PasswordPepper = %q, want %q", cfg.PasswordPepper, "super-secret-pepper")
+	}
+	if cfg.TOTPIssuer != "My App" {
+		t.Fatalf("TOTPIssuer = %q, want %q", cfg.TOTPIssuer, "My App")
 	}
 	if cfg.AppBaseURL != "https://app.example.com" {
 		t.Fatalf("AppBaseURL = %q, want %q", cfg.AppBaseURL, "https://app.example.com")
