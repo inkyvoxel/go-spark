@@ -155,8 +155,8 @@ func TestFromEnvUsesDefaults(t *testing.T) {
 	if cfg.CleanupFailedEmailRetention != 14*24*time.Hour {
 		t.Fatalf("CleanupFailedEmailRetention = %v, want %v", cfg.CleanupFailedEmailRetention, 14*24*time.Hour)
 	}
-	if cfg.TOTPIssuer != "Go Spark" {
-		t.Fatalf("TOTPIssuer = %q, want %q", cfg.TOTPIssuer, "Go Spark")
+	if cfg.TOTPIssuer != "" {
+		t.Fatalf("TOTPIssuer = %q, want empty", cfg.TOTPIssuer)
 	}
 }
 

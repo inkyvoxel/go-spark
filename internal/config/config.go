@@ -166,7 +166,7 @@ func FromEnvWithProcess(defaultPasswordMinLength int, processOverride string) (C
 		EmailChangeNoticeEnabled:    emailChangeNoticeEnabled,
 		PasswordMinLength:           passwordMinLength,
 		PasswordPepper:              os.Getenv("AUTH_PASSWORD_PEPPER"),
-		TOTPIssuer:                  envOrDefault("AUTH_TOTP_ISSUER", "Go Spark"),
+		TOTPIssuer:                  strings.TrimSpace(os.Getenv("AUTH_TOTP_ISSUER")),
 		AppBaseURL:                  appBaseURL,
 		EmailFrom:                   emailFrom,
 		EmailProvider:               emailProvider,
