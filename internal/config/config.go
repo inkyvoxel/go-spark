@@ -37,6 +37,10 @@ type RateLimitPoliciesConfig struct {
 	ChangeEmail               RateLimitPolicyConfig
 	RevokeSession             RateLimitPolicyConfig
 	RevokeOtherSessions       RateLimitPolicyConfig
+	DeleteAccount             RateLimitPolicyConfig
+	TOTPChallenge             RateLimitPolicyConfig
+	TOTPDisable               RateLimitPolicyConfig
+	TOTPConfirm               RateLimitPolicyConfig
 }
 
 type Config struct {
@@ -456,6 +460,22 @@ func rateLimitPoliciesFromEnv() (RateLimitPoliciesConfig, error) {
 	if err != nil {
 		return RateLimitPoliciesConfig{}, err
 	}
+	deleteAccount, err := rateLimitPolicyFromEnv("RATE_LIMIT_DELETE_ACCOUNT")
+	if err != nil {
+		return RateLimitPoliciesConfig{}, err
+	}
+	totpChallenge, err := rateLimitPolicyFromEnv("RATE_LIMIT_TOTP_CHALLENGE")
+	if err != nil {
+		return RateLimitPoliciesConfig{}, err
+	}
+	totpDisable, err := rateLimitPolicyFromEnv("RATE_LIMIT_TOTP_DISABLE")
+	if err != nil {
+		return RateLimitPoliciesConfig{}, err
+	}
+	totpConfirm, err := rateLimitPolicyFromEnv("RATE_LIMIT_TOTP_CONFIRM")
+	if err != nil {
+		return RateLimitPoliciesConfig{}, err
+	}
 
 	return RateLimitPoliciesConfig{
 		Login:                     login,
@@ -468,6 +488,10 @@ func rateLimitPoliciesFromEnv() (RateLimitPoliciesConfig, error) {
 		ChangeEmail:               changeEmail,
 		RevokeSession:             revokeSession,
 		RevokeOtherSessions:       revokeOtherSessions,
+		DeleteAccount:             deleteAccount,
+		TOTPChallenge:             totpChallenge,
+		TOTPDisable:               totpDisable,
+		TOTPConfirm:               totpConfirm,
 	}, nil
 }
 

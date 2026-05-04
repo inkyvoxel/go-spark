@@ -147,6 +147,9 @@ func rateLimitPoliciesWithDefaults(policies RateLimitPolicies) RateLimitPolicies
 		RevokeSession:             mergeRateLimitPolicy(defaultRateLimitPolicies.RevokeSession, policies.RevokeSession),
 		RevokeOtherSessions:       mergeRateLimitPolicy(defaultRateLimitPolicies.RevokeOtherSessions, policies.RevokeOtherSessions),
 		DeleteAccount:             mergeRateLimitPolicy(defaultRateLimitPolicies.DeleteAccount, policies.DeleteAccount),
+		TOTPChallenge:             mergeRateLimitPolicy(defaultRateLimitPolicies.TOTPChallenge, policies.TOTPChallenge),
+		TOTPDisable:               mergeRateLimitPolicy(defaultRateLimitPolicies.TOTPDisable, policies.TOTPDisable),
+		TOTPConfirm:               mergeRateLimitPolicy(defaultRateLimitPolicies.TOTPConfirm, policies.TOTPConfirm),
 	}
 }
 

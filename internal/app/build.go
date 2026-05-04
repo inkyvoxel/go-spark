@@ -1,7 +1,6 @@
 package app
 
 import (
-	"context"
 	"database/sql"
 	"fmt"
 	"log/slog"
@@ -112,32 +111,6 @@ func buildRuntime(cfg config.Config, logger *slog.Logger, db *sql.DB, secretKeyB
 		HTTPServer: httpServer,
 		JobsRunner: jobsRunner,
 	}, nil
-}
-
-type serverAuthService = interface {
-	RequestEmailChange(context.Context, int64, string, string) error
-	ConfirmEmailChange(context.Context, string) (services.User, error)
-	ChangePassword(context.Context, int64, string, string) error
-	ListManagedSessions(context.Context, int64, string) ([]services.ManagedSession, error)
-	RevokeOtherSessions(context.Context, int64, string) error
-	RevokeSessionByID(context.Context, int64, string, int64) error
-	Login(context.Context, string, string) (services.User, services.AuthSession, error)
-	Logout(context.Context, string) error
-	RequestPasswordReset(context.Context, string) error
-	Register(context.Context, string, string) (services.User, error)
-	ResetPasswordWithToken(context.Context, string, string) error
-	ResendVerificationEmailByAddress(context.Context, string) error
-	ResendVerificationEmail(context.Context, int64) error
-	UserBySessionToken(context.Context, string) (services.User, error)
-	ValidatePasswordResetToken(context.Context, string) error
-	VerifyEmail(context.Context, string) (services.User, error)
-	BeginTOTPSetup(context.Context, int64) (secret, otpAuthURI string, err error)
-	GetTOTPSetupInfo(context.Context, int64) (secret, otpAuthURI string, err error)
-	ConfirmTOTPSetup(context.Context, int64, string) ([]string, error)
-	DisableTOTP(context.Context, int64, string) error
-	GetTOTPStatus(context.Context, int64) (enabled bool, backupCodesRemaining int, err error)
-	TOTPSetupState(context.Context, int64) (pending, enabled bool, err error)
-	VerifyTOTPLogin(context.Context, int64, string) (services.AuthSession, error)
 }
 
 func boolPtr(v bool) *bool {
@@ -289,6 +262,22 @@ func toServerRateLimitPolicies(cfg config.RateLimitPoliciesConfig) server.RateLi
 		RevokeOtherSessions: server.RateLimitPolicy{
 			MaxRequests: cfg.RevokeOtherSessions.MaxRequests,
 			Window:      cfg.RevokeOtherSessions.Window,
+		},
+		DeleteAccount: server.RateLimitPolicy{
+			MaxRequests: cfg.DeleteAccount.MaxRequests,
+			Window:      cfg.DeleteAccount.Window,
+		},
+		TOTPChallenge: server.RateLimitPolicy{
+			MaxRequests: cfg.TOTPChallenge.MaxRequests,
+			Window:      cfg.TOTPChallenge.Window,
+		},
+		TOTPDisable: server.RateLimitPolicy{
+			MaxRequests: cfg.TOTPDisable.MaxRequests,
+			Window:      cfg.TOTPDisable.Window,
+		},
+		TOTPConfirm: server.RateLimitPolicy{
+			MaxRequests: cfg.TOTPConfirm.MaxRequests,
+			Window:      cfg.TOTPConfirm.Window,
 		},
 	}
 }
