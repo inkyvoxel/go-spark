@@ -210,6 +210,25 @@ func TestRoutesStaticFileIsServed(t *testing.T) {
 	}
 }
 
+func TestRoutesStaticFaviconIsServed(t *testing.T) {
+	srv := testServer(t)
+
+	req := httptest.NewRequest(http.MethodGet, paths.StaticFaviconSVG, nil)
+	rec := httptest.NewRecorder()
+
+	srv.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	if got := rec.Header().Get("Content-Type"); got != "image/svg+xml" {
+		t.Fatalf("Content-Type = %q, want %q", got, "image/svg+xml")
+	}
+	if got := rec.Header().Get("Cache-Control"); got != cacheControlPublic {
+		t.Fatalf("Cache-Control = %q, want %q", got, cacheControlPublic)
+	}
+}
+
 func TestRoutesSetSecurityHeaders(t *testing.T) {
 	srv := testServer(t)
 
@@ -336,7 +355,7 @@ func TestParseTemplatesIncludesBreadcrumbPartial(t *testing.T) {
 	}
 
 	rendered := body.String()
-	for _, want := range []string{`aria-label="breadcrumb"`, `href="/account"`, `aria-current="page"`} {
+	for _, want := range []string{`aria-label="breadcrumb"`, `href="/account"`, `aria-current="page"`, `rel="icon" href="/static/favicon.svg" type="image/svg+xml"`} {
 		if !strings.Contains(rendered, want) {
 			t.Fatalf("rendered template = %q, want %q", rendered, want)
 		}

@@ -16,6 +16,7 @@ func TestRoutePathConstants(t *testing.T) {
 		{name: "healthz", got: paths.Healthz, want: "/healthz"},
 		{name: "readyz", got: paths.Readyz, want: "/readyz"},
 		{name: "static", got: paths.StaticPrefix, want: "/static/"},
+		{name: "static favicon svg", got: paths.StaticFaviconSVG, want: "/static/favicon.svg"},
 		{name: "static pico css", got: paths.StaticPicoCSS, want: "/static/vendor/pico/pico.min.css"},
 		{name: "static styles", got: paths.StaticStyles, want: "/static/styles.css"},
 		{name: "login", got: paths.Login, want: "/login"},
@@ -49,6 +50,7 @@ func TestTemplateRoutesUseCanonicalPaths(t *testing.T) {
 		want string
 	}{
 		{name: "home", got: paths.TemplateRoutes.Home, want: paths.Home},
+		{name: "static favicon svg", got: paths.TemplateRoutes.StaticFaviconSVG, want: paths.StaticFaviconSVG},
 		{name: "static pico css", got: paths.TemplateRoutes.StaticPicoCSS, want: paths.StaticPicoCSS},
 		{name: "static styles", got: paths.TemplateRoutes.StaticStyles, want: paths.StaticStyles},
 		{name: "account", got: paths.TemplateRoutes.Account, want: paths.Account},

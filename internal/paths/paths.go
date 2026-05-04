@@ -6,6 +6,7 @@ const (
 	Readyz                      = "/readyz"
 	RobotsTxt                   = "/robots.txt"
 	StaticPrefix                = "/static/"
+	StaticFaviconSVG            = StaticPrefix + "favicon.svg"
 	StaticPicoCSS               = StaticPrefix + "vendor/pico/pico.min.css"
 	StaticStyles                = StaticPrefix + "styles.css"
 	StaticQRCodeJS              = StaticPrefix + "vendor/qrcodejs/qrcode.js"
@@ -35,6 +36,7 @@ const (
 
 type TemplateRouteSet struct {
 	Home                        string
+	StaticFaviconSVG            string
 	StaticPicoCSS               string
 	StaticStyles                string
 	StaticQRCodeJS              string
@@ -62,6 +64,7 @@ type TemplateRouteSet struct {
 
 var TemplateRoutes = TemplateRouteSet{
 	Home:                        Home,
+	StaticFaviconSVG:            StaticFaviconSVG,
 	StaticPicoCSS:               StaticPicoCSS,
 	StaticStyles:                StaticStyles,
 	StaticQRCodeJS:              StaticQRCodeJS,
