@@ -313,6 +313,82 @@ func TestRoutesLoginFormOmitsUnsafeNextPath(t *testing.T) {
 	}
 }
 
+func TestRoutesLoginWithTOTPURLEncodesNestedNext(t *testing.T) {
+	auth := &fakeAuthLookup{
+		user:     verifiedRouteUser(),
+		loginErr: services.ErrTOTPRequired,
+	}
+	srv := newAuthRouteTestServer(t, auth)
+
+	form := url.Values{
+		"email":         []string{"user@example.com"},
+		"password":      []string{"password"},
+		"next":          []string{"/account?tab=sessions"},
+		csrfFieldName:   []string{"csrf"},
+	}
+	req := httptest.NewRequest(http.MethodPost, paths.Login, strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	addCSRFCookieAndHeader(t, srv, req)
+	rec := httptest.NewRecorder()
+
+	srv.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusSeeOther)
+	}
+	want := paths.AccountTwoFactorChallenge + "?next=" + url.QueryEscape("/account?tab=sessions")
+	if location := rec.Header().Get("Location"); location != want {
+		t.Fatalf("Location = %q, want %q", location, want)
+	}
+}
+
+func TestRoutesTwoFactorChallengePreservesNestedNext(t *testing.T) {
+	auth := &fakeAuthLookup{
+		user:     verifiedRouteUser(),
+		loginErr: services.ErrTOTPRequired,
+		totpLoginSession: services.AuthSession{
+			Token:     "totp-session-token",
+			ExpiresAt: time.Now().Add(time.Hour),
+		},
+	}
+	srv := newAuthRouteTestServer(t, auth)
+
+	loginForm := url.Values{
+		"email":       []string{"user@example.com"},
+		"password":    []string{"password"},
+		csrfFieldName: []string{"csrf"},
+	}
+	loginReq := httptest.NewRequest(http.MethodPost, paths.Login, strings.NewReader(loginForm.Encode()))
+	loginReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	addCSRFCookieAndHeader(t, srv, loginReq)
+	loginRec := httptest.NewRecorder()
+	srv.Routes().ServeHTTP(loginRec, loginReq)
+	if loginRec.Code != http.StatusSeeOther {
+		t.Fatalf("login status = %d, want %d", loginRec.Code, http.StatusSeeOther)
+	}
+	pending := cookieFromRecorder(t, loginRec, totpPendingCookieName)
+
+	challengeForm := url.Values{
+		"code":        []string{"123456"},
+		csrfFieldName: []string{"csrf"},
+	}
+	target := paths.AccountTwoFactorChallenge + "?next=" + url.QueryEscape("/account?tab=sessions")
+	req := httptest.NewRequest(http.MethodPost, target, strings.NewReader(challengeForm.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(pending)
+	addCSRFCookieAndHeader(t, srv, req)
+	rec := httptest.NewRecorder()
+
+	srv.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusSeeOther)
+	}
+	if location := rec.Header().Get("Location"); location != "/account?tab=sessions" {
+		t.Fatalf("Location = %q, want %q", location, "/account?tab=sessions")
+	}
+}
+
 func TestRoutesLoginFormShowsResendVerificationLink(t *testing.T) {
 	srv := newAuthRouteTestServer(t, &fakeAuthLookup{})
 

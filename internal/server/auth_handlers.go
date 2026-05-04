@@ -8,6 +8,7 @@ import (
 	"html/template"
 	"io"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"unicode/utf8"
@@ -309,7 +310,7 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 			s.setTOTPPendingCookie(w, r, user.ID, rememberMe)
 			challengeURL := paths.AccountTwoFactorChallenge
 			if next != "" {
-				challengeURL += "?next=" + next
+				challengeURL += "?next=" + url.QueryEscape(next)
 			}
 			http.Redirect(w, r, challengeURL, http.StatusSeeOther)
 			return

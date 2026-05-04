@@ -447,6 +447,32 @@ func TestParseTemplatesWorksOutsideProjectRoot(t *testing.T) {
 	}
 }
 
+func TestParseTemplatesTwoFactorChallengeEncodesNextInFormAction(t *testing.T) {
+	templates, err := parseTemplates()
+	if err != nil {
+		t.Fatalf("parseTemplates() error = %v", err)
+	}
+
+	var body strings.Builder
+	err = templates[templateTwoFactorChallenge].ExecuteTemplate(&body, templateLayout, templateData{
+		Title:     "Two-Factor Authentication",
+		Routes:    paths.TemplateRoutes,
+		CSRFToken: "csrf",
+		Next:      "/account?tab=sessions",
+	})
+	if err != nil {
+		t.Fatalf("ExecuteTemplate() error = %v", err)
+	}
+
+	rendered := body.String()
+	if !strings.Contains(rendered, "?next=%2Faccount%3Ftab%3Dsessions") {
+		t.Fatalf("rendered form action does not contain URL-encoded next; body = %q", rendered)
+	}
+	if strings.Contains(rendered, "?next=/account?tab=sessions") {
+		t.Fatalf("rendered form action contains unencoded next; body = %q", rendered)
+	}
+}
+
 func testServer(t *testing.T) *Server {
 	t.Helper()
 

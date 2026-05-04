@@ -165,6 +165,11 @@ func parseTemplates() (map[string]*template.Template, error) {
 		templateTwoFactorBackupCodes: path.Join("account", "two_factor_backup_codes.html"),
 		templateTwoFactorChallenge:   path.Join("account", "two_factor_challenge.html"),
 	}
+	funcMap := template.FuncMap{
+		"urlQueryEscape": func(s string) template.URL {
+			return template.URL(url.QueryEscape(s))
+		},
+	}
 	templates := make(map[string]*template.Template, len(pages))
 	layout := path.Join("templates", templateLayout)
 	partials := []string{
@@ -175,7 +180,7 @@ func parseTemplates() (map[string]*template.Template, error) {
 	for name, filePath := range pages {
 		files := append([]string{layout}, partials...)
 		files = append(files, path.Join("templates", filePath))
-		parsed, err := template.ParseFS(appassets.FS, files...)
+		parsed, err := template.New(templateLayout).Funcs(funcMap).ParseFS(appassets.FS, files...)
 		if err != nil {
 			return nil, err
 		}
