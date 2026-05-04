@@ -352,7 +352,7 @@ func (w *staticCacheHeaderResponseWriter) Write(data []byte) (int, error) {
 }
 
 func (s *Server) home(w http.ResponseWriter, r *http.Request) {
-	s.render(w, templateHome, s.newTemplateData(w, r, "Go Spark"))
+	s.render(w, templateHome, s.newTemplateData(w, r, "Home"))
 }
 
 func (s *Server) healthz(w http.ResponseWriter, _ *http.Request) {
