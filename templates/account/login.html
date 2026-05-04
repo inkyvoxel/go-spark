@@ -4,9 +4,7 @@
   {{ template "login_form_section" . }}
   <p><a href="{{ .Routes.Register }}">Create an account</a></p>
   <p><a href="{{ .Routes.ForgotPassword }}">Forgot your password?</a></p>
-  {{ if .EmailVerificationRequired }}
   <p><a href="{{ .Routes.ResendVerification }}">Resend verification email</a></p>
-  {{ end }}
 </article>
 {{ end }}
 

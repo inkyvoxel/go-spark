@@ -255,26 +255,6 @@ func TestRequireAnonymousAllowsAnonymousUser(t *testing.T) {
 	}
 }
 
-func TestRequireAnonymousRedirectsUnverifiedUserToAccountWhenVerificationOptional(t *testing.T) {
-	srv := newAuthMiddlewareTestServer(&fakeAuthLookup{})
-	srv.emailVerificationPolicy = services.NewEmailVerificationPolicy(false)
-
-	req := httptest.NewRequest(http.MethodGet, paths.Login, nil)
-	req = req.WithContext(contextWithUser(req.Context(), services.User{ID: 42, Email: "user@example.com"}))
-	rec := httptest.NewRecorder()
-
-	srv.requireAnonymous(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatal("next handler should not run")
-	})).ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusSeeOther {
-		t.Fatalf("status = %d, want %d", rec.Code, http.StatusSeeOther)
-	}
-	if location := rec.Header().Get("Location"); location != paths.Account {
-		t.Fatalf("Location = %q, want %q", location, paths.Account)
-	}
-}
-
 func TestRequireVerifiedAuthAllowsVerifiedUser(t *testing.T) {
 	srv := newAuthMiddlewareTestServer(&fakeAuthLookup{})
 
@@ -314,26 +294,6 @@ func TestRequireVerifiedAuthRejectsUnverifiedUser(t *testing.T) {
 
 	if rec.Code != http.StatusForbidden {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusForbidden)
-	}
-}
-
-func TestRequireVerifiedAuthAllowsUnverifiedUserWhenVerificationOptional(t *testing.T) {
-	srv := newAuthMiddlewareTestServer(&fakeAuthLookup{})
-	srv.emailVerificationPolicy = services.NewEmailVerificationPolicy(false)
-
-	req := httptest.NewRequest(http.MethodPost, paths.ChangePassword, nil)
-	req = req.WithContext(contextWithUser(req.Context(), services.User{
-		ID:    42,
-		Email: "user@example.com",
-	}))
-	rec := httptest.NewRecorder()
-
-	srv.requireVerifiedAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusNoContent)
-	})).ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusNoContent {
-		t.Fatalf("status = %d, want %d", rec.Code, http.StatusNoContent)
 	}
 }
 
@@ -597,10 +557,9 @@ func (f *fakeAuthLookup) VerifyTOTPLogin(ctx context.Context, userID int64, code
 
 func newAuthMiddlewareTestServer(auth authService) *Server {
 	return &Server{
-		auth:                    auth,
-		emailVerificationPolicy: services.DefaultEmailVerificationPolicy(),
-		logger:                  slog.New(slog.NewTextHandler(io.Discard, nil)),
-		appBaseOrigin:           "http://localhost:8080",
-		csrfKey:                 []byte("test-csrf-signing-key"),
+		auth:          auth,
+		logger:        slog.New(slog.NewTextHandler(io.Discard, nil)),
+		appBaseOrigin: "http://localhost:8080",
+		csrfKey:       []byte("test-csrf-signing-key"),
 	}
 }

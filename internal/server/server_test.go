@@ -13,7 +13,6 @@ import (
 	"testing"
 
 	"github.com/inkyvoxel/go-spark/internal/paths"
-	"github.com/inkyvoxel/go-spark/internal/services"
 
 	_ "modernc.org/sqlite"
 )
@@ -452,10 +451,9 @@ func testServer(t *testing.T) *Server {
 	t.Helper()
 
 	return &Server{
-		db:                      testDB(t),
-		emailVerificationPolicy: services.DefaultEmailVerificationPolicy(),
-		logger:                  slog.New(slog.NewTextHandler(io.Discard, nil)),
-		csrfKey:                 []byte("test-csrf-signing-key"),
+		db:      testDB(t),
+		logger:  slog.New(slog.NewTextHandler(io.Discard, nil)),
+		csrfKey: []byte("test-csrf-signing-key"),
 		templates: testTemplates(t, map[string]string{
 			templateHome:          `<h1>{{ .Title }}</h1>`,
 			templateNotFound:      `<h1>Page not found</h1>`,

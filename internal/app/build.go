@@ -60,7 +60,6 @@ func buildRuntime(cfg config.Config, logger *slog.Logger, db *sql.DB, secretKeyB
 		PasswordMinLen:           cfg.PasswordMinLength,
 		PasswordPepper:           cfg.PasswordPepper,
 		TOTPIssuer:               cfg.TOTPIssuer,
-		EmailVerificationPolicy:  services.NewEmailVerificationPolicy(cfg.EmailVerificationRequired),
 		EmailChangeNoticeEnabled: boolPtr(cfg.EmailChangeNoticeEnabled),
 		ConfirmationEmail: email.AccountConfirmationOptions{
 			AppBaseURL: cfg.AppBaseURL,
@@ -82,16 +81,15 @@ func buildRuntime(cfg config.Config, logger *slog.Logger, db *sql.DB, secretKeyB
 	}
 
 	webApp, err := server.New(server.Options{
-		Logger:                  logger,
-		DB:                      db,
-		Auth:                    auth,
-		CookieSecure:            cfg.CookieSecure,
-		AppBaseURL:              cfg.AppBaseURL,
-		SecretKeyBase:           secretKeyBase,
-		PasswordMinLength:       cfg.PasswordMinLength,
-		EmailVerificationPolicy: services.NewEmailVerificationPolicy(cfg.EmailVerificationRequired),
-		RateLimitPolicies:       toServerRateLimitPolicies(cfg.RateLimitPolicies),
-		TrustedProxies:          cfg.TrustedProxies,
+		Logger:            logger,
+		DB:                db,
+		Auth:              auth,
+		CookieSecure:      cfg.CookieSecure,
+		AppBaseURL:        cfg.AppBaseURL,
+		SecretKeyBase:     secretKeyBase,
+		PasswordMinLength: cfg.PasswordMinLength,
+		RateLimitPolicies: toServerRateLimitPolicies(cfg.RateLimitPolicies),
+		TrustedProxies:    cfg.TrustedProxies,
 	})
 	if err != nil {
 		return Runtime{}, fmt.Errorf("configure web server: %w", err)
@@ -196,9 +194,6 @@ func securityConfigWarnings(cfg config.Config) []string {
 
 	warnings := make([]string, 0, 4)
 
-	if !cfg.EmailVerificationRequired {
-		warnings = append(warnings, "AUTH_EMAIL_VERIFICATION_REQUIRED=false allows unverified users to access account features in production")
-	}
 	if cfg.EmailProvider != email.ProviderSMTP {
 		warnings = append(warnings, fmt.Sprintf("EMAIL_PROVIDER=%q in production does not deliver real email by default", cfg.EmailProvider))
 	}

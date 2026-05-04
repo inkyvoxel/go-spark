@@ -27,32 +27,30 @@ const (
 )
 
 type Server struct {
-	db                      *sql.DB
-	auth                    authService
-	emailVerificationPolicy services.EmailVerificationPolicy
-	logger                  *slog.Logger
-	templates               map[string]*template.Template
-	cookieSecure            bool
-	appBaseOrigin           string
-	passwordMinLength       int
-	csrfKey                 []byte
-	flashKey                []byte
-	rateLimiter             rateLimitStore
-	rateLimitPolicies       RateLimitPolicies
-	trustedProxies          []net.IPNet
+	db                *sql.DB
+	auth              authService
+	logger            *slog.Logger
+	templates         map[string]*template.Template
+	cookieSecure      bool
+	appBaseOrigin     string
+	passwordMinLength int
+	csrfKey           []byte
+	flashKey          []byte
+	rateLimiter       rateLimitStore
+	rateLimitPolicies RateLimitPolicies
+	trustedProxies    []net.IPNet
 }
 
 type Options struct {
-	DB                      *sql.DB
-	Auth                    authService
-	EmailVerificationPolicy services.EmailVerificationPolicy
-	Logger                  *slog.Logger
-	CookieSecure            bool
-	AppBaseURL              string
-	SecretKeyBase           string
-	PasswordMinLength       int
-	RateLimitPolicies       RateLimitPolicies
-	TrustedProxies          []string
+	DB                *sql.DB
+	Auth              authService
+	Logger            *slog.Logger
+	CookieSecure      bool
+	AppBaseURL        string
+	SecretKeyBase     string
+	PasswordMinLength int
+	RateLimitPolicies RateLimitPolicies
+	TrustedProxies    []string
 }
 
 func New(opts Options) (*Server, error) {
@@ -84,19 +82,18 @@ func New(opts Options) (*Server, error) {
 	}
 
 	return &Server{
-		db:                      opts.DB,
-		auth:                    opts.Auth,
-		emailVerificationPolicy: emailVerificationPolicy(opts.EmailVerificationPolicy),
-		logger:                  logger,
-		templates:               templates,
-		cookieSecure:            opts.CookieSecure,
-		appBaseOrigin:           appBaseOrigin,
-		passwordMinLength:       passwordMinLength,
-		csrfKey:                 csrfKey,
-		flashKey:                flashKey,
-		rateLimiter:             newFixedWindowRateLimiter(),
-		rateLimitPolicies:       rateLimitPoliciesWithDefaults(opts.RateLimitPolicies),
-		trustedProxies:          trustedProxies,
+		db:                opts.DB,
+		auth:              opts.Auth,
+		logger:            logger,
+		templates:         templates,
+		cookieSecure:      opts.CookieSecure,
+		appBaseOrigin:     appBaseOrigin,
+		passwordMinLength: passwordMinLength,
+		csrfKey:           csrfKey,
+		flashKey:          flashKey,
+		rateLimiter:       newFixedWindowRateLimiter(),
+		rateLimitPolicies: rateLimitPoliciesWithDefaults(opts.RateLimitPolicies),
+		trustedProxies:    trustedProxies,
 	}, nil
 }
 

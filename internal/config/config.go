@@ -51,7 +51,6 @@ type Config struct {
 	DatabasePath                string
 	CookieSecure                bool
 	SecretKeyBase               string
-	EmailVerificationRequired   bool
 	EmailChangeNoticeEnabled    bool
 	PasswordMinLength           int
 	PasswordPepper              string
@@ -112,10 +111,6 @@ func FromEnvWithProcess(defaultPasswordMinLength int, processOverride string) (C
 		return Config{}, err
 	}
 
-	emailVerificationRequired, err := envBoolOrDefault("AUTH_EMAIL_VERIFICATION_REQUIRED", true)
-	if err != nil {
-		return Config{}, err
-	}
 	emailChangeNoticeEnabled, err := envBoolOrDefault("AUTH_EMAIL_CHANGE_NOTICE_ENABLED", true)
 	if err != nil {
 		return Config{}, err
@@ -166,7 +161,6 @@ func FromEnvWithProcess(defaultPasswordMinLength int, processOverride string) (C
 		DatabasePath:                envOrDefault("DATABASE_PATH", "./data/app.db"),
 		CookieSecure:                cookieSecure,
 		SecretKeyBase:               strings.TrimSpace(os.Getenv("SECRET_KEY_BASE")),
-		EmailVerificationRequired:   emailVerificationRequired,
 		EmailChangeNoticeEnabled:    emailChangeNoticeEnabled,
 		PasswordMinLength:           passwordMinLength,
 		PasswordPepper:              os.Getenv("AUTH_PASSWORD_PEPPER"),

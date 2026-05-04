@@ -97,17 +97,15 @@ func TestValidateSecurityConfigAllowsProductionWithSecureBaseline(t *testing.T) 
 
 func TestSecurityConfigWarningsProductionIncludesOptionalSettingWarnings(t *testing.T) {
 	warnings := securityConfigWarnings(config.Config{
-		Env:                       "production",
-		EmailVerificationRequired: false,
-		EmailProvider:             email.ProviderLog,
-		EmailLogBody:              true,
-		EmailFrom:                 defaultStarterEmailFrom,
+		Env:           "production",
+		EmailProvider: email.ProviderLog,
+		EmailLogBody:  true,
+		EmailFrom:     defaultStarterEmailFrom,
 	})
 
-	if len(warnings) != 4 {
-		t.Fatalf("warning count = %d, want 4", len(warnings))
+	if len(warnings) != 3 {
+		t.Fatalf("warning count = %d, want 3", len(warnings))
 	}
-	assertWarningsContain(t, warnings, "AUTH_EMAIL_VERIFICATION_REQUIRED")
 	assertWarningsContain(t, warnings, "EMAIL_PROVIDER")
 	assertWarningsContain(t, warnings, "EMAIL_LOG_BODY")
 	assertWarningsContain(t, warnings, "EMAIL_FROM")
@@ -115,11 +113,10 @@ func TestSecurityConfigWarningsProductionIncludesOptionalSettingWarnings(t *test
 
 func TestSecurityConfigWarningsProductionSkipsConfiguredOptions(t *testing.T) {
 	warnings := securityConfigWarnings(config.Config{
-		Env:                       "production",
-		EmailVerificationRequired: true,
-		EmailProvider:             email.ProviderSMTP,
-		EmailLogBody:              false,
-		EmailFrom:                 `"App" <security@example.com>`,
+		Env:           "production",
+		EmailProvider: email.ProviderSMTP,
+		EmailLogBody:  false,
+		EmailFrom:     `"App" <security@example.com>`,
 	})
 
 	if len(warnings) != 0 {
@@ -129,11 +126,10 @@ func TestSecurityConfigWarningsProductionSkipsConfiguredOptions(t *testing.T) {
 
 func TestSecurityConfigWarningsNonProductionReturnsNone(t *testing.T) {
 	warnings := securityConfigWarnings(config.Config{
-		Env:                       "development",
-		EmailVerificationRequired: false,
-		EmailProvider:             email.ProviderLog,
-		EmailLogBody:              true,
-		EmailFrom:                 defaultStarterEmailFrom,
+		Env:           "development",
+		EmailProvider: email.ProviderLog,
+		EmailLogBody:  true,
+		EmailFrom:     defaultStarterEmailFrom,
 	})
 
 	if len(warnings) != 0 {

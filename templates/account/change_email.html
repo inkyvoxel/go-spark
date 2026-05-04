@@ -24,8 +24,7 @@
         .FieldErrors "current_password" }}aria-invalid="true" {{ end }} required>
       {{ with index .FieldErrors "current_password" }}<small role="alert">{{ . }}</small>{{ end }}
     </label>
-    <button type="submit">{{ if .EmailVerificationRequired }}Send verification email{{ else }}Change email address{{ end
-      }}</button>
+    <button type="submit">Send verification email</button>
   </form>
 </section>
 {{ end }}

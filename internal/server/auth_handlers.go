@@ -19,24 +19,23 @@ import (
 const emailPattern = `[^@\s]+@[^@\s]+\.[^@\s]+`
 
 type templateData struct {
-	Title                     string
-	RequestID                 string
-	CSRFToken                 string
-	Routes                    paths.TemplateRouteSet
-	Breadcrumbs               []breadcrumbItem
-	Flash                     *flashMessage
-	Error                     string
-	FieldErrors               map[string]string
-	Email                     string
-	EmailPattern              string
-	Next                      string
-	ResetTokenInvalid         bool
-	Authenticated             bool
-	Verified                  bool
-	EmailVerificationRequired bool
-	User                      services.User
-	PasswordMinLength         int
-	ManagedSessions           []services.ManagedSession
+	Title             string
+	RequestID         string
+	CSRFToken         string
+	Routes            paths.TemplateRouteSet
+	Breadcrumbs       []breadcrumbItem
+	Flash             *flashMessage
+	Error             string
+	FieldErrors       map[string]string
+	Email             string
+	EmailPattern      string
+	Next              string
+	ResetTokenInvalid bool
+	Authenticated     bool
+	Verified          bool
+	User              services.User
+	PasswordMinLength int
+	ManagedSessions   []services.ManagedSession
 	// TOTP
 	TOTPEnabled              bool
 	TOTPPending              bool
@@ -123,7 +122,7 @@ func (s *Server) register(w http.ResponseWriter, r *http.Request) {
 	}
 	s.loggerForRequest(r).Info("auth register succeeded", "user_id", user.ID)
 	redirect := paths.Account
-	if !s.emailVerificationPolicy.UserIsVerified(user) {
+	if !user.EmailVerifiedAt.Valid {
 		redirect = paths.VerifyEmail
 	}
 	http.Redirect(w, r, redirect, http.StatusSeeOther)
@@ -208,28 +207,10 @@ func (s *Server) resetPasswordForm(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) resendVerificationForm(w http.ResponseWriter, r *http.Request) {
-	if !s.emailVerificationPolicy.Required() {
-		if _, ok := currentUser(r.Context()); ok {
-			http.Redirect(w, r, paths.Account, http.StatusSeeOther)
-			return
-		}
-		http.Redirect(w, r, paths.Login, http.StatusSeeOther)
-		return
-	}
-
 	s.render(w, templateResendVerification, s.newTemplateData(w, r, "Resend Verification Email"))
 }
 
 func (s *Server) confirmEmail(w http.ResponseWriter, r *http.Request) {
-	if !s.emailVerificationPolicy.Required() {
-		if _, ok := currentUser(r.Context()); ok {
-			http.Redirect(w, r, paths.Account, http.StatusSeeOther)
-			return
-		}
-		http.Redirect(w, r, paths.Login, http.StatusSeeOther)
-		return
-	}
-
 	data := s.newTemplateData(w, r, "Confirm Email")
 
 	if !s.confirmEmailToken(
@@ -255,15 +236,6 @@ func (s *Server) confirmEmail(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) confirmEmailChange(w http.ResponseWriter, r *http.Request) {
-	if !s.emailVerificationPolicy.RequiresEmailChangeVerification() {
-		if _, ok := currentUser(r.Context()); ok {
-			http.Redirect(w, r, paths.Account, http.StatusSeeOther)
-			return
-		}
-		http.Redirect(w, r, paths.Login, http.StatusSeeOther)
-		return
-	}
-
 	data := s.newTemplateData(w, r, "Confirm Email Change")
 
 	if !s.confirmEmailToken(
@@ -353,7 +325,7 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	next := safeRedirectPath(r.FormValue("next"))
-	if !s.emailVerificationPolicy.UserIsVerified(user) {
+	if !user.EmailVerifiedAt.Valid {
 		next = paths.VerifyEmail
 	} else if next == "" {
 		next = paths.Account
@@ -486,11 +458,6 @@ func (s *Server) changeEmailForm(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) verifyEmail(w http.ResponseWriter, r *http.Request) {
-	if !s.emailVerificationPolicy.Required() {
-		http.Redirect(w, r, paths.Account, http.StatusSeeOther)
-		return
-	}
-
 	data := s.newTemplateData(w, r, "Verify Email")
 	if data.Verified {
 		http.Redirect(w, r, paths.Account, http.StatusSeeOther)
@@ -503,11 +470,6 @@ func (s *Server) resendVerification(w http.ResponseWriter, r *http.Request) {
 	user, ok := currentUser(r.Context())
 	if !ok {
 		http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
-		return
-	}
-
-	if !s.emailVerificationPolicy.Required() {
-		http.Redirect(w, r, paths.Account, http.StatusSeeOther)
 		return
 	}
 
@@ -637,15 +599,6 @@ func (s *Server) changeEmail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !s.emailVerificationPolicy.RequiresEmailChangeVerification() {
-		s.clearSessionCookie(w, r)
-		s.clearCSRFCookie(w, r)
-		s.loggerForRequest(r).Info("auth email changed", "user_id", user.ID)
-		s.setFlash(w, r, flashSuccess("Your email address has been changed. Sign in again."))
-		http.Redirect(w, r, paths.Login, http.StatusSeeOther)
-		return
-	}
-
 	s.loggerForRequest(r).Info("auth email change requested", "user_id", user.ID)
 	s.setFlash(w, r, flashSuccess("Check your new email address for a verification link."))
 	http.Redirect(w, r, paths.Account, http.StatusSeeOther)
@@ -698,15 +651,6 @@ func (s *Server) resetPassword(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) resendVerificationPublic(w http.ResponseWriter, r *http.Request) {
-	if !s.emailVerificationPolicy.Required() {
-		if _, ok := currentUser(r.Context()); ok {
-			http.Redirect(w, r, paths.Account, http.StatusSeeOther)
-			return
-		}
-		http.Redirect(w, r, paths.Login, http.StatusSeeOther)
-		return
-	}
-
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
 		return
@@ -880,9 +824,8 @@ func (s *Server) newTemplateData(w http.ResponseWriter, r *http.Request, title s
 	if s.passwordMinLength > 0 {
 		data.PasswordMinLength = s.passwordMinLength
 	}
-	data.EmailVerificationRequired = s.emailVerificationPolicy.Required()
 	if data.Authenticated {
-		data.Verified = s.emailVerificationPolicy.UserIsVerified(data.User)
+		data.Verified = data.User.EmailVerifiedAt.Valid
 	}
 	if flash, ok := s.popFlash(w, r); ok {
 		data.Flash = &flash

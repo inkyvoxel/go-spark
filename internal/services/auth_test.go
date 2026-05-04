@@ -469,90 +469,6 @@ func TestAuthServiceRequestEmailChangeWrapsStoreErrors(t *testing.T) {
 	}
 }
 
-func TestAuthServiceRequestEmailChangeOptionalModeAppliesImmediately(t *testing.T) {
-	service := newTestAuthServiceWithEmailVerificationRequired(t, false)
-	store := service.store.(*fakeAuthStore)
-
-	user, err := service.Register(context.Background(), "user@example.com", "password")
-	if err != nil {
-		t.Fatalf("Register() error = %v", err)
-	}
-	_, session, err := service.Login(context.Background(), "user@example.com", "password")
-	if err != nil {
-		t.Fatalf("Login() error = %v", err)
-	}
-	initialOutbox := len(store.outbox)
-
-	if err := service.RequestEmailChange(context.Background(), user.ID, "password", "new@example.com"); err != nil {
-		t.Fatalf("RequestEmailChange() error = %v", err)
-	}
-
-	if len(store.emailChangeTokens) != 0 {
-		t.Fatalf("email change token count = %d, want 0", len(store.emailChangeTokens))
-	}
-	changed, err := store.GetUserByEmail(context.Background(), "new@example.com")
-	if err != nil {
-		t.Fatalf("GetUserByEmail(new) error = %v", err)
-	}
-	if changed.Email != "new@example.com" {
-		t.Fatalf("changed email = %q, want %q", changed.Email, "new@example.com")
-	}
-	if !changed.EmailVerifiedAt.Valid {
-		t.Fatal("changed EmailVerifiedAt.Valid = false, want true")
-	}
-	if _, err := store.GetUserByEmail(context.Background(), "user@example.com"); !errors.Is(err, sql.ErrNoRows) {
-		t.Fatalf("GetUserByEmail(old) error = %v, want %v", err, sql.ErrNoRows)
-	}
-	if _, err := service.UserBySessionToken(context.Background(), session.Token); !errors.Is(err, ErrInvalidSession) {
-		t.Fatalf("old session error = %v, want %v", err, ErrInvalidSession)
-	}
-	if len(store.outbox) != initialOutbox+1 {
-		t.Fatalf("outbox count = %d, want %d", len(store.outbox), initialOutbox+1)
-	}
-	notice := store.outbox[len(store.outbox)-1]
-	if notice.To != "<user@example.com>" {
-		t.Fatalf("old email notice To = %q, want old email", notice.To)
-	}
-}
-
-func TestAuthServiceRequestEmailChangeOptionalModeWrapsStoreErrors(t *testing.T) {
-	service := newTestAuthServiceWithEmailVerificationRequired(t, false)
-	store := service.store.(*fakeAuthStore)
-
-	user, err := service.Register(context.Background(), "user@example.com", "password")
-	if err != nil {
-		t.Fatalf("Register() error = %v", err)
-	}
-
-	store.changeEmailImmediatelyErr = errors.New("database unavailable")
-	err = service.RequestEmailChange(context.Background(), user.ID, "password", "new@example.com")
-	if err == nil {
-		t.Fatal("RequestEmailChange() error = nil, want error")
-	}
-	if !strings.Contains(err.Error(), "change email immediately") {
-		t.Fatalf("RequestEmailChange() error = %v, want operation context", err)
-	}
-}
-
-func TestAuthServiceRequestEmailChangeOptionalModeSkipsOldEmailNoticeWhenDisabled(t *testing.T) {
-	service := newTestAuthServiceWithEmailVerificationAndNotice(t, false, false)
-	store := service.store.(*fakeAuthStore)
-
-	user, err := service.Register(context.Background(), "user@example.com", "password")
-	if err != nil {
-		t.Fatalf("Register() error = %v", err)
-	}
-	initialOutbox := len(store.outbox)
-
-	if err := service.RequestEmailChange(context.Background(), user.ID, "password", "new@example.com"); err != nil {
-		t.Fatalf("RequestEmailChange() error = %v", err)
-	}
-
-	if len(store.outbox) != initialOutbox {
-		t.Fatalf("outbox count = %d, want %d", len(store.outbox), initialOutbox)
-	}
-}
-
 func TestAuthServiceConfirmEmailChange(t *testing.T) {
 	service := newTestAuthService(t)
 	store := service.store.(*fakeAuthStore)
@@ -662,7 +578,7 @@ func TestAuthServiceConfirmEmailChangeRejectsAlreadyOwnedEmail(t *testing.T) {
 }
 
 func TestAuthServiceConfirmEmailChangeSkipsOldEmailNoticeWhenDisabled(t *testing.T) {
-	service := newTestAuthServiceWithEmailVerificationAndNotice(t, true, false)
+	service := newTestAuthServiceWithNoticeDisabled(t)
 	store := service.store.(*fakeAuthStore)
 
 	user, err := service.Register(context.Background(), "user@example.com", "password")
@@ -899,42 +815,6 @@ func TestAuthServiceResendVerificationEmailByAddressWrapsLookupError(t *testing.
 	}
 }
 
-func TestAuthServiceRegisterOptionalVerificationCreatesVerifiedUserWithoutOutbox(t *testing.T) {
-	service := newTestAuthServiceWithEmailVerificationRequired(t, false)
-	store := service.store.(*fakeAuthStore)
-
-	user, err := service.Register(context.Background(), "user@example.com", "password")
-	if err != nil {
-		t.Fatalf("Register() error = %v", err)
-	}
-	if !user.EmailVerifiedAt.Valid {
-		t.Fatal("EmailVerifiedAt.Valid = false, want true")
-	}
-	if len(store.verificationTokens) != 0 {
-		t.Fatalf("verification token count = %d, want 0", len(store.verificationTokens))
-	}
-	if len(store.outbox) != 0 {
-		t.Fatalf("outbox count = %d, want 0", len(store.outbox))
-	}
-}
-
-func TestAuthServiceResendVerificationEmailOptionalModeNoOp(t *testing.T) {
-	service := newTestAuthServiceWithEmailVerificationRequired(t, false)
-	store := service.store.(*fakeAuthStore)
-	user, err := store.CreateUser(context.Background(), "user@example.com", "hash")
-	if err != nil {
-		t.Fatalf("CreateUser() error = %v", err)
-	}
-
-	initialOutbox := len(store.outbox)
-	if err := service.ResendVerificationEmail(context.Background(), user.ID); err != nil {
-		t.Fatalf("ResendVerificationEmail() error = %v", err)
-	}
-	if len(store.outbox) != initialOutbox {
-		t.Fatalf("outbox count = %d, want %d", len(store.outbox), initialOutbox)
-	}
-}
-
 func TestAuthServiceRequestPasswordReset(t *testing.T) {
 	service := newTestAuthService(t)
 	store := service.store.(*fakeAuthStore)
@@ -1071,11 +951,7 @@ func newTestAuthService(t *testing.T) *AuthService {
 	})
 }
 
-func newTestAuthServiceWithEmailVerificationRequired(t *testing.T, required bool) *AuthService {
-	return newTestAuthServiceWithEmailVerificationAndNotice(t, required, true)
-}
-
-func newTestAuthServiceWithEmailVerificationAndNotice(t *testing.T, required bool, noticeEnabled bool) *AuthService {
+func newTestAuthServiceWithNoticeDisabled(t *testing.T) *AuthService {
 	t.Helper()
 
 	return NewAuthService(newFakeAuthStore(), AuthOptions{
@@ -1090,8 +966,7 @@ func newTestAuthServiceWithEmailVerificationAndNotice(t *testing.T, required boo
 			AppBaseURL: "http://localhost:8080",
 			From:       "Go Spark <hello@example.com>",
 		},
-		EmailVerificationPolicy:  NewEmailVerificationPolicy(required),
-		EmailChangeNoticeEnabled: boolPtr(noticeEnabled),
+		EmailChangeNoticeEnabled: boolPtr(false),
 	})
 }
 
