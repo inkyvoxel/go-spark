@@ -80,7 +80,9 @@ The starter uses:
 * email verification
 * password reset by email
 
-TOTP follows a three-step flow: the user initiates setup (secret generated and stored as pending), scans the QR code in their authenticator app, then confirms with a valid code — at which point 8 one-time backup codes are generated and shown once. At login, users with 2FA enabled are issued a short-lived pending cookie and redirected to a challenge page before a full session is created.
+Login defaults to a browser-session cookie. Users can explicitly choose "Remember me on this device" to receive a persistent cookie that lasts until the server-side session expires. Session cookies remain HTTP-only, SameSite=Lax, and Secure when configured or served over TLS.
+
+TOTP follows a three-step flow: the user initiates setup (secret generated and stored as pending), scans the QR code in their authenticator app, then confirms with a valid code — at which point 8 one-time backup codes are generated and shown once. At login, users with 2FA enabled are issued a short-lived signed pending cookie and redirected to a challenge page before a full session is created. The pending cookie carries the explicit remember-me choice so the final session cookie matches what the user selected at the password step.
 
 It intentionally does not use JWTs or a large auth framework for the default server-rendered flow.
 

@@ -91,7 +91,7 @@ func TestLoadSessionAllowsInvalidSessionAsAnonymous(t *testing.T) {
 	}
 }
 
-func TestSetSessionCookieSetsPositiveMaxAge(t *testing.T) {
+func TestSetSessionCookieDefaultsToBrowserSessionCookie(t *testing.T) {
 	srv := newAuthMiddlewareTestServer(&fakeAuthLookup{})
 
 	req := httptest.NewRequest(http.MethodGet, "/private", nil)
@@ -100,7 +100,27 @@ func TestSetSessionCookieSetsPositiveMaxAge(t *testing.T) {
 	srv.setSessionCookie(rec, req, services.AuthSession{
 		Token:     "session-token",
 		ExpiresAt: time.Now().UTC().Add(5 * time.Minute),
-	})
+	}, false)
+
+	session := cookieFromRecorder(t, rec, sessionCookieName)
+	if session.MaxAge != 0 {
+		t.Fatalf("session MaxAge = %d, want browser session cookie", session.MaxAge)
+	}
+	if !session.Expires.IsZero() {
+		t.Fatalf("session Expires = %s, want zero time", session.Expires)
+	}
+}
+
+func TestSetSessionCookieSetsPositiveMaxAgeWhenRemembered(t *testing.T) {
+	srv := newAuthMiddlewareTestServer(&fakeAuthLookup{})
+
+	req := httptest.NewRequest(http.MethodGet, "/private", nil)
+	rec := httptest.NewRecorder()
+
+	srv.setSessionCookie(rec, req, services.AuthSession{
+		Token:     "session-token",
+		ExpiresAt: time.Now().UTC().Add(5 * time.Minute),
+	}, true)
 
 	session := cookieFromRecorder(t, rec, sessionCookieName)
 	if session.MaxAge <= 0 {
@@ -397,6 +417,10 @@ type fakeAuthLookup struct {
 	loginPass            string
 	loginSession         services.AuthSession
 	loginErr             error
+	totpLoginUserID      int64
+	totpLoginCode        string
+	totpLoginSession     services.AuthSession
+	totpLoginErr         error
 	logoutToken          string
 	logoutErr            error
 	verifyToken          string
@@ -443,7 +467,7 @@ func (f *fakeAuthLookup) Login(ctx context.Context, email string, password strin
 	f.loginEmail = email
 	f.loginPass = password
 	if f.loginErr != nil {
-		return services.User{}, services.AuthSession{}, f.loginErr
+		return f.user, services.AuthSession{}, f.loginErr
 	}
 	return f.user, f.loginSession, nil
 }
@@ -566,7 +590,9 @@ func (f *fakeAuthLookup) TOTPSetupState(ctx context.Context, userID int64) (bool
 }
 
 func (f *fakeAuthLookup) VerifyTOTPLogin(ctx context.Context, userID int64, code string) (services.AuthSession, error) {
-	return services.AuthSession{}, nil
+	f.totpLoginUserID = userID
+	f.totpLoginCode = code
+	return f.totpLoginSession, f.totpLoginErr
 }
 
 func newAuthMiddlewareTestServer(auth authService) *Server {

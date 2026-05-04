@@ -175,7 +175,7 @@ func (s *Server) twoFactorDisable(w http.ResponseWriter, r *http.Request) {
 
 // twoFactorChallengeForm renders the TOTP challenge page shown mid-login.
 func (s *Server) twoFactorChallengeForm(w http.ResponseWriter, r *http.Request) {
-	if _, ok := s.userIDFromTOTPPendingCookie(r); !ok {
+	if _, ok := s.totpPendingLoginFromCookie(r); !ok {
 		http.Redirect(w, r, paths.Login, http.StatusSeeOther)
 		return
 	}
@@ -187,7 +187,7 @@ func (s *Server) twoFactorChallengeForm(w http.ResponseWriter, r *http.Request) 
 
 // twoFactorChallenge verifies the TOTP code (or backup code) and issues the session.
 func (s *Server) twoFactorChallenge(w http.ResponseWriter, r *http.Request) {
-	userID, ok := s.userIDFromTOTPPendingCookie(r)
+	pendingLogin, ok := s.totpPendingLoginFromCookie(r)
 	if !ok {
 		http.Redirect(w, r, paths.Login, http.StatusSeeOther)
 		return
@@ -201,7 +201,7 @@ func (s *Server) twoFactorChallenge(w http.ResponseWriter, r *http.Request) {
 	code := r.FormValue("code")
 	next := safeRedirectPath(r.FormValue("next"))
 
-	session, err := s.auth.VerifyTOTPLogin(r.Context(), userID, code)
+	session, err := s.auth.VerifyTOTPLogin(r.Context(), pendingLogin.UserID, code)
 	if err != nil {
 		data := s.newTemplateData(w, r, "Two-Factor Authentication")
 		data.Next = next
@@ -209,7 +209,7 @@ func (s *Server) twoFactorChallenge(w http.ResponseWriter, r *http.Request) {
 		case errors.Is(err, services.ErrInvalidTOTPCode):
 			data.Error = "That code is incorrect. Try again or use a backup code."
 		default:
-			s.loggerForRequest(r).Error("verify TOTP login", "user_id", userID, "err", err)
+			s.loggerForRequest(r).Error("verify TOTP login", "user_id", pendingLogin.UserID, "err", err)
 			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 			return
 		}
@@ -218,14 +218,14 @@ func (s *Server) twoFactorChallenge(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.clearTOTPPendingCookie(w, r)
-	s.setSessionCookie(w, r, session)
+	s.setSessionCookie(w, r, session, pendingLogin.RememberMe)
 	if err := s.rotateCSRFCookieForSession(w, r, session.Token); err != nil {
 		s.loggerForRequest(r).Error("rotate csrf token after TOTP login", "err", err)
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
 
-	s.loggerForRequest(r).Info("auth TOTP login succeeded", "user_id", userID)
+	s.loggerForRequest(r).Info("auth TOTP login succeeded", "user_id", pendingLogin.UserID)
 	if next == "" {
 		next = paths.Account
 	}

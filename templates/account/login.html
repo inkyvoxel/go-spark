@@ -28,6 +28,12 @@
         }}aria-invalid="true" {{ end }} required>
       {{ with index .FieldErrors "password" }}<small role="alert">{{ . }}</small>{{ end }}
     </label>
+    <fieldset>
+      <label>
+        <input type="checkbox" name="remember_me" value="1" role="switch">
+        Remember me on this device
+      </label>
+    </fieldset>
     <button type="submit">Sign in</button>
   </form>
 </section>

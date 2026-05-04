@@ -53,8 +53,11 @@ func TestRoutesLogin(t *testing.T) {
 	if session.Value != "session-token" {
 		t.Fatalf("session cookie = %q, want %q", session.Value, "session-token")
 	}
-	if session.MaxAge <= 0 {
-		t.Fatalf("session MaxAge = %d, want positive value", session.MaxAge)
+	if session.MaxAge != 0 {
+		t.Fatalf("session MaxAge = %d, want browser session cookie", session.MaxAge)
+	}
+	if !session.Expires.IsZero() {
+		t.Fatalf("session Expires = %s, want zero time", session.Expires)
 	}
 	if !session.HttpOnly {
 		t.Fatal("session cookie HttpOnly = false, want true")
@@ -62,6 +65,41 @@ func TestRoutesLogin(t *testing.T) {
 	csrf := cookieFromRecorder(t, rec, csrfCookieName)
 	if !srv.validSignedCSRFToken(csrf.Value, csrfSessionHash("session-token"), time.Now().UTC()) {
 		t.Fatal("csrf token was not rotated to a valid session-bound token after login")
+	}
+}
+
+func TestRoutesLoginRememberMeSetsPersistentSessionCookie(t *testing.T) {
+	auth := &fakeAuthLookup{
+		user: verifiedRouteUser(),
+		loginSession: services.AuthSession{
+			Token:     "session-token",
+			ExpiresAt: time.Now().Add(time.Hour),
+		},
+	}
+	srv := newAuthRouteTestServer(t, auth)
+
+	form := url.Values{
+		"email":       []string{"user@example.com"},
+		"password":    []string{"password"},
+		"remember_me": []string{"1"},
+		csrfFieldName: []string{"csrf"},
+	}
+	req := httptest.NewRequest(http.MethodPost, paths.Login, strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	addCSRFCookieAndHeader(t, srv, req)
+	rec := httptest.NewRecorder()
+
+	srv.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusSeeOther)
+	}
+	session := cookieFromRecorder(t, rec, sessionCookieName)
+	if session.MaxAge <= 0 {
+		t.Fatalf("session MaxAge = %d, want positive value", session.MaxAge)
+	}
+	if session.Expires.IsZero() {
+		t.Fatal("session Expires is zero, want persistent expiry")
 	}
 }
 
@@ -153,6 +191,62 @@ func TestRoutesLoginRejectsUnsafeNextPath(t *testing.T) {
 	}
 	if location := rec.Header().Get("Location"); location != paths.Account {
 		t.Fatalf("Location = %q, want %q", location, paths.Account)
+	}
+}
+
+func TestRoutesLoginWithTOTPRemembersPersistentCookieChoice(t *testing.T) {
+	auth := &fakeAuthLookup{
+		user:     verifiedRouteUser(),
+		loginErr: services.ErrTOTPRequired,
+		totpLoginSession: services.AuthSession{
+			Token:     "totp-session-token",
+			ExpiresAt: time.Now().Add(time.Hour),
+		},
+	}
+	srv := newAuthRouteTestServer(t, auth)
+
+	loginForm := url.Values{
+		"email":       []string{"user@example.com"},
+		"password":    []string{"password"},
+		"remember_me": []string{"1"},
+		csrfFieldName: []string{"csrf"},
+	}
+	loginReq := httptest.NewRequest(http.MethodPost, paths.Login, strings.NewReader(loginForm.Encode()))
+	loginReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	addCSRFCookieAndHeader(t, srv, loginReq)
+	loginRec := httptest.NewRecorder()
+
+	srv.Routes().ServeHTTP(loginRec, loginReq)
+
+	if loginRec.Code != http.StatusSeeOther {
+		t.Fatalf("login status = %d, want %d", loginRec.Code, http.StatusSeeOther)
+	}
+	pending := cookieFromRecorder(t, loginRec, totpPendingCookieName)
+
+	challengeForm := url.Values{
+		"code":        []string{"123456"},
+		csrfFieldName: []string{"csrf"},
+	}
+	challengeReq := httptest.NewRequest(http.MethodPost, paths.AccountTwoFactorChallenge, strings.NewReader(challengeForm.Encode()))
+	challengeReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	challengeReq.AddCookie(pending)
+	addCSRFCookieAndHeader(t, srv, challengeReq)
+	challengeRec := httptest.NewRecorder()
+
+	srv.Routes().ServeHTTP(challengeRec, challengeReq)
+
+	if challengeRec.Code != http.StatusSeeOther {
+		t.Fatalf("challenge status = %d, want %d", challengeRec.Code, http.StatusSeeOther)
+	}
+	if auth.totpLoginUserID != auth.user.ID || auth.totpLoginCode != "123456" {
+		t.Fatalf("TOTP login inputs = user:%d code:%q, want user:%d code:%q", auth.totpLoginUserID, auth.totpLoginCode, auth.user.ID, "123456")
+	}
+	session := cookieFromRecorder(t, challengeRec, sessionCookieName)
+	if session.Value != "totp-session-token" {
+		t.Fatalf("session cookie = %q, want %q", session.Value, "totp-session-token")
+	}
+	if session.MaxAge <= 0 {
+		t.Fatalf("session MaxAge = %d, want positive value", session.MaxAge)
 	}
 }
 
@@ -442,8 +536,8 @@ func TestRoutesRegister(t *testing.T) {
 	if session.Value != "new-session-token" {
 		t.Fatalf("session cookie = %q, want %q", session.Value, "new-session-token")
 	}
-	if session.MaxAge <= 0 {
-		t.Fatalf("session MaxAge = %d, want positive value", session.MaxAge)
+	if session.MaxAge != 0 {
+		t.Fatalf("session MaxAge = %d, want browser session cookie", session.MaxAge)
 	}
 }
 

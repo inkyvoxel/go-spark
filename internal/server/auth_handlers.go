@@ -115,7 +115,7 @@ func (s *Server) register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.setSessionCookie(w, r, session)
+	s.setSessionCookie(w, r, session, false)
 	if err := s.rotateCSRFCookieForSession(w, r, session.Token); err != nil {
 		s.loggerForRequest(r).Error("rotate csrf token after register login", "err", err)
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
@@ -330,10 +330,11 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	user, session, err := s.auth.Login(r.Context(), r.FormValue("email"), r.FormValue("password"))
+	rememberMe := rememberMeFromForm(r)
 	if err != nil {
 		if errors.Is(err, services.ErrTOTPRequired) {
 			next := safeRedirectPath(r.FormValue("next"))
-			s.setTOTPPendingCookie(w, r, user.ID)
+			s.setTOTPPendingCookie(w, r, user.ID, rememberMe)
 			challengeURL := paths.AccountTwoFactorChallenge
 			if next != "" {
 				challengeURL += "?next=" + next
@@ -358,7 +359,7 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 		next = paths.Account
 	}
 
-	s.setSessionCookie(w, r, session)
+	s.setSessionCookie(w, r, session, rememberMe)
 	if err := s.rotateCSRFCookieForSession(w, r, session.Token); err != nil {
 		s.loggerForRequest(r).Error("rotate csrf token after login", "err", err)
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
@@ -366,6 +367,10 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 	}
 	s.loggerForRequest(r).Info("auth login succeeded", "user_id", user.ID)
 	http.Redirect(w, r, next, http.StatusSeeOther)
+}
+
+func rememberMeFromForm(r *http.Request) bool {
+	return r.PostForm.Has("remember_me")
 }
 
 func (s *Server) logout(w http.ResponseWriter, r *http.Request) {

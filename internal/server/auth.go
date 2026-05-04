@@ -66,17 +66,20 @@ func contextWithUser(ctx context.Context, user services.User) context.Context {
 	return context.WithValue(ctx, authContextKey{}, user)
 }
 
-func (s *Server) setSessionCookie(w http.ResponseWriter, r *http.Request, session services.AuthSession) {
-	http.SetCookie(w, &http.Cookie{
+func (s *Server) setSessionCookie(w http.ResponseWriter, r *http.Request, session services.AuthSession, rememberMe bool) {
+	cookie := &http.Cookie{
 		Name:     sessionCookieName,
 		Value:    session.Token,
 		Path:     "/",
-		Expires:  session.ExpiresAt,
-		MaxAge:   sessionCookieMaxAge(session.ExpiresAt),
 		HttpOnly: true,
 		Secure:   s.secureCookie(r),
 		SameSite: http.SameSiteLaxMode,
-	})
+	}
+	if rememberMe {
+		cookie.Expires = session.ExpiresAt
+		cookie.MaxAge = sessionCookieMaxAge(session.ExpiresAt)
+	}
+	http.SetCookie(w, cookie)
 }
 
 func sessionCookieMaxAge(expiresAt time.Time) int {
@@ -277,11 +280,16 @@ func (s *Server) totpPendingKey() []byte {
 }
 
 // setTOTPPendingCookie stores a short-lived signed cookie carrying the userID
-// so the TOTP challenge handler can complete the login without a DB lookup of
-// the half-authenticated state.
-func (s *Server) setTOTPPendingCookie(w http.ResponseWriter, r *http.Request, userID int64) {
+// and explicit remember-me choice so the TOTP challenge handler can complete
+// the login without a DB lookup of the half-authenticated state.
+type totpPendingLogin struct {
+	UserID     int64
+	RememberMe bool
+}
+
+func (s *Server) setTOTPPendingCookie(w http.ResponseWriter, r *http.Request, userID int64, rememberMe bool) {
 	now := time.Now().UTC()
-	payload := fmt.Sprintf("%d:%d", userID, now.Unix())
+	payload := fmt.Sprintf("%d:%t:%d", userID, rememberMe, now.Unix())
 
 	h := hmac.New(sha256.New, s.totpPendingKey())
 	h.Write([]byte(payload))
@@ -315,52 +323,57 @@ func (s *Server) clearTOTPPendingCookie(w http.ResponseWriter, r *http.Request) 
 	})
 }
 
-// userIDFromTOTPPendingCookie verifies the TOTP pending cookie signature and
-// returns the embedded userID. Returns 0, false if invalid or expired.
-func (s *Server) userIDFromTOTPPendingCookie(r *http.Request) (int64, bool) {
+// totpPendingLoginFromCookie verifies the TOTP pending cookie signature and
+// returns the embedded login state. Returns false if invalid or expired.
+func (s *Server) totpPendingLoginFromCookie(r *http.Request) (totpPendingLogin, bool) {
 	cookie, err := r.Cookie(totpPendingCookieName)
 	if err != nil {
-		return 0, false
+		return totpPendingLogin{}, false
 	}
 
 	parts := strings.SplitN(cookie.Value, ".", 2)
 	if len(parts) != 2 {
-		return 0, false
+		return totpPendingLogin{}, false
 	}
 
 	payloadBytes, err := base64.RawURLEncoding.DecodeString(parts[0])
 	if err != nil {
-		return 0, false
+		return totpPendingLogin{}, false
 	}
 	sig, err := base64.RawURLEncoding.DecodeString(parts[1])
 	if err != nil {
-		return 0, false
+		return totpPendingLogin{}, false
 	}
 
 	h := hmac.New(sha256.New, s.totpPendingKey())
 	h.Write(payloadBytes)
 	if !hmac.Equal(sig, h.Sum(nil)) {
-		return 0, false
+		return totpPendingLogin{}, false
 	}
 
 	payload := string(payloadBytes)
-	colonIdx := strings.LastIndex(payload, ":")
-	if colonIdx < 0 {
-		return 0, false
+	fields := strings.Split(payload, ":")
+	if len(fields) != 3 {
+		return totpPendingLogin{}, false
 	}
 
-	userID, err := strconv.ParseInt(payload[:colonIdx], 10, 64)
+	userID, err := strconv.ParseInt(fields[0], 10, 64)
 	if err != nil || userID <= 0 {
-		return 0, false
+		return totpPendingLogin{}, false
 	}
 
-	ts, err := strconv.ParseInt(payload[colonIdx+1:], 10, 64)
+	rememberMe, err := strconv.ParseBool(fields[1])
 	if err != nil {
-		return 0, false
+		return totpPendingLogin{}, false
+	}
+
+	ts, err := strconv.ParseInt(fields[2], 10, 64)
+	if err != nil {
+		return totpPendingLogin{}, false
 	}
 	if time.Since(time.Unix(ts, 0)) > totpPendingCookieTTL {
-		return 0, false
+		return totpPendingLogin{}, false
 	}
 
-	return userID, true
+	return totpPendingLogin{UserID: userID, RememberMe: rememberMe}, true
 }

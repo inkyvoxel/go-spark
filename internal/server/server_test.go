@@ -362,6 +362,32 @@ func TestParseTemplatesIncludesBreadcrumbPartial(t *testing.T) {
 	}
 }
 
+func TestParseTemplatesLoginIncludesRememberMeSwitch(t *testing.T) {
+	templates, err := parseTemplates()
+	if err != nil {
+		t.Fatalf("parseTemplates() error = %v", err)
+	}
+
+	var body strings.Builder
+	err = templates[templateLogin].ExecuteTemplate(&body, templateLayout, templateData{
+		Title:        "Sign In",
+		Routes:       paths.TemplateRoutes,
+		CSRFToken:    "csrf",
+		EmailPattern: emailPattern,
+		FieldErrors:  map[string]string{},
+	})
+	if err != nil {
+		t.Fatalf("ExecuteTemplate() error = %v", err)
+	}
+
+	rendered := body.String()
+	for _, want := range []string{`name="remember_me"`, `role="switch"`, `Remember me on this device`} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("rendered template = %q, want %q", rendered, want)
+		}
+	}
+}
+
 func TestParseTemplatesWorksOutsideProjectRoot(t *testing.T) {
 	t.Helper()
 
