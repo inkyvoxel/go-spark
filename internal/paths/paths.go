@@ -7,6 +7,8 @@ const (
 	StaticPrefix                = "/static/"
 	StaticPicoCSS               = StaticPrefix + "vendor/pico/pico.min.css"
 	StaticStyles                = StaticPrefix + "styles.css"
+	StaticQRCodeJS              = StaticPrefix + "vendor/qrcodejs/qrcode.js"
+	StaticTOTPSetupJS           = StaticPrefix + "js/totp-setup.js"
 	Login                       = "/login"
 	Register                    = "/register"
 	Logout                      = "/logout"
@@ -23,12 +25,19 @@ const (
 	AccountSessionsRevoke       = Account + "/sessions/revoke"
 	AccountSessionsRevokeOthers = Account + "/sessions/revoke-others"
 	AccountDelete               = Account + "/delete"
+	AccountTwoFactor            = Account + "/two-factor"
+	AccountTwoFactorSetup       = AccountTwoFactor + "/setup"
+	AccountTwoFactorConfirm     = AccountTwoFactor + "/confirm"
+	AccountTwoFactorDisable     = AccountTwoFactor + "/disable"
+	AccountTwoFactorChallenge   = AccountTwoFactor + "/challenge"
 )
 
 type TemplateRouteSet struct {
 	Home                        string
 	StaticPicoCSS               string
 	StaticStyles                string
+	StaticQRCodeJS              string
+	StaticTOTPSetupJS           string
 	Account                     string
 	Login                       string
 	Register                    string
@@ -43,12 +52,19 @@ type TemplateRouteSet struct {
 	AccountSessionsRevoke       string
 	AccountSessionsRevokeOthers string
 	AccountDelete               string
+	AccountTwoFactor            string
+	AccountTwoFactorSetup       string
+	AccountTwoFactorConfirm     string
+	AccountTwoFactorDisable     string
+	AccountTwoFactorChallenge   string
 }
 
 var TemplateRoutes = TemplateRouteSet{
 	Home:                        Home,
 	StaticPicoCSS:               StaticPicoCSS,
 	StaticStyles:                StaticStyles,
+	StaticQRCodeJS:              StaticQRCodeJS,
+	StaticTOTPSetupJS:           StaticTOTPSetupJS,
 	Account:                     Account,
 	Login:                       Login,
 	Register:                    Register,
@@ -63,4 +79,9 @@ var TemplateRoutes = TemplateRouteSet{
 	AccountSessionsRevoke:       AccountSessionsRevoke,
 	AccountSessionsRevokeOthers: AccountSessionsRevokeOthers,
 	AccountDelete:               AccountDelete,
+	AccountTwoFactor:            AccountTwoFactor,
+	AccountTwoFactorSetup:       AccountTwoFactorSetup,
+	AccountTwoFactorConfirm:     AccountTwoFactorConfirm,
+	AccountTwoFactorDisable:     AccountTwoFactorDisable,
+	AccountTwoFactorChallenge:   AccountTwoFactorChallenge,
 }

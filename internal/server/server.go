@@ -149,20 +149,23 @@ func normalizeOrigin(raw string) string {
 
 func parseTemplates() (map[string]*template.Template, error) {
 	pages := map[string]string{
-		templateNotFound:           "404.html",
-		templateHome:               "home.html",
-		templateAccount:            path.Join("account", "account.html"),
-		templateChangePassword:     path.Join("account", "change_password.html"),
-		templateLogin:              path.Join("account", "login.html"),
-		templateRegister:           path.Join("account", "register.html"),
-		templateForgotPassword:     path.Join("account", "forgot_password.html"),
-		templateResetPassword:      path.Join("account", "reset_password.html"),
-		templateConfirmEmail:       path.Join("account", "confirm_email.html"),
-		templateResendVerification: path.Join("account", "resend_verification.html"),
-		templateVerifyEmail:        path.Join("account", "verify_email.html"),
-		templateChangeEmail:        path.Join("account", "change_email.html"),
-		templateConfirmEmailChange: path.Join("account", "confirm_email_change.html"),
-		templateDeleteAccount:      path.Join("account", "delete_account.html"),
+		templateNotFound:             "404.html",
+		templateHome:                 "home.html",
+		templateAccount:              path.Join("account", "account.html"),
+		templateChangePassword:       path.Join("account", "change_password.html"),
+		templateLogin:                path.Join("account", "login.html"),
+		templateRegister:             path.Join("account", "register.html"),
+		templateForgotPassword:       path.Join("account", "forgot_password.html"),
+		templateResetPassword:        path.Join("account", "reset_password.html"),
+		templateConfirmEmail:         path.Join("account", "confirm_email.html"),
+		templateResendVerification:   path.Join("account", "resend_verification.html"),
+		templateVerifyEmail:          path.Join("account", "verify_email.html"),
+		templateChangeEmail:          path.Join("account", "change_email.html"),
+		templateConfirmEmailChange:   path.Join("account", "confirm_email_change.html"),
+		templateDeleteAccount:        path.Join("account", "delete_account.html"),
+		templateTwoFactor:            path.Join("account", "two_factor.html"),
+		templateTwoFactorBackupCodes: path.Join("account", "two_factor_backup_codes.html"),
+		templateTwoFactorChallenge:   path.Join("account", "two_factor_challenge.html"),
 	}
 	templates := make(map[string]*template.Template, len(pages))
 	layout := path.Join("templates", templateLayout)
@@ -285,6 +288,30 @@ func (s *Server) registerAuthRoutes(dynamic *http.ServeMux) {
 			s.withRateLimit("delete-account", s.rateLimitPolicies.DeleteAccount, s.rateLimitKeyByIPAndUser(), http.HandlerFunc(s.deleteAccount)),
 		),
 	)
+	dynamic.Handle(route(http.MethodGet, paths.AccountTwoFactor), s.requireVerifiedAuth(http.HandlerFunc(s.twoFactorPage)))
+	dynamic.Handle(
+		route(http.MethodPost, paths.AccountTwoFactorSetup),
+		s.requireVerifiedAuth(http.HandlerFunc(s.twoFactorSetup)),
+	)
+	dynamic.Handle(
+		route(http.MethodPost, paths.AccountTwoFactorConfirm),
+		s.requireVerifiedAuth(
+			s.withRateLimit("totp-confirm", s.rateLimitPolicies.TOTPConfirm, s.rateLimitKeyByIPAndUser(), http.HandlerFunc(s.twoFactorConfirm)),
+		),
+	)
+	dynamic.Handle(
+		route(http.MethodPost, paths.AccountTwoFactorDisable),
+		s.requireVerifiedAuth(
+			s.withRateLimit("totp-disable", s.rateLimitPolicies.TOTPDisable, s.rateLimitKeyByIPAndUser(), http.HandlerFunc(s.twoFactorDisable)),
+		),
+	)
+	dynamic.Handle(route(http.MethodGet, paths.AccountTwoFactorChallenge), s.requireAnonymous(http.HandlerFunc(s.twoFactorChallengeForm)))
+	dynamic.Handle(
+		route(http.MethodPost, paths.AccountTwoFactorChallenge),
+		s.requireAnonymous(
+			s.withRateLimit("totp-challenge", s.rateLimitPolicies.TOTPChallenge, s.rateLimitKeyByIP(), http.HandlerFunc(s.twoFactorChallenge)),
+		),
+	)
 }
 
 func route(method, path string) string {
@@ -377,7 +404,10 @@ func postOnlyAllowForPath(path string) (string, bool) {
 		paths.ChangePassword,
 		paths.ChangeEmail,
 		paths.AccountSessionsRevoke,
-		paths.AccountSessionsRevokeOthers:
+		paths.AccountSessionsRevokeOthers,
+		paths.AccountTwoFactorSetup,
+		paths.AccountTwoFactorConfirm,
+		paths.AccountTwoFactorDisable:
 		return http.MethodPost, true
 	default:
 		return "", false

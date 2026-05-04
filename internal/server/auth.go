@@ -2,9 +2,14 @@ package server
 
 import (
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/base64"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -13,10 +18,13 @@ import (
 )
 
 const (
-	sessionCookieName = "session"
-	resetCookieName   = "reset_token"
-	resetCookiePath   = "/account/reset-password"
-	resetCookieTTL    = 10 * time.Minute
+	sessionCookieName       = "session"
+	resetCookieName         = "reset_token"
+	resetCookiePath         = "/account/reset-password"
+	resetCookieTTL          = 10 * time.Minute
+	totpPendingCookieName   = "totp_pending"
+	totpPendingCookiePath   = "/account/two-factor/challenge"
+	totpPendingCookieTTL    = 5 * time.Minute
 )
 
 type authService interface {
@@ -37,6 +45,14 @@ type authService interface {
 	ValidatePasswordResetToken(context.Context, string) error
 	VerifyEmail(context.Context, string) (services.User, error)
 	DeleteAccount(context.Context, int64, string) error
+	// TOTP
+	BeginTOTPSetup(context.Context, int64) (secret, otpAuthURI string, err error)
+	GetTOTPSetupInfo(context.Context, int64) (secret, otpAuthURI string, err error)
+	ConfirmTOTPSetup(context.Context, int64, string) ([]string, error)
+	DisableTOTP(context.Context, int64, string) error
+	GetTOTPStatus(context.Context, int64) (enabled bool, backupCodesRemaining int, err error)
+	TOTPSetupState(context.Context, int64) (pending, enabled bool, err error)
+	VerifyTOTPLogin(context.Context, int64, string) (services.AuthSession, error)
 }
 
 type authContextKey struct{}
@@ -254,4 +270,97 @@ func safeRedirectPath(value string) string {
 	}
 
 	return u.RequestURI()
+}
+
+func (s *Server) totpPendingKey() []byte {
+	return deriveKey(s.csrfKey, "totp_pending")
+}
+
+// setTOTPPendingCookie stores a short-lived signed cookie carrying the userID
+// so the TOTP challenge handler can complete the login without a DB lookup of
+// the half-authenticated state.
+func (s *Server) setTOTPPendingCookie(w http.ResponseWriter, r *http.Request, userID int64) {
+	now := time.Now().UTC()
+	payload := fmt.Sprintf("%d:%d", userID, now.Unix())
+
+	h := hmac.New(sha256.New, s.totpPendingKey())
+	h.Write([]byte(payload))
+	sig := h.Sum(nil)
+
+	value := base64.RawURLEncoding.EncodeToString([]byte(payload)) + "." +
+		base64.RawURLEncoding.EncodeToString(sig)
+
+	http.SetCookie(w, &http.Cookie{
+		Name:     totpPendingCookieName,
+		Value:    value,
+		Path:     totpPendingCookiePath,
+		Expires:  now.Add(totpPendingCookieTTL),
+		MaxAge:   int(totpPendingCookieTTL.Seconds()),
+		HttpOnly: true,
+		Secure:   s.secureCookie(r),
+		SameSite: http.SameSiteStrictMode,
+	})
+}
+
+func (s *Server) clearTOTPPendingCookie(w http.ResponseWriter, r *http.Request) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     totpPendingCookieName,
+		Value:    "",
+		Path:     totpPendingCookiePath,
+		Expires:  time.Unix(0, 0),
+		MaxAge:   -1,
+		HttpOnly: true,
+		Secure:   s.secureCookie(r),
+		SameSite: http.SameSiteStrictMode,
+	})
+}
+
+// userIDFromTOTPPendingCookie verifies the TOTP pending cookie signature and
+// returns the embedded userID. Returns 0, false if invalid or expired.
+func (s *Server) userIDFromTOTPPendingCookie(r *http.Request) (int64, bool) {
+	cookie, err := r.Cookie(totpPendingCookieName)
+	if err != nil {
+		return 0, false
+	}
+
+	parts := strings.SplitN(cookie.Value, ".", 2)
+	if len(parts) != 2 {
+		return 0, false
+	}
+
+	payloadBytes, err := base64.RawURLEncoding.DecodeString(parts[0])
+	if err != nil {
+		return 0, false
+	}
+	sig, err := base64.RawURLEncoding.DecodeString(parts[1])
+	if err != nil {
+		return 0, false
+	}
+
+	h := hmac.New(sha256.New, s.totpPendingKey())
+	h.Write(payloadBytes)
+	if !hmac.Equal(sig, h.Sum(nil)) {
+		return 0, false
+	}
+
+	payload := string(payloadBytes)
+	colonIdx := strings.LastIndex(payload, ":")
+	if colonIdx < 0 {
+		return 0, false
+	}
+
+	userID, err := strconv.ParseInt(payload[:colonIdx], 10, 64)
+	if err != nil || userID <= 0 {
+		return 0, false
+	}
+
+	ts, err := strconv.ParseInt(payload[colonIdx+1:], 10, 64)
+	if err != nil {
+		return 0, false
+	}
+	if time.Since(time.Unix(ts, 0)) > totpPendingCookieTTL {
+		return 0, false
+	}
+
+	return userID, true
 }

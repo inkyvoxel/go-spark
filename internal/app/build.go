@@ -60,6 +60,7 @@ func buildRuntime(cfg config.Config, logger *slog.Logger, db *sql.DB, secretKeyB
 	auth := services.NewAuthService(database.NewAuthStore(db), services.AuthOptions{
 		PasswordMinLen:           cfg.PasswordMinLength,
 		PasswordPepper:           cfg.PasswordPepper,
+		TOTPIssuer:               cfg.TOTPIssuer,
 		EmailVerificationPolicy:  services.NewEmailVerificationPolicy(cfg.EmailVerificationRequired),
 		EmailChangeNoticeEnabled: boolPtr(cfg.EmailChangeNoticeEnabled),
 		ConfirmationEmail: email.AccountConfirmationOptions{
@@ -130,6 +131,13 @@ type serverAuthService = interface {
 	UserBySessionToken(context.Context, string) (services.User, error)
 	ValidatePasswordResetToken(context.Context, string) error
 	VerifyEmail(context.Context, string) (services.User, error)
+	BeginTOTPSetup(context.Context, int64) (secret, otpAuthURI string, err error)
+	GetTOTPSetupInfo(context.Context, int64) (secret, otpAuthURI string, err error)
+	ConfirmTOTPSetup(context.Context, int64, string) ([]string, error)
+	DisableTOTP(context.Context, int64, string) error
+	GetTOTPStatus(context.Context, int64) (enabled bool, backupCodesRemaining int, err error)
+	TOTPSetupState(context.Context, int64) (pending, enabled bool, err error)
+	VerifyTOTPLogin(context.Context, int64, string) (services.AuthSession, error)
 }
 
 func boolPtr(v bool) *bool {

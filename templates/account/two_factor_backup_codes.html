@@ -1,0 +1,16 @@
+{{ define "content" }}
+<article>
+  {{ template "breadcrumb" . }}
+  <h1>Save your backup codes</h1>
+  <section id="totp-backup-codes-section">
+    <p>Two-factor authentication is now enabled. Save these backup codes somewhere safe — each one can be used once to sign in if you lose access to your authenticator app.</p>
+    <p><strong>These codes will not be shown again.</strong></p>
+    <ul>
+      {{ range .TOTPBackupCodes }}
+      <li><code>{{ . }}</code></li>
+      {{ end }}
+    </ul>
+    <p><a href="{{ .Routes.AccountTwoFactor }}" role="button">I've saved my backup codes</a></p>
+  </section>
+</article>
+{{ end }}

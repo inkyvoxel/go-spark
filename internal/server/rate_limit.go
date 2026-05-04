@@ -36,6 +36,9 @@ type RateLimitPolicies struct {
 	RevokeSession             RateLimitPolicy
 	RevokeOtherSessions       RateLimitPolicy
 	DeleteAccount             RateLimitPolicy
+	TOTPChallenge             RateLimitPolicy
+	TOTPDisable               RateLimitPolicy
+	TOTPConfirm               RateLimitPolicy
 }
 
 var defaultRateLimitPolicies = RateLimitPolicies{
@@ -50,6 +53,9 @@ var defaultRateLimitPolicies = RateLimitPolicies{
 	RevokeSession:             RateLimitPolicy{MaxRequests: 20, Window: 15 * time.Minute},
 	RevokeOtherSessions:       RateLimitPolicy{MaxRequests: 10, Window: 15 * time.Minute},
 	DeleteAccount:             RateLimitPolicy{MaxRequests: 3, Window: 15 * time.Minute},
+	TOTPChallenge:             RateLimitPolicy{MaxRequests: 5, Window: time.Minute},
+	TOTPDisable:               RateLimitPolicy{MaxRequests: 5, Window: 15 * time.Minute},
+	TOTPConfirm:               RateLimitPolicy{MaxRequests: 10, Window: 15 * time.Minute},
 }
 
 type rateLimitKeyFunc func(*http.Request) (key string, keyType string)
@@ -220,6 +226,12 @@ func (s *Server) rateLimitKeyByIPAndUser() rateLimitKeyFunc {
 			return "ip:" + ip, "ip"
 		}
 		return fmt.Sprintf("ip:%s|user:%d", ip, user.ID), "ip_user"
+	}
+}
+
+func (s *Server) rateLimitKeyByIP() rateLimitKeyFunc {
+	return func(r *http.Request) (string, string) {
+		return "ip:" + s.requestIP(r), "ip"
 	}
 }
 
