@@ -152,6 +152,7 @@ func rateLimitPoliciesWithDefaults(policies RateLimitPolicies) RateLimitPolicies
 		TOTPChallenge:             mergeRateLimitPolicy(defaultRateLimitPolicies.TOTPChallenge, policies.TOTPChallenge),
 		TOTPDisable:               mergeRateLimitPolicy(defaultRateLimitPolicies.TOTPDisable, policies.TOTPDisable),
 		TOTPConfirm:               mergeRateLimitPolicy(defaultRateLimitPolicies.TOTPConfirm, policies.TOTPConfirm),
+		TOTPRegenerateCodes:       mergeRateLimitPolicy(defaultRateLimitPolicies.TOTPRegenerateCodes, policies.TOTPRegenerateCodes),
 	}
 }
 
