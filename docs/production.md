@@ -105,7 +105,22 @@ TRUSTED_PROXY_IPS=10.0.0.1,172.16.0.0/12
 
 Only list IPs you control. Any request arriving from a trusted proxy address will have its IP overridden by the header value, so listing untrusted addresses would allow clients to spoof their IP and bypass rate limiting.
 
-## 7. Put Caddy in front
+## 7. Scaling beyond a single server
+
+This template is designed for single-server deployment. SQLite is the database, and the rate limiter is an in-memory counter — both are scoped to one machine. These two constraints are coupled: if you need to run the web process across multiple servers, you need to address both at the same time.
+
+| Concern | Single server | Multiple servers |
+|---|---|---|
+| Database | SQLite (file on disk) | Postgres or similar |
+| Rate limiting | In-memory (per process) | Shared store (e.g. Redis) |
+
+**Rate limiter.** The `rateLimitStore` interface in `internal/server` is the intended extension point. Swap in a shared-store implementation via `Options.RateLimiter` if you need limits that hold across instances.
+
+**Database.** Migrating away from SQLite means replacing `internal/platform/sqlite`, the migration setup in `cmd/app/main.go`, and regenerating queries with a different sqlc driver. That is a deliberate rearchitecture step, not a config change.
+
+For most apps this template targets — a single VPS, low-to-moderate traffic, straightforward ops — single-server SQLite is a good fit and these limits are not reached in practice.
+
+## 8. Put Caddy in front
 
 Minimal Caddy config:
 

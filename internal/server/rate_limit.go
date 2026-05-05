@@ -62,6 +62,13 @@ var defaultRateLimitPolicies = RateLimitPolicies{
 
 type rateLimitKeyFunc func(*http.Request) (key string, keyType string)
 
+// rateLimitStore is the extension point for rate limiting. The default
+// implementation is an in-memory fixed-window counter, which is correct for
+// single-server deployments. If you scale the web process across multiple
+// servers, implement this interface backed by a shared store (e.g. Redis) and
+// pass it to Server via Options. Note: if you need multi-server rate limiting
+// you will also need to replace SQLite with a network-accessible database, as
+// both share the same single-server boundary.
 type rateLimitStore interface {
 	Allow(bucketKey string, policy RateLimitPolicy, now time.Time) (bool, time.Duration)
 }
