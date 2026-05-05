@@ -38,10 +38,10 @@ tidy:
 	go mod tidy
 
 sqlc:
-	go tool sqlc generate
+	go -C tools tool sqlc generate -f ../sqlc.yaml
 
 vulncheck:
-	go tool govulncheck ./...
+	go -C tools tool govulncheck ../...
 
 migrate-up:
 	go run ./cmd/app migrate up
@@ -53,6 +53,6 @@ migrate-status:
 	go run ./cmd/app migrate status
 
 tools:
-	go tool sqlc version
-	go tool goose --version
-	go tool govulncheck -h >/dev/null 2>&1
+	go -C tools tool sqlc version
+	go -C tools tool goose --version
+	go -C tools tool govulncheck -h >/dev/null 2>&1
