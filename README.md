@@ -49,5 +49,6 @@ make check          # fmt + tidy + sqlc + vulncheck + test
 
 * [docs/development.md](docs/development.md)
 * [docs/architecture.md](docs/architecture.md)
+* [docs/components.md](docs/components.md)
 * [docs/production.md](docs/production.md)
 * [CONTRIBUTING.md](CONTRIBUTING.md)

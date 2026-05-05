@@ -12,6 +12,7 @@ The starter includes:
 * account confirmation emails
 * resend verification flows
 * password reset emails
+* email change verification emails and old-address notices
 * SMTP and log senders
 * a SQLite-backed outbox processor for durable delivery
 
@@ -70,6 +71,22 @@ Reset confirmation:
 3. updates the password
 4. consumes the token
 5. revokes existing sessions
+
+### Email change
+
+Change request:
+
+1. accepts the current password and new email address
+2. creates an email-change token for the new address
+3. enqueues a verification email to the new address
+
+Change confirmation:
+
+1. accepts the raw token
+2. validates the hashed token
+3. updates the user's email address
+4. consumes the token and clears other pending email-change tokens for that user
+5. optionally enqueues a notice to the old address, controlled by `AUTH_EMAIL_CHANGE_NOTICE_ENABLED`
 
 ## Local Development
 

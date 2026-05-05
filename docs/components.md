@@ -83,11 +83,13 @@ Use `{{ template "breadcrumb" . }}` in the page template wherever the breadcrumb
 
 ## Secret Key Derivation
 
-Both flash signing and CSRF token signing use keys derived from the single `SECRET_KEY_BASE` environment variable:
+Several signing and hashing purposes use keys derived from the single `SECRET_KEY_BASE` environment variable:
 
 ```
-csrfKey  = HMAC-SHA256(SECRET_KEY_BASE, "csrf")
-flashKey = HMAC-SHA256(SECRET_KEY_BASE, "flash")
+csrfKey          = HMAC-SHA256(SECRET_KEY_BASE, "csrf")
+flashKey         = HMAC-SHA256(SECRET_KEY_BASE, "flash")
+totpBackupKey    = HMAC-SHA256(SECRET_KEY_BASE, "totp_backup_code")
+totpPendingKey   = HMAC-SHA256(csrfKey, "totp_pending")
 ```
 
-To add a new signing purpose, call `deriveKey(s.secretKeyBase, "your-purpose")` during server initialisation and store the result as a field on `Server`. This follows the Rails `secret_key_base` pattern — one root secret, isolated derived keys.
+To add a new signing purpose in the server package, derive a purpose-scoped key during server initialisation and store it as a field on `Server`. Application-wide service keys are derived during runtime assembly in `internal/app`. This follows the Rails `secret_key_base` pattern — one root secret, isolated derived keys.

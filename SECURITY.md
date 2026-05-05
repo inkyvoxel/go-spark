@@ -12,7 +12,7 @@ This project is a starter template. Security fixes are expected to land on the m
 
 ## Security Scope
 
-This starter includes basic server-rendered authentication, sessions, CSRF protection, and SQLite persistence. It is intended as a foundation, not a complete production security program.
+This starter includes server-rendered email/password authentication, optional TOTP two-factor authentication, sessions, CSRF protection, rate limiting, and SQLite persistence. It is intended as a foundation, not a complete production security program.
 
 Before deploying a project based on this template:
 
@@ -22,5 +22,6 @@ Before deploying a project based on this template:
 * Review deployment-specific headers, logging, backups, and access controls.
 * Keep Go modules and browser assets up to date.
 * Review and tune auth rate-limit settings (`RATE_LIMIT_*`) for your traffic profile.
-* Set `SECRET_KEY_BASE` and keep it out of version control — it signs all session cookies, CSRF tokens, and flash messages.
+* Set `SECRET_KEY_BASE` and keep it out of version control — it signs CSRF tokens, flash messages, and TOTP pending-login cookies, and derives the key used to hash TOTP backup codes.
 * Set `AUTH_PASSWORD_PEPPER` and treat it as a secret outside the database.
+* Set `AUTH_TOTP_ISSUER` to your app name before users enroll authenticator apps.

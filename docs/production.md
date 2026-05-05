@@ -41,6 +41,7 @@ Strongly recommended:
 * `EMAIL_LOG_BODY=false`
 * `LOG_FORMAT=json` for structured production log ingestion
 * set a real sender address in `EMAIL_FROM`
+* set `AUTH_TOTP_ISSUER` to your app name before users enroll authenticator apps
 
 Also set your production database path (for example `DATABASE_PATH=/var/lib/go-spark/app.db`) and SMTP settings.
 

@@ -12,7 +12,7 @@ make tools
 make check
 ```
 
-The project pins development tools in `go.mod`, so `sqlc` and `goose` are run through `go tool` via the Makefile.
+The project pins development tools with Go tool dependencies. `sqlc` and `goose` live in `tools/go.mod`; `govulncheck` lives in the root `go.mod` so it can analyse the main module directly. The Makefile runs all three through `go tool`.
 
 ## Before Opening a Pull Request
 
