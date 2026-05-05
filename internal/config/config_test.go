@@ -11,11 +11,11 @@ import (
 )
 
 func TestLoadDotEnvLoadsValuesWithoutOverridingEnvironment(t *testing.T) {
-	t.Setenv("APP_ENV", "shell")
+	t.Setenv("APP_ADDR", ":9090")
 	unsetEnvForTest(t, "TEST_DOTENV_ONLY_VALUE")
 
 	path := filepath.Join(t.TempDir(), ".env")
-	if err := os.WriteFile(path, []byte("APP_ENV=dotenv\nTEST_DOTENV_ONLY_VALUE=loaded\n"), 0o600); err != nil {
+	if err := os.WriteFile(path, []byte("APP_ADDR=:8080\nTEST_DOTENV_ONLY_VALUE=loaded\n"), 0o600); err != nil {
 		t.Fatalf("WriteFile() error = %v", err)
 	}
 
@@ -23,8 +23,8 @@ func TestLoadDotEnvLoadsValuesWithoutOverridingEnvironment(t *testing.T) {
 		t.Fatalf("LoadDotEnv() error = %v", err)
 	}
 
-	if got := os.Getenv("APP_ENV"); got != "shell" {
-		t.Fatalf("APP_ENV = %q, want existing shell value", got)
+	if got := os.Getenv("APP_ADDR"); got != ":9090" {
+		t.Fatalf("APP_ADDR = %q, want existing shell value", got)
 	}
 	if got := os.Getenv("TEST_DOTENV_ONLY_VALUE"); got != "loaded" {
 		t.Fatalf("TEST_DOTENV_ONLY_VALUE = %q, want dotenv value", got)
@@ -41,7 +41,7 @@ func TestLoadDotEnvIgnoresMissingFile(t *testing.T) {
 
 func TestLoadDotEnvReturnsParseError(t *testing.T) {
 	path := filepath.Join(t.TempDir(), ".env")
-	if err := os.WriteFile(path, []byte(`APP_ENV="unterminated`), 0o600); err != nil {
+	if err := os.WriteFile(path, []byte(`APP_ADDR="unterminated`), 0o600); err != nil {
 		t.Fatalf("WriteFile() error = %v", err)
 	}
 
@@ -74,7 +74,6 @@ func unsetEnvForTest(t *testing.T, key string) {
 func TestFromEnvUsesDefaults(t *testing.T) {
 	t.Setenv("APP_ADDR", "")
 	t.Setenv("APP_PROCESS", "")
-	t.Setenv("APP_ENV", "")
 	t.Setenv("LOG_FORMAT", "")
 	t.Setenv("DATABASE_PATH", "")
 	t.Setenv("APP_COOKIE_SECURE", "")
@@ -102,9 +101,6 @@ func TestFromEnvUsesDefaults(t *testing.T) {
 	}
 	if cfg.Process != ProcessAll {
 		t.Fatalf("Process = %q, want %q", cfg.Process, ProcessAll)
-	}
-	if cfg.Env != "development" {
-		t.Fatalf("Env = %q, want %q", cfg.Env, "development")
 	}
 	if cfg.LogFormat != "text" {
 		t.Fatalf("LogFormat = %q, want %q", cfg.LogFormat, "text")
@@ -159,7 +155,6 @@ func TestFromEnvUsesDefaults(t *testing.T) {
 func TestFromEnvUsesEnvironment(t *testing.T) {
 	t.Setenv("APP_ADDR", ":9090")
 	t.Setenv("APP_PROCESS", "WORKER")
-	t.Setenv("APP_ENV", "test")
 	t.Setenv("LOG_FORMAT", "JSON")
 	t.Setenv("DATABASE_PATH", "/tmp/app-test.db")
 	t.Setenv("APP_COOKIE_SECURE", "true")
@@ -199,9 +194,6 @@ func TestFromEnvUsesEnvironment(t *testing.T) {
 	}
 	if cfg.Process != ProcessWorker {
 		t.Fatalf("Process = %q, want %q", cfg.Process, ProcessWorker)
-	}
-	if cfg.Env != "test" {
-		t.Fatalf("Env = %q, want %q", cfg.Env, "test")
 	}
 	if cfg.LogFormat != "json" {
 		t.Fatalf("LogFormat = %q, want %q", cfg.LogFormat, "json")

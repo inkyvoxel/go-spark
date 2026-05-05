@@ -62,20 +62,6 @@ func TestValidateSecurityConfigRejectsWhitespacePepper(t *testing.T) {
 	assertValidateSecurityConfigErrorContains(t, cfg, "AUTH_PASSWORD_PEPPER")
 }
 
-func TestValidateSecurityConfigRequiresCookieSecureInProduction(t *testing.T) {
-	cfg := productionSecurityConfig()
-	cfg.CookieSecure = false
-
-	assertValidateSecurityConfigErrorContains(t, cfg, "APP_COOKIE_SECURE")
-}
-
-func TestValidateSecurityConfigRequiresHTTPSAppBaseURLInProduction(t *testing.T) {
-	cfg := productionSecurityConfig()
-	cfg.AppBaseURL = "http://app.example.com"
-
-	assertValidateSecurityConfigErrorContains(t, cfg, "APP_BASE_URL")
-}
-
 func TestValidateSecurityConfigRequiresSecretKeyBase(t *testing.T) {
 	cfg := config.Config{PasswordPepper: "pepper", SecretKeyBase: ""}
 
@@ -88,32 +74,36 @@ func TestValidateSecurityConfigRejectsWhitespaceSecretKeyBase(t *testing.T) {
 	assertValidateSecurityConfigErrorContains(t, cfg, "SECRET_KEY_BASE")
 }
 
-func TestValidateSecurityConfigAllowsProductionWithSecureBaseline(t *testing.T) {
-	err := validateSecurityConfig(productionSecurityConfig())
+func TestValidateSecurityConfigAllowsRequiredSecrets(t *testing.T) {
+	err := validateSecurityConfig(requiredSecurityConfig())
 	if err != nil {
 		t.Fatalf("validateSecurityConfig() error = %v, want nil", err)
 	}
 }
 
-func TestSecurityConfigWarningsProductionIncludesOptionalSettingWarnings(t *testing.T) {
+func TestSecurityConfigWarningsIncludesRiskySettingWarnings(t *testing.T) {
 	warnings := securityConfigWarnings(config.Config{
-		Env:           "production",
+		CookieSecure:  false,
+		AppBaseURL:    "http://app.example.com",
 		EmailProvider: email.ProviderLog,
 		EmailLogBody:  true,
 		EmailFrom:     defaultStarterEmailFrom,
 	})
 
-	if len(warnings) != 3 {
-		t.Fatalf("warning count = %d, want 3", len(warnings))
+	if len(warnings) != 5 {
+		t.Fatalf("warning count = %d, want 5", len(warnings))
 	}
+	assertWarningsContain(t, warnings, "APP_COOKIE_SECURE")
+	assertWarningsContain(t, warnings, "APP_BASE_URL")
 	assertWarningsContain(t, warnings, "EMAIL_PROVIDER")
 	assertWarningsContain(t, warnings, "EMAIL_LOG_BODY")
 	assertWarningsContain(t, warnings, "EMAIL_FROM")
 }
 
-func TestSecurityConfigWarningsProductionSkipsConfiguredOptions(t *testing.T) {
+func TestSecurityConfigWarningsSkipsConfiguredOptions(t *testing.T) {
 	warnings := securityConfigWarnings(config.Config{
-		Env:           "production",
+		CookieSecure:  true,
+		AppBaseURL:    "https://app.example.com",
 		EmailProvider: email.ProviderSMTP,
 		EmailLogBody:  false,
 		EmailFrom:     `"App" <security@example.com>`,
@@ -124,22 +114,8 @@ func TestSecurityConfigWarningsProductionSkipsConfiguredOptions(t *testing.T) {
 	}
 }
 
-func TestSecurityConfigWarningsNonProductionReturnsNone(t *testing.T) {
-	warnings := securityConfigWarnings(config.Config{
-		Env:           "development",
-		EmailProvider: email.ProviderLog,
-		EmailLogBody:  true,
-		EmailFrom:     defaultStarterEmailFrom,
-	})
-
-	if len(warnings) != 0 {
-		t.Fatalf("warning count = %d, want 0", len(warnings))
-	}
-}
-
-func productionSecurityConfig() config.Config {
+func requiredSecurityConfig() config.Config {
 	return config.Config{
-		Env:            "production",
 		CookieSecure:   true,
 		SecretKeyBase:  "csrf-key",
 		AppBaseURL:     "https://app.example.com",

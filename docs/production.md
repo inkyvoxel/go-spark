@@ -30,7 +30,6 @@ make build-prod PROD_BIN=./bin/myapp PROD_GOOS=linux PROD_GOARCH=arm64
 
 Create a production env file (for example `/etc/go-spark/go-spark.env`) and set at least:
 
-* `APP_ENV=production`
 * `APP_COOKIE_SECURE=true`
 * `APP_BASE_URL=https://your-domain.example`
 * `AUTH_PASSWORD_PEPPER=<long-random-secret>` — generate with `openssl rand -hex 32`
@@ -43,7 +42,9 @@ Strongly recommended:
 * `LOG_FORMAT=json` for structured production log ingestion
 * set a real sender address in `EMAIL_FROM`
 
-Also set your production database path (for example `DATABASE_PATH=/var/lib/go-spark/app.db`) and SMTP settings when SMTP is enabled.
+Also set your production database path (for example `DATABASE_PATH=/var/lib/go-spark/app.db`) and SMTP settings.
+
+Missing required secrets and malformed configuration fail startup. Risky settings such as insecure cookies, non-HTTPS base URLs, log-only email delivery, email body logging, or the default sender are reported as startup warnings. You should set these values in a production environment.
 
 ## 3. Health Endpoints
 

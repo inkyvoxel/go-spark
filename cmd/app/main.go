@@ -155,7 +155,7 @@ func runAll(ctx context.Context, logger *slog.Logger, cfg config.Config, httpSer
 	errs := make(chan error, 2)
 	go func() {
 		logStartupURL(logger, cfg)
-		logger.Info("server listening", "addr", cfg.Addr, "env", cfg.Env, "email_provider", cfg.EmailProvider, "process", cfg.Process)
+		logger.Info("server listening", "addr", cfg.Addr, "email_provider", cfg.EmailProvider, "process", cfg.Process)
 		errs <- httpServer.ListenAndServe()
 	}()
 
@@ -186,7 +186,7 @@ func runWeb(ctx context.Context, logger *slog.Logger, cfg config.Config, httpSer
 	errs := make(chan error, 1)
 	go func() {
 		logStartupURL(logger, cfg)
-		logger.Info("server listening", "addr", cfg.Addr, "env", cfg.Env, "email_provider", cfg.EmailProvider, "process", cfg.Process)
+		logger.Info("server listening", "addr", cfg.Addr, "email_provider", cfg.EmailProvider, "process", cfg.Process)
 		errs <- httpServer.ListenAndServe()
 	}()
 
@@ -209,7 +209,7 @@ func runWeb(ctx context.Context, logger *slog.Logger, cfg config.Config, httpSer
 }
 
 func runWorker(ctx context.Context, logger *slog.Logger, cfg config.Config, jobsRunner *jobs.Runner) error {
-	logger.Info("background jobs worker starting", "env", cfg.Env, "email_provider", cfg.EmailProvider, "process", cfg.Process)
+	logger.Info("background jobs worker starting", "email_provider", cfg.EmailProvider, "process", cfg.Process)
 	if err := jobsRunner.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
 		return err
 	}

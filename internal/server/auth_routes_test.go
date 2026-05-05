@@ -321,10 +321,10 @@ func TestRoutesLoginWithTOTPURLEncodesNestedNext(t *testing.T) {
 	srv := newAuthRouteTestServer(t, auth)
 
 	form := url.Values{
-		"email":         []string{"user@example.com"},
-		"password":      []string{"password"},
-		"next":          []string{"/account?tab=sessions"},
-		csrfFieldName:   []string{"csrf"},
+		"email":       []string{"user@example.com"},
+		"password":    []string{"password"},
+		"next":        []string{"/account?tab=sessions"},
+		csrfFieldName: []string{"csrf"},
 	}
 	req := httptest.NewRequest(http.MethodPost, paths.Login, strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")

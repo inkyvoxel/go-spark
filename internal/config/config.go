@@ -46,7 +46,6 @@ type RateLimitPoliciesConfig struct {
 type Config struct {
 	Addr                        string
 	Process                     string
-	Env                         string
 	LogFormat                   string
 	DatabasePath                string
 	CookieSecure                bool
@@ -156,7 +155,6 @@ func FromEnvWithProcess(defaultPasswordMinLength int, processOverride string) (C
 	cfg := Config{
 		Addr:                        envOrDefault("APP_ADDR", ":8080"),
 		Process:                     process,
-		Env:                         envOrDefault("APP_ENV", "development"),
 		LogFormat:                   logFormat,
 		DatabasePath:                envOrDefault("DATABASE_PATH", "./data/app.db"),
 		CookieSecure:                cookieSecure,

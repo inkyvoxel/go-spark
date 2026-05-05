@@ -169,39 +169,32 @@ func validateSecurityConfig(cfg config.Config) error {
 	if strings.TrimSpace(cfg.SecretKeyBase) == "" {
 		return fmt.Errorf("SECRET_KEY_BASE must be set")
 	}
-	if cfg.Env != "production" {
-		return nil
-	}
-	if !cfg.CookieSecure {
-		return fmt.Errorf("APP_COOKIE_SECURE must be true when APP_ENV=production")
-	}
-	if !isHTTPSURL(cfg.AppBaseURL) {
-		return fmt.Errorf("APP_BASE_URL must use https when APP_ENV=production")
-	}
 	return nil
 }
 
 func logSecurityConfigWarnings(cfg config.Config, logger *slog.Logger) {
 	for _, warning := range securityConfigWarnings(cfg) {
-		logger.Warn("production security configuration warning", "warning", warning)
+		logger.Warn("security configuration warning", "warning", warning)
 	}
 }
 
 func securityConfigWarnings(cfg config.Config) []string {
-	if cfg.Env != "production" {
-		return nil
+	warnings := make([]string, 0, 5)
+
+	if !cfg.CookieSecure {
+		warnings = append(warnings, "APP_COOKIE_SECURE=false is not suitable for public production deployments")
 	}
-
-	warnings := make([]string, 0, 4)
-
+	if !isHTTPSURL(cfg.AppBaseURL) {
+		warnings = append(warnings, "APP_BASE_URL does not use https; configure https for public production deployments")
+	}
 	if cfg.EmailProvider != email.ProviderSMTP {
-		warnings = append(warnings, fmt.Sprintf("EMAIL_PROVIDER=%q in production does not deliver real email by default", cfg.EmailProvider))
+		warnings = append(warnings, fmt.Sprintf("EMAIL_PROVIDER=%q does not deliver real email by default", cfg.EmailProvider))
 	}
 	if cfg.EmailLogBody {
-		warnings = append(warnings, "EMAIL_LOG_BODY=true may expose email contents and token links in production logs")
+		warnings = append(warnings, "EMAIL_LOG_BODY=true may expose email contents and token links in logs")
 	}
 	if isDefaultStarterEmailFrom(cfg.EmailFrom) {
-		warnings = append(warnings, "EMAIL_FROM is still the default starter sender in production")
+		warnings = append(warnings, "EMAIL_FROM is still the default starter sender")
 	}
 
 	return warnings
