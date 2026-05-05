@@ -97,6 +97,125 @@ func validTOTPCode(t *testing.T, store *fakeAuthStore, userID int64) string {
 	return code
 }
 
+// enableTOTP sets up and confirms TOTP for the given user, returning the plaintext backup codes.
+func enableTOTP(t *testing.T, service *AuthService, store *fakeAuthStore, userID int64) []string {
+	t.Helper()
+	if _, _, err := service.BeginTOTPSetup(context.Background(), userID); err != nil {
+		t.Fatalf("BeginTOTPSetup() error = %v", err)
+	}
+	codes, err := service.ConfirmTOTPSetup(context.Background(), userID, validTOTPCode(t, store, userID))
+	if err != nil {
+		t.Fatalf("ConfirmTOTPSetup() error = %v", err)
+	}
+	return codes
+}
+
+func TestVerifyTOTPLogin_WithBackupCode_Succeeds(t *testing.T) {
+	service := newTestAuthService(t)
+	store := service.store.(*fakeAuthStore)
+
+	user, err := store.CreateVerifiedUser(context.Background(), "user@example.com", "hash", time.Now())
+	if err != nil {
+		t.Fatalf("CreateVerifiedUser() error = %v", err)
+	}
+	codes := enableTOTP(t, service, store, user.ID)
+
+	_, err = service.VerifyTOTPLogin(context.Background(), user.ID, codes[0])
+	if err != nil {
+		t.Fatalf("VerifyTOTPLogin() with backup code error = %v, want nil", err)
+	}
+}
+
+func TestVerifyTOTPLogin_WithUsedBackupCode_Fails(t *testing.T) {
+	service := newTestAuthService(t)
+	store := service.store.(*fakeAuthStore)
+
+	user, err := store.CreateVerifiedUser(context.Background(), "user@example.com", "hash", time.Now())
+	if err != nil {
+		t.Fatalf("CreateVerifiedUser() error = %v", err)
+	}
+	codes := enableTOTP(t, service, store, user.ID)
+
+	if _, err := service.VerifyTOTPLogin(context.Background(), user.ID, codes[0]); err != nil {
+		t.Fatalf("VerifyTOTPLogin() first use error = %v", err)
+	}
+
+	_, err = service.VerifyTOTPLogin(context.Background(), user.ID, codes[0])
+	if !errors.Is(err, ErrInvalidTOTPCode) {
+		t.Fatalf("VerifyTOTPLogin() with used backup code = %v, want ErrInvalidTOTPCode", err)
+	}
+}
+
+func TestDisableTOTP_WithBackupCode_Succeeds(t *testing.T) {
+	service := newTestAuthService(t)
+	store := service.store.(*fakeAuthStore)
+
+	user, err := store.CreateVerifiedUser(context.Background(), "user@example.com", "hash", time.Now())
+	if err != nil {
+		t.Fatalf("CreateVerifiedUser() error = %v", err)
+	}
+	codes := enableTOTP(t, service, store, user.ID)
+
+	if err := service.DisableTOTP(context.Background(), user.ID, codes[0]); err != nil {
+		t.Fatalf("DisableTOTP() with backup code error = %v, want nil", err)
+	}
+
+	enabled, _, err := service.GetTOTPStatus(context.Background(), user.ID)
+	if err != nil {
+		t.Fatalf("GetTOTPStatus() error = %v", err)
+	}
+	if enabled {
+		t.Fatal("GetTOTPStatus() enabled = true, want false after disable")
+	}
+}
+
+func TestDisableTOTP_WithInvalidCode_Fails(t *testing.T) {
+	service := newTestAuthService(t)
+	store := service.store.(*fakeAuthStore)
+
+	user, err := store.CreateVerifiedUser(context.Background(), "user@example.com", "hash", time.Now())
+	if err != nil {
+		t.Fatalf("CreateVerifiedUser() error = %v", err)
+	}
+	enableTOTP(t, service, store, user.ID)
+
+	err = service.DisableTOTP(context.Background(), user.ID, "XXXXXXXX-XXXXXXXX-XXXXXXXX-XXXXXXXX")
+	if !errors.Is(err, ErrInvalidTOTPCode) {
+		t.Fatalf("DisableTOTP() with invalid code = %v, want ErrInvalidTOTPCode", err)
+	}
+}
+
+func TestConfirmTOTPSetup_BackupCodesHaveExpectedFormat(t *testing.T) {
+	service := newTestAuthService(t)
+	store := service.store.(*fakeAuthStore)
+
+	user, err := store.CreateVerifiedUser(context.Background(), "user@example.com", "hash", time.Now())
+	if err != nil {
+		t.Fatalf("CreateVerifiedUser() error = %v", err)
+	}
+	codes := enableTOTP(t, service, store, user.ID)
+
+	if len(codes) != totpBackupCodeCount {
+		t.Fatalf("len(codes) = %d, want %d", len(codes), totpBackupCodeCount)
+	}
+	for _, code := range codes {
+		// Expected format: XXXXXXXX-XXXXXXXX-XXXXXXXX-XXXXXXXX (32 hex chars + 3 dashes = 35 chars)
+		if len(code) != 35 {
+			t.Errorf("code %q has length %d, want 35", code, len(code))
+		}
+		parts := strings.Split(code, "-")
+		if len(parts) != 4 {
+			t.Errorf("code %q has %d dash-separated parts, want 4", code, len(parts))
+			continue
+		}
+		for _, part := range parts {
+			if len(part) != 8 {
+				t.Errorf("code %q: part %q has length %d, want 8", code, part, len(part))
+			}
+		}
+	}
+}
+
 func TestAuthServiceRegisterHashesPassword(t *testing.T) {
 	service := newTestAuthService(t)
 

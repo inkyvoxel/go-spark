@@ -157,7 +157,7 @@ func (s *Server) twoFactorDisable(w http.ResponseWriter, r *http.Request) {
 		data.TOTPEnabled = true
 		switch {
 		case errors.Is(err, services.ErrInvalidTOTPCode):
-			data.Error = "That code is incorrect. Check your authenticator app and try again."
+			data.Error = "That code is incorrect. Check your authenticator app or try a backup code."
 		case errors.Is(err, services.ErrTOTPNotEnabled):
 			http.Redirect(w, r, paths.AccountTwoFactor, http.StatusSeeOther)
 			return

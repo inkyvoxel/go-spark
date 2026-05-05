@@ -106,7 +106,7 @@ func (s *AuthService) ConfirmTOTPSetup(ctx context.Context, userID int64, code s
 	return codes, nil
 }
 
-// DisableTOTP disables 2FA for the user after verifying a valid TOTP code.
+// DisableTOTP disables 2FA for the user after verifying a valid TOTP code or backup code.
 func (s *AuthService) DisableTOTP(ctx context.Context, userID int64, code string) error {
 	record, err := s.store.GetEnabledTOTPByUserID(ctx, userID)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -116,15 +116,26 @@ func (s *AuthService) DisableTOTP(ctx context.Context, userID int64, code string
 		return fmt.Errorf("get TOTP: %w", err)
 	}
 
-	if !totp.Verify(record.Secret, code) {
-		return ErrInvalidTOTPCode
+	if totp.Verify(record.Secret, code) {
+		if err := s.store.DeleteTOTPAndBackupCodes(ctx, userID); err != nil {
+			return fmt.Errorf("delete TOTP: %w", err)
+		}
+		return nil
 	}
 
-	if err := s.store.DeleteTOTPAndBackupCodes(ctx, userID); err != nil {
-		return fmt.Errorf("delete TOTP: %w", err)
+	codeHash := hashBackupCode(code, s.backupCodeKey)
+	consumed, err := s.store.ConsumeTOTPBackupCode(ctx, userID, codeHash, time.Now().UTC())
+	if err != nil {
+		return fmt.Errorf("consume backup code: %w", err)
+	}
+	if consumed {
+		if err := s.store.DeleteTOTPAndBackupCodes(ctx, userID); err != nil {
+			return fmt.Errorf("delete TOTP: %w", err)
+		}
+		return nil
 	}
 
-	return nil
+	return ErrInvalidTOTPCode
 }
 
 // GetTOTPStatus returns whether TOTP is enabled and how many backup codes remain.
