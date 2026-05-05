@@ -39,6 +39,7 @@ type Server struct {
 	rateLimiter       rateLimitStore
 	rateLimitPolicies RateLimitPolicies
 	trustedProxies    []net.IPNet
+	postOnlyPaths     map[string]struct{}
 }
 
 type Options struct {
@@ -94,6 +95,7 @@ func New(opts Options) (*Server, error) {
 		rateLimiter:       newFixedWindowRateLimiter(),
 		rateLimitPolicies: rateLimitPoliciesWithDefaults(opts.RateLimitPolicies),
 		trustedProxies:    trustedProxies,
+		postOnlyPaths:     make(map[string]struct{}),
 	}, nil
 }
 
@@ -227,7 +229,7 @@ func (s *Server) registerAuthRoutes(dynamic *http.ServeMux) {
 			s.withRateLimit("login", s.rateLimitPolicies.Login, s.rateLimitKeyByIPAndEmail("email"), http.HandlerFunc(s.login)),
 		),
 	)
-	dynamic.Handle(route(http.MethodPost, paths.Logout), s.requireAuth(http.HandlerFunc(s.logout)))
+	s.postOnly(dynamic, paths.Logout, s.requireAuth(http.HandlerFunc(s.logout)))
 	dynamic.Handle(route(http.MethodGet, paths.Account), s.requireVerifiedAuth(http.HandlerFunc(s.account)))
 	dynamic.Handle(route(http.MethodGet, paths.ChangePassword), s.requireVerifiedAuth(http.HandlerFunc(s.changePasswordForm)))
 	dynamic.Handle(
@@ -236,14 +238,12 @@ func (s *Server) registerAuthRoutes(dynamic *http.ServeMux) {
 			s.withRateLimit("change-password", s.rateLimitPolicies.ChangePassword, s.rateLimitKeyByIPAndUser(), http.HandlerFunc(s.changePassword)),
 		),
 	)
-	dynamic.Handle(
-		route(http.MethodPost, paths.AccountSessionsRevoke),
+	s.postOnly(dynamic, paths.AccountSessionsRevoke,
 		s.requireVerifiedAuth(
 			s.withRateLimit("revoke-session", s.rateLimitPolicies.RevokeSession, s.rateLimitKeyByIPAndUser(), http.HandlerFunc(s.revokeSession)),
 		),
 	)
-	dynamic.Handle(
-		route(http.MethodPost, paths.AccountSessionsRevokeOthers),
+	s.postOnly(dynamic, paths.AccountSessionsRevokeOthers,
 		s.requireVerifiedAuth(
 			s.withRateLimit("revoke-other-sessions", s.rateLimitPolicies.RevokeOtherSessions, s.rateLimitKeyByIPAndUser(), http.HandlerFunc(s.revokeOtherSessions)),
 		),
@@ -271,8 +271,7 @@ func (s *Server) registerAuthRoutes(dynamic *http.ServeMux) {
 		),
 	)
 	dynamic.Handle(route(http.MethodGet, paths.VerifyEmail), s.requireAuth(http.HandlerFunc(s.verifyEmail)))
-	dynamic.Handle(
-		route(http.MethodPost, paths.VerifyEmailResend),
+	s.postOnly(dynamic, paths.VerifyEmailResend,
 		s.requireAuth(
 			s.withRateLimit("resend-verification-account", s.rateLimitPolicies.AccountResendVerification, s.rateLimitKeyByIPAndUser(), http.HandlerFunc(s.resendVerification)),
 		),
@@ -293,24 +292,20 @@ func (s *Server) registerAuthRoutes(dynamic *http.ServeMux) {
 		),
 	)
 	dynamic.Handle(route(http.MethodGet, paths.AccountTwoFactor), s.requireVerifiedAuth(http.HandlerFunc(s.twoFactorPage)))
-	dynamic.Handle(
-		route(http.MethodPost, paths.AccountTwoFactorSetup),
+	s.postOnly(dynamic, paths.AccountTwoFactorSetup,
 		s.requireVerifiedAuth(http.HandlerFunc(s.twoFactorSetup)),
 	)
-	dynamic.Handle(
-		route(http.MethodPost, paths.AccountTwoFactorConfirm),
+	s.postOnly(dynamic, paths.AccountTwoFactorConfirm,
 		s.requireVerifiedAuth(
 			s.withRateLimit("totp-confirm", s.rateLimitPolicies.TOTPConfirm, s.rateLimitKeyByIPAndUser(), http.HandlerFunc(s.twoFactorConfirm)),
 		),
 	)
-	dynamic.Handle(
-		route(http.MethodPost, paths.AccountTwoFactorDisable),
+	s.postOnly(dynamic, paths.AccountTwoFactorDisable,
 		s.requireVerifiedAuth(
 			s.withRateLimit("totp-disable", s.rateLimitPolicies.TOTPDisable, s.rateLimitKeyByIPAndUser(), http.HandlerFunc(s.twoFactorDisable)),
 		),
 	)
-	dynamic.Handle(
-		route(http.MethodPost, paths.AccountTwoFactorRegenerateCodes),
+	s.postOnly(dynamic, paths.AccountTwoFactorRegenerateCodes,
 		s.requireVerifiedAuth(
 			s.withRateLimit("totp-regenerate-codes", s.rateLimitPolicies.TOTPRegenerateCodes, s.rateLimitKeyByIPAndUser(), http.HandlerFunc(s.twoFactorRegenerateCodes)),
 		),
@@ -326,6 +321,14 @@ func (s *Server) registerAuthRoutes(dynamic *http.ServeMux) {
 
 func route(method, path string) string {
 	return method + " " + path
+}
+
+// postOnly registers a POST-only route and records the path so the catch-all
+// GET handler can return 405 instead of 404. Use this instead of mux.Handle
+// whenever a route has no corresponding GET handler.
+func (s *Server) postOnly(mux *http.ServeMux, path string, handler http.Handler) {
+	s.postOnlyPaths[path] = struct{}{}
+	mux.Handle(route(http.MethodPost, path), handler)
 }
 
 func staticFileHandler() http.Handler {
@@ -407,38 +410,13 @@ func (s *Server) internalServerError(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) notFoundPage(w http.ResponseWriter, r *http.Request) {
-	if allow, ok := postOnlyAllowForPath(r.URL.Path); ok {
-		w.Header().Set("Allow", allow)
+	if _, ok := s.postOnlyPaths[r.URL.Path]; ok {
+		w.Header().Set("Allow", http.MethodPost)
 		http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
 		return
 	}
 
 	s.renderStatus(w, http.StatusNotFound, templateNotFound, s.newTemplateData(w, r, "Page Not Found"))
-}
-
-// postOnlyAllowForPath returns the Allow header value for paths that are
-// registered exclusively as POST handlers. This is needed because the catch-all
-// GET /{path...} handler shadows the mux's built-in 405 responses.
-//
-// Invariant: every path registered only as "POST <path>" that a user might
-// navigate to via GET must be listed in this switch. When adding a new
-// POST-only route to registerAuthRoutes, add its path constant here too.
-func postOnlyAllowForPath(path string) (string, bool) {
-	switch path {
-	case paths.Logout,
-		paths.VerifyEmailResend,
-		paths.ChangePassword,
-		paths.ChangeEmail,
-		paths.AccountSessionsRevoke,
-		paths.AccountSessionsRevokeOthers,
-		paths.AccountTwoFactorSetup,
-		paths.AccountTwoFactorConfirm,
-		paths.AccountTwoFactorDisable,
-		paths.AccountTwoFactorRegenerateCodes:
-		return http.MethodPost, true
-	default:
-		return "", false
-	}
 }
 
 func (s *Server) securityHeaders(next http.Handler) http.Handler {

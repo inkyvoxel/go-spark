@@ -477,9 +477,10 @@ func testServer(t *testing.T) *Server {
 	t.Helper()
 
 	return &Server{
-		db:      testDB(t),
-		logger:  slog.New(slog.NewTextHandler(io.Discard, nil)),
-		csrfKey: []byte("test-csrf-signing-key"),
+		db:            testDB(t),
+		logger:        slog.New(slog.NewTextHandler(io.Discard, nil)),
+		csrfKey:       []byte("test-csrf-signing-key"),
+		postOnlyPaths: make(map[string]struct{}),
 		templates: testTemplates(t, map[string]string{
 			templateHome:          `<h1>{{ .Title }}</h1>`,
 			templateNotFound:      `<h1>Page not found</h1>`,

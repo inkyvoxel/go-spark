@@ -57,14 +57,13 @@ Notes:
 
 ## Tooling
 
-`sqlc`, `goose`, and `govulncheck` are pinned as Go tools in `go.mod`.
-This intentionally adds a larger set of indirect dependencies to `go.mod`, because a single module keeps template setup and upgrades straightforward.
+`sqlc` and `goose` are pinned as Go tools in `tools/go.mod`, keeping their large dependency trees out of the main module. `govulncheck` lives in the root `go.mod` because it must analyse the main module directly.
 
 Useful commands:
 
 ```sh
-go tool sqlc version
-go tool goose --version
+go -C tools tool sqlc version
+go -C tools tool goose --version
 go tool govulncheck -h
 ```
 
@@ -87,6 +86,18 @@ Typical change flow:
 * Unmatched `GET` and `HEAD` requests render `templates/404.html`.
 
 If you add a new route, update `internal/paths` first and use those constants from handlers, templates, emails, and tests.
+
+**POST-only routes** (no corresponding GET handler) must be registered with `s.postOnly` instead of `mux.Handle`:
+
+```go
+// correct — catch-all GET handler will return 405 for this path
+s.postOnly(dynamic, paths.MyAction, s.requireAuth(http.HandlerFunc(s.myAction)))
+
+// wrong — catch-all GET handler would return 404 instead of 405
+dynamic.Handle(route(http.MethodPost, paths.MyAction), ...)
+```
+
+Routes that have both a GET and a POST handler use `mux.Handle` for both; the mux handles 405 for them automatically.
 
 ### Database changes
 

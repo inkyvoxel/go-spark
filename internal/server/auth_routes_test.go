@@ -2105,10 +2105,11 @@ func newAuthRouteTestServer(t *testing.T, auth authService) *Server {
 	t.Helper()
 
 	return &Server{
-		db:      testDB(t),
-		auth:    auth,
-		logger:  slog.New(slog.NewTextHandler(io.Discard, nil)),
-		csrfKey: []byte("test-csrf-signing-key"),
+		db:            testDB(t),
+		auth:          auth,
+		logger:        slog.New(slog.NewTextHandler(io.Discard, nil)),
+		csrfKey:       []byte("test-csrf-signing-key"),
+		postOnlyPaths: make(map[string]struct{}),
 		templates: testTemplates(t, map[string]string{
 			templateHome:               `home {{ if .Authenticated }}Account Sign out {{ .User.Email }}{{ else }}Sign in Create account{{ end }}`,
 			templateRegister:           `{{ define "content" }}{{ template "register_form_section" . }}{{ end }}{{ define "register_form_section" }}register {{ .Error }} {{ with index .FieldErrors "email" }}{{ . }}{{ end }} {{ with index .FieldErrors "password" }}{{ . }}{{ end }} {{ with index .FieldErrors "confirm_password" }}{{ . }}{{ end }} {{ .Email }} {{ .PasswordMinLength }} {{ .CSRFToken }}{{ end }}`,
