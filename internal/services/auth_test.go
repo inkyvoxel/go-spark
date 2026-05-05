@@ -1009,6 +1009,7 @@ func newTestAuthService(t *testing.T) *AuthService {
 		Argon2idParallelism: 1,
 		Argon2idSaltLength:  16,
 		Argon2idKeyLength:   32,
+		TOTPBackupCodeKey:   []byte("test-backup-code-key"),
 		ConfirmationEmail: email.AccountConfirmationOptions{
 			AppBaseURL: "http://localhost:8080",
 			From:       "Go Spark <hello@example.com>",
@@ -1027,6 +1028,7 @@ func newTestAuthServiceWithNoticeDisabled(t *testing.T) *AuthService {
 		Argon2idParallelism: 1,
 		Argon2idSaltLength:  16,
 		Argon2idKeyLength:   32,
+		TOTPBackupCodeKey:   []byte("test-backup-code-key"),
 		ConfirmationEmail: email.AccountConfirmationOptions{
 			AppBaseURL: "http://localhost:8080",
 			From:       "Go Spark <hello@example.com>",

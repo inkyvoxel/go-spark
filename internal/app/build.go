@@ -1,6 +1,8 @@
 package app
 
 import (
+	"crypto/hmac"
+	"crypto/sha256"
 	"database/sql"
 	"fmt"
 	"log/slog"
@@ -19,6 +21,14 @@ import (
 )
 
 const defaultStarterEmailFrom = `"Go Spark" <hello@example.com>`
+
+// deriveKey produces a purpose-scoped key from a root secret using HMAC-SHA256,
+// following the single-root-secret pattern used throughout this application.
+func deriveKey(base []byte, purpose string) []byte {
+	h := hmac.New(sha256.New, base)
+	h.Write([]byte(purpose))
+	return h.Sum(nil)
+}
 
 type Runtime struct {
 	DB         *sql.DB
@@ -60,6 +70,7 @@ func buildRuntime(cfg config.Config, logger *slog.Logger, db *sql.DB, secretKeyB
 		PasswordMinLen:           cfg.PasswordMinLength,
 		PasswordPepper:           cfg.PasswordPepper,
 		TOTPIssuer:               cfg.TOTPIssuer,
+		TOTPBackupCodeKey:        deriveKey([]byte(secretKeyBase), "totp_backup_code"),
 		EmailChangeNoticeEnabled: boolPtr(cfg.EmailChangeNoticeEnabled),
 		ConfirmationEmail: email.AccountConfirmationOptions{
 			AppBaseURL: cfg.AppBaseURL,

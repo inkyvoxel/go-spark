@@ -2,7 +2,9 @@ package services
 
 import (
 	"context"
+	"crypto/hmac"
 	"crypto/rand"
+	"crypto/sha256"
 	"database/sql"
 	"encoding/base32"
 	"encoding/hex"
@@ -92,7 +94,7 @@ func (s *AuthService) ConfirmTOTPSetup(ctx context.Context, userID int64, code s
 		return nil, ErrInvalidTOTPCode
 	}
 
-	codes, hashes, err := generateBackupCodes(totpBackupCodeCount)
+	codes, hashes, err := generateBackupCodes(totpBackupCodeCount, s.backupCodeKey)
 	if err != nil {
 		return nil, fmt.Errorf("generate backup codes: %w", err)
 	}
@@ -170,7 +172,7 @@ func (s *AuthService) VerifyTOTPLogin(ctx context.Context, userID int64, code st
 		return s.createSessionForUser(ctx, userID)
 	}
 
-	codeHash := hashBackupCode(code)
+	codeHash := hashBackupCode(code, s.backupCodeKey)
 	consumed, err := s.store.ConsumeTOTPBackupCode(ctx, userID, codeHash, time.Now().UTC())
 	if err != nil {
 		return AuthSession{}, fmt.Errorf("consume backup code: %w", err)
@@ -191,25 +193,29 @@ func generateTOTPSecret() (string, error) {
 	return base32.StdEncoding.EncodeToString(b), nil
 }
 
-// generateBackupCodes creates n one-time backup codes and their SHA256 hashes.
-// Each code is 10 uppercase hex characters.
-func generateBackupCodes(n int) (codes []string, hashes []string, err error) {
+// generateBackupCodes creates n one-time backup codes and their HMAC-SHA256 hashes.
+// Each code is 16 random bytes (128 bits) displayed as XXXXXXXX-XXXXXXXX-XXXXXXXX-XXXXXXXX.
+func generateBackupCodes(n int, key []byte) (codes []string, hashes []string, err error) {
 	codes = make([]string, n)
 	hashes = make([]string, n)
 	for i := range n {
-		b := make([]byte, 5)
+		b := make([]byte, 16)
 		if _, err := rand.Read(b); err != nil {
 			return nil, nil, err
 		}
-		code := strings.ToUpper(hex.EncodeToString(b))
+		raw := strings.ToUpper(hex.EncodeToString(b))
+		code := raw[0:8] + "-" + raw[8:16] + "-" + raw[16:24] + "-" + raw[24:32]
 		codes[i] = code
-		hashes[i] = hashBackupCode(code)
+		hashes[i] = hashBackupCode(code, key)
 	}
 	return codes, hashes, nil
 }
 
-// hashBackupCode normalises and hashes a backup code for storage/lookup.
-func hashBackupCode(code string) string {
-	normalised := strings.ToUpper(strings.Join(strings.Fields(code), ""))
-	return hashToken(normalised)
+// hashBackupCode normalises and hashes a backup code for storage/lookup using
+// HMAC-SHA256 keyed with a purpose-specific key derived from SECRET_KEY_BASE.
+func hashBackupCode(code string, key []byte) string {
+	normalised := strings.ToUpper(strings.ReplaceAll(strings.Join(strings.Fields(code), ""), "-", ""))
+	mac := hmac.New(sha256.New, key)
+	mac.Write([]byte(normalised))
+	return hex.EncodeToString(mac.Sum(nil))
 }

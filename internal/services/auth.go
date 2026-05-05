@@ -55,6 +55,7 @@ type AuthService struct {
 	tokenBytes                     int
 	passwordMinLen                 int
 	totpIssuer                     string
+	backupCodeKey                  []byte
 }
 
 type TOTPRecord struct {
@@ -176,6 +177,7 @@ type AuthOptions struct {
 	PasswordResetEmail             email.PasswordResetOptions
 	EmailChangeNoticeEnabled       *bool
 	TOTPIssuer                     string
+	TOTPBackupCodeKey              []byte
 }
 
 type ResendEmailVerificationParams struct {
@@ -266,6 +268,7 @@ func NewAuthService(store AuthStore, opts AuthOptions) *AuthService {
 		tokenBytes:                     tokenBytes,
 		passwordMinLen:                 passwordMinLen,
 		totpIssuer:                     strings.TrimSpace(opts.TOTPIssuer),
+		backupCodeKey:                  opts.TOTPBackupCodeKey,
 	}
 }
 
