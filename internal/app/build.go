@@ -278,5 +278,9 @@ func toServerRateLimitPolicies(cfg config.RateLimitPoliciesConfig) server.RateLi
 			MaxRequests: cfg.TOTPConfirm.MaxRequests,
 			Window:      cfg.TOTPConfirm.Window,
 		},
+		TOTPRegenerateCodes: server.RateLimitPolicy{
+			MaxRequests: cfg.TOTPRegenerateCodes.MaxRequests,
+			Window:      cfg.TOTPRegenerateCodes.Window,
+		},
 	}
 }

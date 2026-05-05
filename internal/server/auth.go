@@ -53,6 +53,7 @@ type authService interface {
 	GetTOTPStatus(context.Context, int64) (enabled bool, backupCodesRemaining int, err error)
 	TOTPSetupState(context.Context, int64) (pending, enabled bool, err error)
 	VerifyTOTPLogin(context.Context, int64, string) (services.AuthSession, error)
+	RegenerateBackupCodes(context.Context, int64, string) ([]string, error)
 }
 
 type authContextKey struct{}

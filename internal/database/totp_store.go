@@ -64,6 +64,25 @@ func (s *AuthStore) EnableTOTPWithBackupCodes(ctx context.Context, userID int64,
 	})
 }
 
+// ReplaceBackupCodes atomically deletes all existing backup codes for the user
+// and inserts the new set, leaving the TOTP record itself unchanged.
+func (s *AuthStore) ReplaceBackupCodes(ctx context.Context, userID int64, codeHashes []string) error {
+	return withTx(ctx, s.db, s.queries, "replace backup codes", func(queries *db.Queries) error {
+		if err := queries.DeleteTOTPBackupCodesByUserID(ctx, userID); err != nil {
+			return fmt.Errorf("delete backup codes: %w", err)
+		}
+		for _, hash := range codeHashes {
+			if err := queries.CreateTOTPBackupCode(ctx, db.CreateTOTPBackupCodeParams{
+				UserID:   userID,
+				CodeHash: hash,
+			}); err != nil {
+				return fmt.Errorf("create backup code: %w", err)
+			}
+		}
+		return nil
+	})
+}
+
 // DeleteTOTPAndBackupCodes atomically removes all TOTP and backup code data.
 func (s *AuthStore) DeleteTOTPAndBackupCodes(ctx context.Context, userID int64) error {
 	return withTx(ctx, s.db, s.queries, "delete TOTP and backup codes", func(queries *db.Queries) error {

@@ -39,6 +39,7 @@ type RateLimitPolicies struct {
 	TOTPChallenge             RateLimitPolicy
 	TOTPDisable               RateLimitPolicy
 	TOTPConfirm               RateLimitPolicy
+	TOTPRegenerateCodes       RateLimitPolicy
 }
 
 var defaultRateLimitPolicies = RateLimitPolicies{
@@ -56,6 +57,7 @@ var defaultRateLimitPolicies = RateLimitPolicies{
 	TOTPChallenge:             RateLimitPolicy{MaxRequests: 5, Window: time.Minute},
 	TOTPDisable:               RateLimitPolicy{MaxRequests: 5, Window: 15 * time.Minute},
 	TOTPConfirm:               RateLimitPolicy{MaxRequests: 10, Window: 15 * time.Minute},
+	TOTPRegenerateCodes:       RateLimitPolicy{MaxRequests: 5, Window: 15 * time.Minute},
 }
 
 type rateLimitKeyFunc func(*http.Request) (key string, keyType string)

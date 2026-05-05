@@ -177,6 +177,51 @@ func (s *Server) twoFactorDisable(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, paths.AccountTwoFactor, http.StatusSeeOther)
 }
 
+// twoFactorRegenerateCodes verifies a TOTP or backup code then replaces all
+// existing backup codes with a fresh set, rendering the result page directly
+// so the plaintext codes can be shown once without being stored.
+func (s *Server) twoFactorRegenerateCodes(w http.ResponseWriter, r *http.Request) {
+	user, ok := currentUser(r.Context())
+	if !ok {
+		http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+		return
+	}
+
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+		return
+	}
+
+	code := r.FormValue("code")
+	backupCodes, err := s.auth.RegenerateBackupCodes(r.Context(), user.ID, code)
+	if err != nil {
+		data := s.newTwoFactorTemplateData(w, r)
+		data.TOTPEnabled = true
+		switch {
+		case errors.Is(err, services.ErrInvalidTOTPCode):
+			data.Error = "That code is incorrect. Check your authenticator app or try a backup code."
+		case errors.Is(err, services.ErrTOTPNotEnabled):
+			http.Redirect(w, r, paths.AccountTwoFactor, http.StatusSeeOther)
+			return
+		default:
+			s.loggerForRequest(r).Error("regenerate backup codes", "user_id", user.ID, "err", err)
+			s.internalServerError(w, r)
+			return
+		}
+		_, remaining, _ := s.auth.GetTOTPStatus(r.Context(), user.ID)
+		data.TOTPBackupCodesRemaining = remaining
+		s.renderStatus(w, http.StatusUnprocessableEntity, templateTwoFactor, data)
+		return
+	}
+
+	s.loggerForRequest(r).Info("TOTP backup codes regenerated", "user_id", user.ID)
+	data := s.newTwoFactorTemplateData(w, r)
+	data.Title = "Save Your Backup Codes"
+	data.TOTPEnabled = true
+	data.TOTPBackupCodes = backupCodes
+	s.render(w, templateTwoFactorBackupCodes, data)
+}
+
 // twoFactorChallengeForm renders the TOTP challenge page shown mid-login.
 func (s *Server) twoFactorChallengeForm(w http.ResponseWriter, r *http.Request) {
 	if _, ok := s.totpPendingLoginFromCookie(r); !ok {

@@ -185,6 +185,78 @@ func TestDisableTOTP_WithInvalidCode_Fails(t *testing.T) {
 	}
 }
 
+func TestRegenerateBackupCodes_WithTOTPCode_ReturnsNewCodes(t *testing.T) {
+	service := newTestAuthService(t)
+	store := service.store.(*fakeAuthStore)
+
+	user, err := store.CreateVerifiedUser(context.Background(), "user@example.com", "hash", time.Now())
+	if err != nil {
+		t.Fatalf("CreateVerifiedUser() error = %v", err)
+	}
+	originalCodes := enableTOTP(t, service, store, user.ID)
+
+	newCodes, err := service.RegenerateBackupCodes(context.Background(), user.ID, validTOTPCode(t, store, user.ID))
+	if err != nil {
+		t.Fatalf("RegenerateBackupCodes() error = %v, want nil", err)
+	}
+	if len(newCodes) != totpBackupCodeCount {
+		t.Fatalf("len(newCodes) = %d, want %d", len(newCodes), totpBackupCodeCount)
+	}
+
+	// Old codes must no longer work.
+	_, err = service.VerifyTOTPLogin(context.Background(), user.ID, originalCodes[0])
+	if !errors.Is(err, ErrInvalidTOTPCode) {
+		t.Fatalf("VerifyTOTPLogin() with old backup code = %v, want ErrInvalidTOTPCode", err)
+	}
+}
+
+func TestRegenerateBackupCodes_WithBackupCode_Succeeds(t *testing.T) {
+	service := newTestAuthService(t)
+	store := service.store.(*fakeAuthStore)
+
+	user, err := store.CreateVerifiedUser(context.Background(), "user@example.com", "hash", time.Now())
+	if err != nil {
+		t.Fatalf("CreateVerifiedUser() error = %v", err)
+	}
+	codes := enableTOTP(t, service, store, user.ID)
+
+	_, err = service.RegenerateBackupCodes(context.Background(), user.ID, codes[0])
+	if err != nil {
+		t.Fatalf("RegenerateBackupCodes() with backup code error = %v, want nil", err)
+	}
+}
+
+func TestRegenerateBackupCodes_WithInvalidCode_Fails(t *testing.T) {
+	service := newTestAuthService(t)
+	store := service.store.(*fakeAuthStore)
+
+	user, err := store.CreateVerifiedUser(context.Background(), "user@example.com", "hash", time.Now())
+	if err != nil {
+		t.Fatalf("CreateVerifiedUser() error = %v", err)
+	}
+	enableTOTP(t, service, store, user.ID)
+
+	_, err = service.RegenerateBackupCodes(context.Background(), user.ID, "XXXXXXXX-XXXXXXXX-XXXXXXXX-XXXXXXXX")
+	if !errors.Is(err, ErrInvalidTOTPCode) {
+		t.Fatalf("RegenerateBackupCodes() with invalid code = %v, want ErrInvalidTOTPCode", err)
+	}
+}
+
+func TestRegenerateBackupCodes_WhenTOTPNotEnabled_Fails(t *testing.T) {
+	service := newTestAuthService(t)
+	store := service.store.(*fakeAuthStore)
+
+	user, err := store.CreateVerifiedUser(context.Background(), "user@example.com", "hash", time.Now())
+	if err != nil {
+		t.Fatalf("CreateVerifiedUser() error = %v", err)
+	}
+
+	_, err = service.RegenerateBackupCodes(context.Background(), user.ID, "000000")
+	if !errors.Is(err, ErrTOTPNotEnabled) {
+		t.Fatalf("RegenerateBackupCodes() when TOTP not enabled = %v, want ErrTOTPNotEnabled", err)
+	}
+}
+
 func TestConfirmTOTPSetup_BackupCodesHaveExpectedFormat(t *testing.T) {
 	service := newTestAuthService(t)
 	store := service.store.(*fakeAuthStore)
@@ -1717,4 +1789,13 @@ func (s *fakeAuthStore) CountUnusedTOTPBackupCodes(ctx context.Context, userID i
 		}
 	}
 	return count, nil
+}
+
+func (s *fakeAuthStore) ReplaceBackupCodes(ctx context.Context, userID int64, codeHashes []string) error {
+	codes := make([]backupCode, len(codeHashes))
+	for i, h := range codeHashes {
+		codes[i] = backupCode{hash: h}
+	}
+	s.backupCodesByUserID[userID] = codes
+	return nil
 }

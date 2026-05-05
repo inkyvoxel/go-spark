@@ -150,6 +150,7 @@ type AuthStore interface {
 	DeleteTOTPAndBackupCodes(ctx context.Context, userID int64) error
 	ConsumeTOTPBackupCode(ctx context.Context, userID int64, codeHash string, usedAt time.Time) (bool, error)
 	CountUnusedTOTPBackupCodes(ctx context.Context, userID int64) (int64, error)
+	ReplaceBackupCodes(ctx context.Context, userID int64, codeHashes []string) error
 }
 
 type CreateUserWithEmailVerificationParams struct {

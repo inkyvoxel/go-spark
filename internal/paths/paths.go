@@ -30,8 +30,9 @@ const (
 	AccountTwoFactor            = Account + "/two-factor"
 	AccountTwoFactorSetup       = AccountTwoFactor + "/setup"
 	AccountTwoFactorConfirm     = AccountTwoFactor + "/confirm"
-	AccountTwoFactorDisable     = AccountTwoFactor + "/disable"
-	AccountTwoFactorChallenge   = AccountTwoFactor + "/challenge"
+	AccountTwoFactorDisable         = AccountTwoFactor + "/disable"
+	AccountTwoFactorChallenge       = AccountTwoFactor + "/challenge"
+	AccountTwoFactorRegenerateCodes = AccountTwoFactor + "/regenerate-codes"
 )
 
 type TemplateRouteSet struct {
@@ -58,8 +59,9 @@ type TemplateRouteSet struct {
 	AccountTwoFactor            string
 	AccountTwoFactorSetup       string
 	AccountTwoFactorConfirm     string
-	AccountTwoFactorDisable     string
-	AccountTwoFactorChallenge   string
+	AccountTwoFactorDisable         string
+	AccountTwoFactorChallenge       string
+	AccountTwoFactorRegenerateCodes string
 }
 
 var TemplateRoutes = TemplateRouteSet{
@@ -86,6 +88,7 @@ var TemplateRoutes = TemplateRouteSet{
 	AccountTwoFactor:            AccountTwoFactor,
 	AccountTwoFactorSetup:       AccountTwoFactorSetup,
 	AccountTwoFactorConfirm:     AccountTwoFactorConfirm,
-	AccountTwoFactorDisable:     AccountTwoFactorDisable,
-	AccountTwoFactorChallenge:   AccountTwoFactorChallenge,
+	AccountTwoFactorDisable:         AccountTwoFactorDisable,
+	AccountTwoFactorChallenge:       AccountTwoFactorChallenge,
+	AccountTwoFactorRegenerateCodes: AccountTwoFactorRegenerateCodes,
 }

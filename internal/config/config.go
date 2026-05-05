@@ -41,6 +41,7 @@ type RateLimitPoliciesConfig struct {
 	TOTPChallenge             RateLimitPolicyConfig
 	TOTPDisable               RateLimitPolicyConfig
 	TOTPConfirm               RateLimitPolicyConfig
+	TOTPRegenerateCodes       RateLimitPolicyConfig
 }
 
 type Config struct {
@@ -468,6 +469,10 @@ func rateLimitPoliciesFromEnv() (RateLimitPoliciesConfig, error) {
 	if err != nil {
 		return RateLimitPoliciesConfig{}, err
 	}
+	totpRegenerateCodes, err := rateLimitPolicyFromEnv("RATE_LIMIT_TOTP_REGENERATE_CODES")
+	if err != nil {
+		return RateLimitPoliciesConfig{}, err
+	}
 
 	return RateLimitPoliciesConfig{
 		Login:                     login,
@@ -484,6 +489,7 @@ func rateLimitPoliciesFromEnv() (RateLimitPoliciesConfig, error) {
 		TOTPChallenge:             totpChallenge,
 		TOTPDisable:               totpDisable,
 		TOTPConfirm:               totpConfirm,
+		TOTPRegenerateCodes:       totpRegenerateCodes,
 	}, nil
 }
 

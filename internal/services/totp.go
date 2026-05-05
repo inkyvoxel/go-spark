@@ -138,6 +138,41 @@ func (s *AuthService) DisableTOTP(ctx context.Context, userID int64, code string
 	return ErrInvalidTOTPCode
 }
 
+// RegenerateBackupCodes verifies a TOTP or backup code, then atomically replaces
+// all existing backup codes with a fresh set and returns the plaintext codes.
+func (s *AuthService) RegenerateBackupCodes(ctx context.Context, userID int64, code string) ([]string, error) {
+	record, err := s.store.GetEnabledTOTPByUserID(ctx, userID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrTOTPNotEnabled
+	}
+	if err != nil {
+		return nil, fmt.Errorf("get TOTP: %w", err)
+	}
+
+	verified := totp.Verify(record.Secret, code)
+	if !verified {
+		codeHash := hashBackupCode(code, s.backupCodeKey)
+		consumed, err := s.store.ConsumeTOTPBackupCode(ctx, userID, codeHash, time.Now().UTC())
+		if err != nil {
+			return nil, fmt.Errorf("consume backup code: %w", err)
+		}
+		if !consumed {
+			return nil, ErrInvalidTOTPCode
+		}
+	}
+
+	codes, hashes, err := generateBackupCodes(totpBackupCodeCount, s.backupCodeKey)
+	if err != nil {
+		return nil, fmt.Errorf("generate backup codes: %w", err)
+	}
+
+	if err := s.store.ReplaceBackupCodes(ctx, userID, hashes); err != nil {
+		return nil, fmt.Errorf("replace backup codes: %w", err)
+	}
+
+	return codes, nil
+}
+
 // GetTOTPStatus returns whether TOTP is enabled and how many backup codes remain.
 func (s *AuthService) GetTOTPStatus(ctx context.Context, userID int64) (enabled bool, backupCodesRemaining int, err error) {
 	_, err = s.store.GetEnabledTOTPByUserID(ctx, userID)

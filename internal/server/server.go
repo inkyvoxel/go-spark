@@ -309,6 +309,12 @@ func (s *Server) registerAuthRoutes(dynamic *http.ServeMux) {
 			s.withRateLimit("totp-disable", s.rateLimitPolicies.TOTPDisable, s.rateLimitKeyByIPAndUser(), http.HandlerFunc(s.twoFactorDisable)),
 		),
 	)
+	dynamic.Handle(
+		route(http.MethodPost, paths.AccountTwoFactorRegenerateCodes),
+		s.requireVerifiedAuth(
+			s.withRateLimit("totp-regenerate-codes", s.rateLimitPolicies.TOTPRegenerateCodes, s.rateLimitKeyByIPAndUser(), http.HandlerFunc(s.twoFactorRegenerateCodes)),
+		),
+	)
 	dynamic.Handle(route(http.MethodGet, paths.AccountTwoFactorChallenge), s.requireAnonymous(http.HandlerFunc(s.twoFactorChallengeForm)))
 	dynamic.Handle(
 		route(http.MethodPost, paths.AccountTwoFactorChallenge),
@@ -427,7 +433,8 @@ func postOnlyAllowForPath(path string) (string, bool) {
 		paths.AccountSessionsRevokeOthers,
 		paths.AccountTwoFactorSetup,
 		paths.AccountTwoFactorConfirm,
-		paths.AccountTwoFactorDisable:
+		paths.AccountTwoFactorDisable,
+		paths.AccountTwoFactorRegenerateCodes:
 		return http.MethodPost, true
 	default:
 		return "", false

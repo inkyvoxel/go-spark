@@ -58,6 +58,20 @@
   <p>Two-factor authentication is <strong>enabled</strong>.</p>
   <p>Backup codes remaining: <strong>{{ .TOTPBackupCodesRemaining }}</strong></p>
 
+  <h2>Regenerate backup codes</h2>
+  <p>This will invalidate your existing backup codes and generate a new set. Enter a code from your authenticator app
+    or an existing backup code to continue.</p>
+  <form method="post" action="{{ .Routes.AccountTwoFactorRegenerateCodes }}">
+    <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
+    <label>
+      Code
+      <input type="text" name="code" autocomplete="one-time-code" maxlength="39"
+        placeholder="000000 or XXXXXXXX-XXXXXXXX-XXXXXXXX-XXXXXXXX" {{ if .Error }}aria-invalid="true" {{ end }}
+        required>
+    </label>
+    <button type="submit" class="secondary outline">Regenerate backup codes</button>
+  </form>
+
   <h2>Disable two-factor authentication</h2>
   <p>Enter a code from your authenticator app, or one of your backup codes, to disable two-factor authentication.</p>
   <form method="post" action="{{ .Routes.AccountTwoFactorDisable }}">

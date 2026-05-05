@@ -555,6 +555,10 @@ func (f *fakeAuthLookup) VerifyTOTPLogin(ctx context.Context, userID int64, code
 	return f.totpLoginSession, f.totpLoginErr
 }
 
+func (f *fakeAuthLookup) RegenerateBackupCodes(ctx context.Context, userID int64, code string) ([]string, error) {
+	return nil, nil
+}
+
 func newAuthMiddlewareTestServer(auth authService) *Server {
 	return &Server{
 		auth:          auth,
