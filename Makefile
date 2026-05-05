@@ -41,7 +41,7 @@ sqlc:
 	go -C tools tool sqlc generate -f ../sqlc.yaml
 
 vulncheck:
-	go -C tools tool govulncheck ../...
+	go tool govulncheck ./...
 
 migrate-up:
 	go run ./cmd/app migrate up
@@ -55,4 +55,4 @@ migrate-status:
 tools:
 	go -C tools tool sqlc version
 	go -C tools tool goose --version
-	go -C tools tool govulncheck -h >/dev/null 2>&1
+	go tool govulncheck -h >/dev/null 2>&1
