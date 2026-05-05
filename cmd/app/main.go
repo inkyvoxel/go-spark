@@ -168,22 +168,24 @@ func runAll(ctx context.Context, logger *slog.Logger, cfg config.Config, httpSer
 		}
 	}()
 
+	var firstErr error
 	select {
 	case <-ctx.Done():
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-
-		if err := httpServer.Shutdown(shutdownCtx); err != nil {
-			return fmt.Errorf("shutdown server: %w", err)
-		}
-		logger.Info("server stopped")
-		<-jobsDone
 	case err := <-errs:
 		if !errors.Is(err, http.ErrServerClosed) {
-			return err
+			firstErr = err
 		}
 	}
-	return nil
+
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := httpServer.Shutdown(shutdownCtx); err != nil && firstErr == nil {
+		firstErr = fmt.Errorf("shutdown server: %w", err)
+	}
+	logger.Info("server stopped")
+	<-jobsDone
+
+	return firstErr
 }
 
 func runWeb(ctx context.Context, logger *slog.Logger, cfg config.Config, httpServer *http.Server) error {
