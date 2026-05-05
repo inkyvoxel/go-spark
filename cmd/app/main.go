@@ -153,6 +153,8 @@ func runMigrate(action string) error {
 
 func runAll(ctx context.Context, logger *slog.Logger, cfg config.Config, httpServer *http.Server, jobsRunner *jobs.Runner) error {
 	errs := make(chan error, 2)
+	jobsDone := make(chan struct{})
+
 	go func() {
 		logStartupURL(logger, cfg)
 		logger.Info("server listening", "addr", cfg.Addr, "email_provider", cfg.EmailProvider, "process", cfg.Process)
@@ -160,6 +162,7 @@ func runAll(ctx context.Context, logger *slog.Logger, cfg config.Config, httpSer
 	}()
 
 	go func() {
+		defer close(jobsDone)
 		if err := jobsRunner.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
 			errs <- err
 		}
@@ -174,6 +177,7 @@ func runAll(ctx context.Context, logger *slog.Logger, cfg config.Config, httpSer
 			return fmt.Errorf("shutdown server: %w", err)
 		}
 		logger.Info("server stopped")
+		<-jobsDone
 	case err := <-errs:
 		if !errors.Is(err, http.ErrServerClosed) {
 			return err
