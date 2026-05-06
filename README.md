@@ -45,6 +45,16 @@ make test           # run tests
 make check          # fmt + tidy + sqlc + vulncheck + test
 ```
 
+## Deploying
+
+Production deployment uses Docker Compose and Caddy (automatic TLS). Copy `.env.example` to `.env`, fill in your domain and secrets, then:
+
+```sh
+docker compose up -d
+```
+
+See [docs/production.md](docs/production.md) for the full guide.
+
 ## Read Next
 
 * [docs/development.md](docs/development.md)

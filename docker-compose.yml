@@ -1,0 +1,81 @@
+# Shared environment for the app and worker processes.
+# Docker Compose reads .env in the project root to expand ${VAR} references.
+x-app-env: &app-env
+  DATABASE_PATH: /data/app.db
+  LOG_FORMAT: json
+  APP_BASE_URL: https://${DOMAIN}
+  SECRET_KEY_BASE: ${SECRET_KEY_BASE}
+  AUTH_PASSWORD_PEPPER: ${AUTH_PASSWORD_PEPPER}
+  EMAIL_FROM: ${EMAIL_FROM}
+  EMAIL_PROVIDER: ${EMAIL_PROVIDER:-smtp}
+  EMAIL_LOG_BODY: "false"
+  SMTP_HOST: ${SMTP_HOST}
+  SMTP_PORT: ${SMTP_PORT:-587}
+  SMTP_USERNAME: ${SMTP_USERNAME}
+  SMTP_PASSWORD: ${SMTP_PASSWORD}
+  SMTP_TLS: ${SMTP_TLS:-true}
+
+services:
+  # Runs migrations and exits. app and worker wait for this to complete successfully.
+  migrate:
+    build: .
+    command: [migrate, up]
+    environment:
+      DATABASE_PATH: /data/app.db
+    volumes:
+      - app-data:/data
+    restart: "no"
+
+  # HTTP server (web process only). Worker runs separately for failure isolation.
+  app:
+    build: .
+    command: [serve]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      <<: *app-env
+      APP_ADDR: :8080
+      APP_COOKIE_SECURE: "true"
+      AUTH_TOTP_ISSUER: ${AUTH_TOTP_ISSUER:-Go Spark}
+      # Trust the Docker network so Caddy's X-Forwarded-For header is used for rate limiting.
+      # 172.16.0.0/12 covers the default Docker bridge subnet range.
+      TRUSTED_PROXY_IPS: 172.16.0.0/12
+    volumes:
+      - app-data:/data
+    restart: unless-stopped
+
+  # Background jobs worker. Runs independently so a job failure does not take down the web server.
+  worker:
+    build: .
+    command: [worker]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      <<: *app-env
+    volumes:
+      - app-data:/data
+    restart: unless-stopped
+
+  # Reverse proxy. Obtains and renews TLS certificates automatically via Let's Encrypt.
+  caddy:
+    image: caddy:2-alpine
+    depends_on:
+      - app
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    restart: unless-stopped
+
+volumes:
+  # SQLite database and WAL files. Shared between app and worker.
+  app-data:
+  # Caddy TLS certificates. Persisted across restarts to avoid Let's Encrypt rate limits.
+  caddy-data:
+  caddy-config:

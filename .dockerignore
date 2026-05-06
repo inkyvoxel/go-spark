@@ -1,0 +1,30 @@
+# Build artifacts
+bin/
+tmp/
+
+# Local environment — secrets must not be baked into the image
+.env
+.env.*
+
+# Local databases
+data/
+*.db
+*.db-*
+*.sqlite
+*.sqlite-*
+
+# Source control
+.git/
+.github/
+
+# OS/editor noise
+.DS_Store
+.idea/
+.vscode/
+.codex
+
+# Docs and tooling not needed in the image
+docs/
+scripts/
+tools/
+*.md

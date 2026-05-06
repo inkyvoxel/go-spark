@@ -115,12 +115,11 @@ direction is:
 Current SQLite tuning defaults in `internal/platform/sqlite` are:
 
 * `PRAGMA foreign_keys = ON` to keep relational constraints enforced
+* `PRAGMA journal_mode = WAL` for concurrent reads and non-blocking writes
 * `PRAGMA busy_timeout = 5000` to tolerate short write contention
-* `MaxOpenConns = 1` to match the starter's single-writer SQLite model
+* `MaxOpenConns = 1` per process to match the single-writer SQLite model
 
-WAL mode is intentionally not enabled by default yet. If the starter adopts it
-later, that should come with clear documentation about local development,
-backups, and multi-process tradeoffs.
+WAL mode allows concurrent reads from multiple processes without blocking writes. In the Docker deployment, `app` and `worker` each open the same SQLite file from separate containers via a shared volume. WAL handles this correctly; `busy_timeout` handles any transient write contention.
 
 ## Application Bootstrap
 
