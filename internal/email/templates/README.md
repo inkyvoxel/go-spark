@@ -14,3 +14,7 @@ Each email uses three files:
   - Variables: `{{ .ConfirmationURL }}`
 - `password_reset`
   - Variables: `{{ .ResetURL }}`
+- `email_change`
+  - Variables: `{{ .ChangeURL }}`
+- `email_change_notice`
+  - Variables: none

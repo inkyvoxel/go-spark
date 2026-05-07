@@ -1,24 +1,26 @@
 # Go Spark
 
-A Go web app starter template. Fork it, run `make init`, and you're off.
+A Go + SQLite web app starter template. Fork it, run `make init`, and you're off.
 
 ## What's Included
 
-* server-rendered HTML with `html/template`
-* SQLite with `database/sql`
-* SQL-first data access with `sqlc`
-* SQL migrations with `goose`
+* production-ready server-rendered web app foundation
+* standard library HTTP server and `html/template` rendering
+* SQLite persistence with `database/sql`, WAL mode, and practical connection defaults
+* SQL-first workflow with `sqlc` generated queries and `goose` migrations
+* complete email/password auth: registration, login, logout, email verification, password reset, and email change
+* two-factor authentication with TOTP setup, challenge flow, and backup codes
+* secure browser sessions with HTTP-only cookies and CSRF protection
+* rate limiting for auth and account-sensitive endpoints
+* transactional email templates with SMTP and local log senders
+* durable email outbox with retrying background delivery
+* background worker process with periodic cleanup jobs
 * structured logging with `log/slog`
-* email/password authentication
-* two-factor authentication (TOTP) with backup codes
-* server-side sessions
-* CSRF protection
-* email verification
-* password reset
-* email change
-* email outbox delivery
-* background worker and periodic cleanup jobs
-* rate limiting
+* health and readiness endpoints for deployment checks
+* production Dockerfile and Docker Compose setup
+* separate `migrate`, `app`, and `worker` services for clean deploys and failure isolation
+* Caddy reverse proxy with automatic HTTPS
+* documented single-server deployment, backups, SMTP deliverability, and secret rotation
 
 ## Getting Started
 
@@ -31,6 +33,16 @@ cp .env.example .env
 make migrate-up
 make start
 ```
+
+## Adding Your First Feature
+
+Once the app is running, the next step is usually adding your own product
+feature: a database table, a page, a form, an email, or a worker job.
+
+Start with [docs/extending.md](docs/extending.md). It walks through the common
+extension patterns in this starter, including SQL migrations, `sqlc` queries,
+stores, services, authenticated and public routes, HTML templates, email
+templates, and background jobs.
 
 ## Common Commands
 
@@ -59,6 +71,7 @@ See [docs/production.md](docs/production.md) for the full guide.
 
 * [docs/development.md](docs/development.md)
 * [docs/architecture.md](docs/architecture.md)
+* [docs/extending.md](docs/extending.md)
 * [docs/components.md](docs/components.md)
 * [docs/production.md](docs/production.md)
 * [CONTRIBUTING.md](CONTRIBUTING.md)
