@@ -2,7 +2,9 @@ package email
 
 import (
 	"context"
+	"crypto/rand"
 	"crypto/tls"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"log/slog"
@@ -238,7 +240,10 @@ func buildSMTPPayload(message Message) ([]byte, error) {
 	builder.WriteString("Subject: " + subject + "\r\n")
 
 	if strings.TrimSpace(message.HTMLBody) != "" {
-		boundary := "go-spark-boundary"
+		boundary, err := randomMIMEBoundary()
+		if err != nil {
+			return nil, fmt.Errorf("generate mime boundary: %w", err)
+		}
 		builder.WriteString("Content-Type: multipart/alternative; boundary=" + boundary + "\r\n")
 		builder.WriteString("\r\n")
 
@@ -262,6 +267,16 @@ func buildSMTPPayload(message Message) ([]byte, error) {
 	builder.WriteString("\r\n")
 	builder.WriteString(message.TextBody + "\r\n")
 	return []byte(builder.String()), nil
+}
+
+// randomMIMEBoundary returns an unguessable boundary so body content can
+// never collide with (or inject past) the multipart structure.
+func randomMIMEBoundary() (string, error) {
+	b := make([]byte, 16)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	return "go-spark-" + hex.EncodeToString(b), nil
 }
 
 func sanitizeHeaderValue(value string) string {
