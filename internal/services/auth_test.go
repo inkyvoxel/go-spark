@@ -110,6 +110,41 @@ func enableTOTP(t *testing.T, service *AuthService, store *fakeAuthStore, userID
 	return codes
 }
 
+// resetTOTPReplayGuard clears the stored last-used counter, simulating the
+// passage of time into a new TOTP window so a fresh code from the current
+// window can be accepted after an earlier verification consumed it.
+func resetTOTPReplayGuard(t *testing.T, store *fakeAuthStore, userID int64) {
+	t.Helper()
+	record, ok := store.totpByUserID[userID]
+	if !ok {
+		t.Fatal("no TOTP record found for user")
+	}
+	record.LastUsedCounter = sql.NullInt64{}
+	store.totpByUserID[userID] = record
+}
+
+func TestVerifyTOTPLogin_ReplayedCode_Fails(t *testing.T) {
+	service := newTestAuthService(t)
+	store := service.store.(*fakeAuthStore)
+
+	user, err := store.CreateVerifiedUser(context.Background(), "user@example.com", "hash", time.Now())
+	if err != nil {
+		t.Fatalf("CreateVerifiedUser() error = %v", err)
+	}
+	enableTOTP(t, service, store, user.ID)
+	resetTOTPReplayGuard(t, store, user.ID)
+
+	code := validTOTPCode(t, store, user.ID)
+	if _, err := service.VerifyTOTPLogin(context.Background(), user.ID, code); err != nil {
+		t.Fatalf("VerifyTOTPLogin() first use error = %v, want nil", err)
+	}
+
+	_, err = service.VerifyTOTPLogin(context.Background(), user.ID, code)
+	if !errors.Is(err, ErrInvalidTOTPCode) {
+		t.Fatalf("VerifyTOTPLogin() replayed code = %v, want ErrInvalidTOTPCode", err)
+	}
+}
+
 func TestVerifyTOTPLogin_WithBackupCode_Succeeds(t *testing.T) {
 	service := newTestAuthService(t)
 	store := service.store.(*fakeAuthStore)
@@ -194,6 +229,7 @@ func TestRegenerateBackupCodes_WithTOTPCode_ReturnsNewCodes(t *testing.T) {
 		t.Fatalf("CreateVerifiedUser() error = %v", err)
 	}
 	originalCodes := enableTOTP(t, service, store, user.ID)
+	resetTOTPReplayGuard(t, store, user.ID)
 
 	newCodes, err := service.RegenerateBackupCodes(context.Background(), user.ID, validTOTPCode(t, store, user.ID))
 	if err != nil {
@@ -1764,6 +1800,19 @@ func (s *fakeAuthStore) DeleteTOTPAndBackupCodes(ctx context.Context, userID int
 	delete(s.totpByUserID, userID)
 	delete(s.backupCodesByUserID, userID)
 	return nil
+}
+
+func (s *fakeAuthStore) ClaimTOTPCounter(ctx context.Context, userID, counter int64) (bool, error) {
+	record, ok := s.totpByUserID[userID]
+	if !ok {
+		return false, nil
+	}
+	if record.LastUsedCounter.Valid && record.LastUsedCounter.Int64 >= counter {
+		return false, nil
+	}
+	record.LastUsedCounter = sql.NullInt64{Int64: counter, Valid: true}
+	s.totpByUserID[userID] = record
+	return true, nil
 }
 
 func (s *fakeAuthStore) ConsumeTOTPBackupCode(ctx context.Context, userID int64, codeHash string, usedAt time.Time) (bool, error) {

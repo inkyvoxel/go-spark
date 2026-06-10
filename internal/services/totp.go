@@ -18,6 +18,22 @@ import (
 
 const totpBackupCodeCount = 8
 
+// verifyTOTPCode checks a TOTP code and, on a match, atomically claims its
+// time-step counter so the same code cannot be accepted twice within its
+// validity window (RFC 6238 section 5.2 replay protection).
+func (s *AuthService) verifyTOTPCode(ctx context.Context, record TOTPRecord, code string) (bool, error) {
+	counter, ok := totp.VerifyWithCounter(record.Secret, code)
+	if !ok {
+		return false, nil
+	}
+
+	claimed, err := s.store.ClaimTOTPCounter(ctx, record.UserID, counter)
+	if err != nil {
+		return false, fmt.Errorf("claim TOTP counter: %w", err)
+	}
+	return claimed, nil
+}
+
 // BeginTOTPSetup generates a new TOTP secret, stores it as pending, and
 // returns the raw secret and otpauth:// URI for QR code rendering.
 func (s *AuthService) BeginTOTPSetup(ctx context.Context, userID int64) (secret, otpAuthURI string, err error) {
@@ -90,7 +106,11 @@ func (s *AuthService) ConfirmTOTPSetup(ctx context.Context, userID int64, code s
 		return nil, ErrTOTPAlreadyEnabled
 	}
 
-	if !totp.Verify(record.Secret, code) {
+	verified, err := s.verifyTOTPCode(ctx, record, code)
+	if err != nil {
+		return nil, err
+	}
+	if !verified {
 		return nil, ErrInvalidTOTPCode
 	}
 
@@ -116,7 +136,11 @@ func (s *AuthService) DisableTOTP(ctx context.Context, userID int64, code string
 		return fmt.Errorf("get TOTP: %w", err)
 	}
 
-	if totp.Verify(record.Secret, code) {
+	verified, err := s.verifyTOTPCode(ctx, record, code)
+	if err != nil {
+		return err
+	}
+	if verified {
 		if err := s.store.DeleteTOTPAndBackupCodes(ctx, userID); err != nil {
 			return fmt.Errorf("delete TOTP: %w", err)
 		}
@@ -149,7 +173,10 @@ func (s *AuthService) RegenerateBackupCodes(ctx context.Context, userID int64, c
 		return nil, fmt.Errorf("get TOTP: %w", err)
 	}
 
-	verified := totp.Verify(record.Secret, code)
+	verified, err := s.verifyTOTPCode(ctx, record, code)
+	if err != nil {
+		return nil, err
+	}
 	if !verified {
 		codeHash := hashBackupCode(code, s.backupCodeKey)
 		consumed, err := s.store.ConsumeTOTPBackupCode(ctx, userID, codeHash, time.Now().UTC())
@@ -214,7 +241,11 @@ func (s *AuthService) VerifyTOTPLogin(ctx context.Context, userID int64, code st
 		return AuthSession{}, fmt.Errorf("get TOTP: %w", err)
 	}
 
-	if totp.Verify(record.Secret, code) {
+	verified, err := s.verifyTOTPCode(ctx, record, code)
+	if err != nil {
+		return AuthSession{}, err
+	}
+	if verified {
 		return s.createSessionForUser(ctx, userID)
 	}
 

@@ -108,6 +108,20 @@ func (s *AuthStore) ConsumeTOTPBackupCode(ctx context.Context, userID int64, cod
 	return rows > 0, nil
 }
 
+// ClaimTOTPCounter records the accepted TOTP time-step counter. It reports
+// false when the counter is not strictly newer than the stored one, meaning
+// the code was already used and must be rejected as a replay.
+func (s *AuthStore) ClaimTOTPCounter(ctx context.Context, userID, counter int64) (bool, error) {
+	rows, err := s.queries.ClaimTOTPCounter(ctx, db.ClaimTOTPCounterParams{
+		Counter: sql.NullInt64{Int64: counter, Valid: true},
+		UserID:  userID,
+	})
+	if err != nil {
+		return false, fmt.Errorf("claim TOTP counter: %w", err)
+	}
+	return rows > 0, nil
+}
+
 func (s *AuthStore) CountUnusedTOTPBackupCodes(ctx context.Context, userID int64) (int64, error) {
 	count, err := s.queries.CountUnusedTOTPBackupCodes(ctx, userID)
 	if err != nil {
@@ -118,10 +132,11 @@ func (s *AuthStore) CountUnusedTOTPBackupCodes(ctx context.Context, userID int64
 
 func totpRecordFromDB(row db.UserTotp) services.TOTPRecord {
 	return services.TOTPRecord{
-		ID:        row.ID,
-		UserID:    row.UserID,
-		Secret:    row.Secret,
-		EnabledAt: row.EnabledAt,
-		CreatedAt: row.CreatedAt,
+		ID:              row.ID,
+		UserID:          row.UserID,
+		Secret:          row.Secret,
+		EnabledAt:       row.EnabledAt,
+		LastUsedCounter: row.LastUsedCounter,
+		CreatedAt:       row.CreatedAt,
 	}
 }

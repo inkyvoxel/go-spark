@@ -3,6 +3,7 @@ package totp
 import (
 	"crypto/hmac"
 	"crypto/sha1" //nolint:gosec // TOTP (RFC 6238) mandates HMAC-SHA1
+	"crypto/subtle"
 	"encoding/base32"
 	"encoding/binary"
 	"fmt"
@@ -42,23 +43,38 @@ func Generate(secret string) (string, error) {
 // It accepts codes from the previous, current, and next 30-second windows
 // to tolerate clock skew.
 func Verify(secret, code string) bool {
+	_, ok := VerifyWithCounter(secret, code)
+	return ok
+}
+
+// VerifyWithCounter checks a 6-digit TOTP code against a base32-encoded
+// secret and returns the time-step counter the code matched. Callers should
+// persist the counter and reject codes whose counter is not strictly greater
+// than the last accepted one, so a captured code cannot be replayed within
+// its validity window (RFC 6238 section 5.2).
+func VerifyWithCounter(secret, code string) (int64, bool) {
 	code = strings.TrimSpace(code)
 	if len(code) != digits {
-		return false
+		return 0, false
 	}
 
 	key, err := decodeSecret(secret)
 	if err != nil {
-		return false
+		return 0, false
 	}
 
 	counter := time.Now().Unix() / period
+	matched := int64(0)
+	ok := false
 	for delta := int64(-1); delta <= 1; delta++ {
-		if hotp(key, counter+delta) == code {
-			return true
+		// Compare every window in constant time without early exit so timing
+		// reveals nothing about which (if any) window matched.
+		if subtle.ConstantTimeCompare([]byte(hotp(key, counter+delta)), []byte(code)) == 1 && !ok {
+			matched = counter + delta
+			ok = true
 		}
 	}
-	return false
+	return matched, ok
 }
 
 func decodeSecret(secret string) ([]byte, error) {

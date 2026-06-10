@@ -59,11 +59,12 @@ type AuthService struct {
 }
 
 type TOTPRecord struct {
-	ID        int64
-	UserID    int64
-	Secret    string
-	EnabledAt sql.NullTime
-	CreatedAt time.Time
+	ID              int64
+	UserID          int64
+	Secret          string
+	EnabledAt       sql.NullTime
+	LastUsedCounter sql.NullInt64
+	CreatedAt       time.Time
 }
 
 type AuthSession struct {
@@ -149,6 +150,7 @@ type AuthStore interface {
 	EnableTOTPWithBackupCodes(ctx context.Context, userID int64, enabledAt time.Time, codeHashes []string) error
 	DeleteTOTPAndBackupCodes(ctx context.Context, userID int64) error
 	ConsumeTOTPBackupCode(ctx context.Context, userID int64, codeHash string, usedAt time.Time) (bool, error)
+	ClaimTOTPCounter(ctx context.Context, userID, counter int64) (bool, error)
 	CountUnusedTOTPBackupCodes(ctx context.Context, userID int64) (int64, error)
 	ReplaceBackupCodes(ctx context.Context, userID int64, codeHashes []string) error
 }
