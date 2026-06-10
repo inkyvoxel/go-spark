@@ -133,6 +133,8 @@ The app sends transactional email for registration, password reset, and email ch
 
 **Use a dedicated transactional email provider.** Self-hosted SMTP (Postfix, etc.) is hard to deliver reliably. Prefer a provider with a reputation system: Postmark, Resend, SendGrid, AWS SES, and similar services all work. Configure `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, and `SMTP_PASSWORD` in your `.env`.
 
+**SMTP transport notes.** The sender connects in plaintext and upgrades with STARTTLS when `SMTP_TLS=true` (the usual setup on port 587). Implicit TLS (port 465) and auth mechanisms other than `PLAIN` are not supported; every major transactional provider supports STARTTLS with `PLAIN` auth on 587.
+
 **Set DNS records.** Your email provider's dashboard will supply the values.
 
 | Record | Purpose |

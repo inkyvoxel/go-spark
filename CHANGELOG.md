@@ -31,3 +31,22 @@ This project follows a simple, human-written changelog format.
 * `make init` script for one-time project setup (module path and project name).
 * Rate limiting with configurable policies and trusted proxy support.
 * Two-factor authentication (TOTP) with QR code setup, code confirmation, backup codes (8 per user), disable flow, and mid-login challenge.
+* TOTP replay protection: each accepted code's time-step counter is recorded and codes are rejected once used, so a captured code cannot be replayed within its validity window.
+
+### Changed
+
+* Upgraded dependencies (`modernc.org/sqlite`, `golang.org/x/crypto`, `goose`, `sqlc`) and the Docker runtime image to Alpine 3.24.
+* Replaced the `godotenv` dependency with a small standard-library `.env` parser covering the syntax this starter uses.
+* SQLite pragmas (`foreign_keys`, `busy_timeout`, WAL) now apply through the connection string so they reach every pooled connection, and `synchronous=NORMAL` is set to pair with WAL.
+* SMTP multipart messages use a random MIME boundary per message instead of a fixed string.
+* `AUTH_PASSWORD_PEPPER` is trimmed of surrounding whitespace like `SECRET_KEY_BASE`, so a trailing newline from a secrets manager cannot silently change the effective pepper.
+
+### Fixed
+
+* The `all` process mode now exits with an error instead of hanging when the HTTP server fails to start (for example, when the port is already in use).
+
+### Security
+
+* Rate limiting no longer trusts the spoofable `X-Real-IP` header and reads `X-Forwarded-For` from the rightmost untrusted hop instead of the client-controlled leftmost entry, closing a per-IP rate-limit bypass behind trusted proxies.
+* Login takes the same time whether or not the email is registered, by verifying against a dummy Argon2id hash on the unknown-email path.
+* TOTP codes are compared in constant time.

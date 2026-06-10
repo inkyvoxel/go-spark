@@ -16,6 +16,10 @@ The starter includes:
 * SMTP and log senders
 * a SQLite-backed outbox processor for durable delivery
 
+The SMTP sender speaks STARTTLS (enabled by `SMTP_TLS=true`, the standard
+setup on port 587) with `PLAIN` authentication. Implicit TLS on port 465 is
+not supported; see [production.md](production.md) for provider guidance.
+
 ## Design
 
 Email is split into a few clear responsibilities:
