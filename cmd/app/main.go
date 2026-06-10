@@ -152,6 +152,12 @@ func runMigrate(action string) error {
 }
 
 func runAll(ctx context.Context, logger *slog.Logger, cfg config.Config, httpServer *http.Server, jobsRunner *jobs.Runner) error {
+	// The jobs runner only stops on context cancellation, so derive a
+	// cancelable context to release it when the HTTP server fails; otherwise
+	// a startup error (e.g. port already in use) would hang on jobsDone.
+	jobsCtx, stopJobs := context.WithCancel(ctx)
+	defer stopJobs()
+
 	errs := make(chan error, 2)
 	jobsDone := make(chan struct{})
 
@@ -163,7 +169,7 @@ func runAll(ctx context.Context, logger *slog.Logger, cfg config.Config, httpSer
 
 	go func() {
 		defer close(jobsDone)
-		if err := jobsRunner.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
+		if err := jobsRunner.Run(jobsCtx); err != nil && !errors.Is(err, context.Canceled) {
 			errs <- err
 		}
 	}()
@@ -183,6 +189,7 @@ func runAll(ctx context.Context, logger *slog.Logger, cfg config.Config, httpSer
 		firstErr = fmt.Errorf("shutdown server: %w", err)
 	}
 	logger.Info("server stopped")
+	stopJobs()
 	<-jobsDone
 
 	return firstErr

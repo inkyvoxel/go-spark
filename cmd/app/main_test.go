@@ -2,12 +2,18 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"io"
 	"log/slog"
+	"net"
+	"net/http"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/inkyvoxel/go-spark/internal/config"
+	"github.com/inkyvoxel/go-spark/internal/jobs"
 )
 
 func TestParseCLIArgsReturnsEmptyWhenNoArg(t *testing.T) {
@@ -187,5 +193,38 @@ func TestStartupURLReturnsEmptyForNonLocalAddr(t *testing.T) {
 
 	if got := startupURL(cfg); got != "" {
 		t.Fatalf("startupURL() = %q, want empty", got)
+	}
+}
+
+func TestRunAllExitsWhenServerFailsToStart(t *testing.T) {
+	// Occupy a port so ListenAndServe fails immediately.
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("net.Listen() error = %v", err)
+	}
+	defer listener.Close()
+
+	httpServer := &http.Server{Addr: listener.Addr().String()}
+	jobsRunner, err := jobs.NewRunner(
+		slog.New(slog.NewTextHandler(io.Discard, nil)),
+		jobs.Job{Name: "noop", Interval: time.Hour, Run: func(context.Context) error { return nil }},
+	)
+	if err != nil {
+		t.Fatalf("jobs.NewRunner() error = %v", err)
+	}
+
+	done := make(chan error, 1)
+	go func() {
+		logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+		done <- runAll(context.Background(), logger, config.Config{Addr: httpServer.Addr}, httpServer, jobsRunner)
+	}()
+
+	select {
+	case err := <-done:
+		if err == nil {
+			t.Fatal("runAll() error = nil, want listen error")
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("runAll() did not return after server startup failure; jobs runner was not released")
 	}
 }
