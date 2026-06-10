@@ -5,6 +5,9 @@ CREATE TABLE user_totp (
     secret TEXT NOT NULL,
     enabled_at TIMESTAMP,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    -- Most recent accepted TOTP time-step counter so a captured code cannot
+    -- be replayed within its validity window (RFC 6238 section 5.2).
+    last_used_counter INTEGER,
     FOREIGN KEY (user_id) REFERENCES users(id)
 );
 

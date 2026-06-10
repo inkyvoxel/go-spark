@@ -39,19 +39,12 @@ func Generate(secret string) (string, error) {
 	return hotp(key, time.Now().Unix()/period), nil
 }
 
-// Verify checks a 6-digit TOTP code against a base32-encoded secret.
-// It accepts codes from the previous, current, and next 30-second windows
-// to tolerate clock skew.
-func Verify(secret, code string) bool {
-	_, ok := VerifyWithCounter(secret, code)
-	return ok
-}
-
 // VerifyWithCounter checks a 6-digit TOTP code against a base32-encoded
-// secret and returns the time-step counter the code matched. Callers should
-// persist the counter and reject codes whose counter is not strictly greater
-// than the last accepted one, so a captured code cannot be replayed within
-// its validity window (RFC 6238 section 5.2).
+// secret, accepting the previous, current, and next 30-second windows to
+// tolerate clock skew. It returns the time-step counter the code matched.
+// Callers should persist the counter and reject codes whose counter is not
+// strictly greater than the last accepted one, so a captured code cannot be
+// replayed within its validity window (RFC 6238 section 5.2).
 func VerifyWithCounter(secret, code string) (int64, bool) {
 	code = strings.TrimSpace(code)
 	if len(code) != digits {
