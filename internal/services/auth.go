@@ -52,6 +52,7 @@ type AuthService struct {
 	confirmationEmail              email.AccountConfirmationOptions
 	passwordResetEmail             email.PasswordResetOptions
 	passwordHasher                 passwordHasher
+	dummyPasswordHash              string
 	tokenBytes                     int
 	passwordMinLen                 int
 	totpIssuer                     string
@@ -259,6 +260,12 @@ func NewAuthService(store AuthStore, opts AuthOptions) *AuthService {
 		passwordResetEmail.From = opts.ConfirmationEmail.From
 	}
 
+	hasher := newArgon2idHasher(opts)
+	// Hashed once at startup and verified against on the unknown-email login
+	// path, so a missing account costs the same as a wrong password and
+	// response timing does not reveal which emails are registered.
+	dummyPasswordHash, _ := hasher.Hash("dummy-timing-equalization-password")
+
 	return &AuthService{
 		store:                          store,
 		emailChangeNoticeEnabled:       emailChangeNoticeEnabled(opts.EmailChangeNoticeEnabled),
@@ -267,7 +274,8 @@ func NewAuthService(store AuthStore, opts AuthOptions) *AuthService {
 		passwordResetTokenDuration:     passwordResetTokenDuration,
 		confirmationEmail:              opts.ConfirmationEmail,
 		passwordResetEmail:             passwordResetEmail,
-		passwordHasher:                 newArgon2idHasher(opts),
+		passwordHasher:                 hasher,
+		dummyPasswordHash:              dummyPasswordHash,
 		tokenBytes:                     tokenBytes,
 		passwordMinLen:                 passwordMinLen,
 		totpIssuer:                     strings.TrimSpace(opts.TOTPIssuer),
@@ -329,6 +337,9 @@ func (s *AuthService) Register(ctx context.Context, emailAddress, password strin
 func (s *AuthService) Login(ctx context.Context, email, password string) (User, AuthSession, error) {
 	user, err := s.store.GetUserByEmail(ctx, normalizeEmail(email))
 	if errors.Is(err, sql.ErrNoRows) {
+		// Burn a verification against a dummy hash so this path takes as
+		// long as a wrong password for an existing account.
+		_, _ = s.passwordHasher.Verify(s.dummyPasswordHash, password)
 		return User{}, AuthSession{}, ErrInvalidCredentials
 	}
 	if err != nil {
