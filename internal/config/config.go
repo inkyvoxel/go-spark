@@ -9,8 +9,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
-	"github.com/joho/godotenv"
 )
 
 const (
@@ -73,18 +71,75 @@ type Config struct {
 }
 
 func LoadDotEnv(path string) error {
-	if _, err := os.Stat(path); err != nil {
+	data, err := os.ReadFile(path)
+	if err != nil {
 		if os.IsNotExist(err) {
 			return nil
 		}
-		return fmt.Errorf("stat %s: %w", path, err)
+		return fmt.Errorf("read %s: %w", path, err)
 	}
 
-	if err := godotenv.Load(path); err != nil {
+	values, err := parseDotEnv(string(data))
+	if err != nil {
 		return fmt.Errorf("load %s: %w", path, err)
 	}
 
+	for key, value := range values {
+		if _, exists := os.LookupEnv(key); exists {
+			continue
+		}
+		if err := os.Setenv(key, value); err != nil {
+			return fmt.Errorf("load %s: set %s: %w", path, key, err)
+		}
+	}
+
 	return nil
+}
+
+// parseDotEnv supports the subset of dotenv syntax this starter uses:
+// KEY=value lines, blank lines, full-line # comments, an optional
+// "export " prefix, and single- or double-quoted values. It does not
+// support multi-line values, escape sequences, or variable expansion.
+func parseDotEnv(content string) (map[string]string, error) {
+	values := make(map[string]string)
+	for index, line := range strings.Split(content, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		line = strings.TrimPrefix(line, "export ")
+
+		key, value, ok := strings.Cut(line, "=")
+		if !ok {
+			return nil, fmt.Errorf("line %d: expected KEY=value", index+1)
+		}
+		key = strings.TrimSpace(key)
+		if key == "" || strings.ContainsAny(key, " \t") {
+			return nil, fmt.Errorf("line %d: invalid key %q", index+1, key)
+		}
+
+		value, err := unquoteDotEnvValue(strings.TrimSpace(value))
+		if err != nil {
+			return nil, fmt.Errorf("line %d: %w", index+1, err)
+		}
+		values[key] = value
+	}
+
+	return values, nil
+}
+
+func unquoteDotEnvValue(value string) (string, error) {
+	if len(value) == 0 {
+		return "", nil
+	}
+	quote := value[0]
+	if quote != '"' && quote != '\'' {
+		return value, nil
+	}
+	if len(value) < 2 || value[len(value)-1] != quote {
+		return "", fmt.Errorf("unterminated quoted value %s", value)
+	}
+	return value[1 : len(value)-1], nil
 }
 
 func FromEnv(defaultPasswordMinLength int) (Config, error) {

@@ -31,6 +31,62 @@ func TestLoadDotEnvLoadsValuesWithoutOverridingEnvironment(t *testing.T) {
 	}
 }
 
+func TestLoadDotEnvParsesQuotedValuesCommentsAndExport(t *testing.T) {
+	unsetEnvForTest(t, "TEST_DOTENV_QUOTED")
+	unsetEnvForTest(t, "TEST_DOTENV_SINGLE")
+	unsetEnvForTest(t, "TEST_DOTENV_EXPORTED")
+	unsetEnvForTest(t, "TEST_DOTENV_EMPTY")
+
+	content := strings.Join([]string{
+		"# full-line comment",
+		"",
+		`TEST_DOTENV_QUOTED="Go Spark <hello@example.com>"`,
+		`TEST_DOTENV_SINGLE='single quoted'`,
+		"export TEST_DOTENV_EXPORTED=exported",
+		"TEST_DOTENV_EMPTY=",
+	}, "\n")
+
+	path := filepath.Join(t.TempDir(), ".env")
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	if err := LoadDotEnv(path); err != nil {
+		t.Fatalf("LoadDotEnv() error = %v", err)
+	}
+
+	if got := os.Getenv("TEST_DOTENV_QUOTED"); got != "Go Spark <hello@example.com>" {
+		t.Fatalf("TEST_DOTENV_QUOTED = %q, want unquoted value", got)
+	}
+	if got := os.Getenv("TEST_DOTENV_SINGLE"); got != "single quoted" {
+		t.Fatalf("TEST_DOTENV_SINGLE = %q, want unquoted value", got)
+	}
+	if got := os.Getenv("TEST_DOTENV_EXPORTED"); got != "exported" {
+		t.Fatalf("TEST_DOTENV_EXPORTED = %q, want exported value", got)
+	}
+	if got, ok := os.LookupEnv("TEST_DOTENV_EMPTY"); !ok || got != "" {
+		t.Fatalf("TEST_DOTENV_EMPTY = %q (set=%t), want empty value to be set", got, ok)
+	}
+}
+
+func TestLoadDotEnvRejectsMalformedLines(t *testing.T) {
+	for name, content := range map[string]string{
+		"missing equals": "JUST_A_KEY",
+		"invalid key":    "BAD KEY=value",
+	} {
+		t.Run(name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), ".env")
+			if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+				t.Fatalf("WriteFile() error = %v", err)
+			}
+
+			if err := LoadDotEnv(path); err == nil {
+				t.Fatal("LoadDotEnv() error = nil, want error")
+			}
+		})
+	}
+}
+
 func TestLoadDotEnvIgnoresMissingFile(t *testing.T) {
 	path := filepath.Join(t.TempDir(), ".env")
 

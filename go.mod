@@ -3,7 +3,6 @@ module github.com/inkyvoxel/go-spark
 go 1.26
 
 require (
-	github.com/joho/godotenv v1.5.1
 	github.com/pressly/goose/v3 v3.27.0
 	golang.org/x/crypto v0.50.0
 	modernc.org/sqlite v1.49.1
