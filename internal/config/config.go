@@ -209,15 +209,17 @@ func FromEnvWithProcess(defaultPasswordMinLength int, processOverride string) (C
 	}
 
 	cfg := Config{
-		Addr:                        envOrDefault("APP_ADDR", ":8080"),
-		Process:                     process,
-		LogFormat:                   logFormat,
-		DatabasePath:                envOrDefault("DATABASE_PATH", "./data/app.db"),
-		CookieSecure:                cookieSecure,
-		SecretKeyBase:               strings.TrimSpace(os.Getenv("SECRET_KEY_BASE")),
-		EmailChangeNoticeEnabled:    emailChangeNoticeEnabled,
-		PasswordMinLength:           passwordMinLength,
-		PasswordPepper:              os.Getenv("AUTH_PASSWORD_PEPPER"),
+		Addr:                     envOrDefault("APP_ADDR", ":8080"),
+		Process:                  process,
+		LogFormat:                logFormat,
+		DatabasePath:             envOrDefault("DATABASE_PATH", "./data/app.db"),
+		CookieSecure:             cookieSecure,
+		SecretKeyBase:            strings.TrimSpace(os.Getenv("SECRET_KEY_BASE")),
+		EmailChangeNoticeEnabled: emailChangeNoticeEnabled,
+		PasswordMinLength:        passwordMinLength,
+		// Trimmed like SECRET_KEY_BASE so a trailing newline from a secrets
+		// manager cannot silently change the effective pepper.
+		PasswordPepper:              strings.TrimSpace(os.Getenv("AUTH_PASSWORD_PEPPER")),
 		TOTPIssuer:                  strings.TrimSpace(os.Getenv("AUTH_TOTP_ISSUER")),
 		AppBaseURL:                  appBaseURL,
 		EmailFrom:                   emailFrom,
