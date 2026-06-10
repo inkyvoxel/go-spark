@@ -263,21 +263,41 @@ func (s *Server) requestIP(r *http.Request) string {
 	}
 
 	if len(s.trustedProxies) > 0 && s.isTrustedProxy(host) {
-		if ip := strings.TrimSpace(r.Header.Get("X-Real-IP")); ip != "" {
-			if parsed := net.ParseIP(ip); parsed != nil {
-				return parsed.String()
-			}
-		}
-		if xff := strings.TrimSpace(r.Header.Get("X-Forwarded-For")); xff != "" {
-			if ip := strings.TrimSpace(strings.SplitN(xff, ",", 2)[0]); ip != "" {
-				if parsed := net.ParseIP(ip); parsed != nil {
-					return parsed.String()
-				}
-			}
+		if clientIP := s.clientIPFromForwardedFor(r.Header.Get("X-Forwarded-For")); clientIP != "" {
+			return clientIP
 		}
 	}
 
 	return host
+}
+
+// clientIPFromForwardedFor walks X-Forwarded-For from right to left and
+// returns the first hop that is not a trusted proxy. Proxies append the
+// connecting address to this header, so rightmost entries were added by our
+// own proxies while leftmost entries are client-supplied and spoofable.
+// Returns "" if the header is empty or contains an unparsable entry, in which
+// case the caller falls back to the direct peer address.
+func (s *Server) clientIPFromForwardedFor(header string) string {
+	header = strings.TrimSpace(header)
+	if header == "" {
+		return ""
+	}
+
+	entries := strings.Split(header, ",")
+	candidate := ""
+	for i := len(entries) - 1; i >= 0; i-- {
+		ip := net.ParseIP(strings.TrimSpace(entries[i]))
+		if ip == nil {
+			return ""
+		}
+		candidate = ip.String()
+		if !s.isTrustedProxyIP(ip) {
+			return candidate
+		}
+	}
+
+	// Every hop was a trusted proxy; the leftmost entry is the originator.
+	return candidate
 }
 
 func (s *Server) isTrustedProxy(host string) bool {
@@ -285,6 +305,10 @@ func (s *Server) isTrustedProxy(host string) bool {
 	if ip == nil {
 		return false
 	}
+	return s.isTrustedProxyIP(ip)
+}
+
+func (s *Server) isTrustedProxyIP(ip net.IP) bool {
 	for _, cidr := range s.trustedProxies {
 		if cidr.Contains(ip) {
 			return true

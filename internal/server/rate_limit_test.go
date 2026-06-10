@@ -153,27 +153,72 @@ func TestRequestIPNoTrustedProxies(t *testing.T) {
 	}
 }
 
-func TestRequestIPTrustedProxyReadsXRealIP(t *testing.T) {
+func TestRequestIPIgnoresXRealIP(t *testing.T) {
+	// X-Real-IP is not stripped or set by Caddy, so a client-supplied value
+	// would pass through a trusted proxy untouched. It must never be trusted.
 	srv := mustServerWithTrustedProxies(t, "127.0.0.1")
 
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	req.RemoteAddr = "127.0.0.1:5678"
 	req.Header.Set("X-Real-IP", "9.9.9.9")
 
-	if got := srv.requestIP(req); got != "9.9.9.9" {
-		t.Fatalf("requestIP() = %q, want %q", got, "9.9.9.9")
+	if got := srv.requestIP(req); got != "127.0.0.1" {
+		t.Fatalf("requestIP() = %q, want %q (X-Real-IP is spoofable and must be ignored)", got, "127.0.0.1")
 	}
 }
 
-func TestRequestIPTrustedProxyFallsBackToXForwardedFor(t *testing.T) {
+func TestRequestIPTrustedProxyReadsXForwardedFor(t *testing.T) {
 	srv := mustServerWithTrustedProxies(t, "127.0.0.1")
 
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	req.RemoteAddr = "127.0.0.1:5678"
-	req.Header.Set("X-Forwarded-For", "5.5.5.5, 10.0.0.1")
+	req.Header.Set("X-Forwarded-For", "5.5.5.5")
 
 	if got := srv.requestIP(req); got != "5.5.5.5" {
-		t.Fatalf("requestIP() = %q, want leftmost X-Forwarded-For entry %q", got, "5.5.5.5")
+		t.Fatalf("requestIP() = %q, want %q", got, "5.5.5.5")
+	}
+}
+
+func TestRequestIPUsesRightmostUntrustedForwardedForEntry(t *testing.T) {
+	// A client can send its own X-Forwarded-For header, which proxies append
+	// to. Only the rightmost untrusted hop is proxy-reported and trustworthy.
+	srv := mustServerWithTrustedProxies(t, "127.0.0.1", "10.0.0.0/8")
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.RemoteAddr = "127.0.0.1:5678"
+	req.Header.Set("X-Forwarded-For", "6.6.6.6, 5.5.5.5, 10.0.0.1")
+
+	if got := srv.requestIP(req); got != "5.5.5.5" {
+		t.Fatalf("requestIP() = %q, want rightmost untrusted X-Forwarded-For entry %q", got, "5.5.5.5")
+	}
+}
+
+func TestRequestIPAllForwardedForEntriesTrusted(t *testing.T) {
+	srv := mustServerWithTrustedProxies(t, "127.0.0.1", "10.0.0.0/8")
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.RemoteAddr = "127.0.0.1:5678"
+	req.Header.Set("X-Forwarded-For", "10.0.0.2, 10.0.0.1")
+
+	if got := srv.requestIP(req); got != "10.0.0.2" {
+		t.Fatalf("requestIP() = %q, want leftmost entry %q when all hops are trusted", got, "10.0.0.2")
+	}
+}
+
+func TestRequestIPMalformedForwardedForFallsBackToPeer(t *testing.T) {
+	srv := mustServerWithTrustedProxies(t, "127.0.0.1")
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.RemoteAddr = "127.0.0.1:5678"
+	req.Header.Set("X-Forwarded-For", "not-an-ip, 5.5.5.5")
+
+	if got := srv.requestIP(req); got != "5.5.5.5" {
+		t.Fatalf("requestIP() = %q, want %q (rightmost valid entry before malformed data)", got, "5.5.5.5")
+	}
+
+	req.Header.Set("X-Forwarded-For", "not-an-ip")
+	if got := srv.requestIP(req); got != "127.0.0.1" {
+		t.Fatalf("requestIP() = %q, want peer address fallback %q", got, "127.0.0.1")
 	}
 }
 
@@ -182,7 +227,7 @@ func TestRequestIPTrustedProxyCIDR(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	req.RemoteAddr = "10.1.2.3:5678"
-	req.Header.Set("X-Real-IP", "203.0.113.1")
+	req.Header.Set("X-Forwarded-For", "203.0.113.1")
 
 	if got := srv.requestIP(req); got != "203.0.113.1" {
 		t.Fatalf("requestIP() = %q, want %q", got, "203.0.113.1")
@@ -194,7 +239,7 @@ func TestRequestIPUntrustedProxyIgnoresHeader(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	req.RemoteAddr = "1.2.3.4:5678"
-	req.Header.Set("X-Real-IP", "9.9.9.9")
+	req.Header.Set("X-Forwarded-For", "9.9.9.9")
 
 	if got := srv.requestIP(req); got != "1.2.3.4" {
 		t.Fatalf("requestIP() = %q, want %q (untrusted proxy, should use RemoteAddr)", got, "1.2.3.4")

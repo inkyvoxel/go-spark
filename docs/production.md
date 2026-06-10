@@ -59,7 +59,7 @@ Four services start on `docker compose up`:
 
 `app` and `worker` run as separate containers so a job failure does not take down the web server, and each can be restarted independently. Both mount the `app-data` volume at `/data` and share the same SQLite database file. SQLite WAL mode is enabled, which allows concurrent reads and writes from both processes without lock contention under normal load.
 
-Caddy sets `X-Forwarded-For` on requests it forwards. The compose file configures `TRUSTED_PROXY_IPS=172.16.0.0/12` for `app`, which covers the Docker bridge network range and tells the app to read the real client IP from that header. Rate limiting uses the real client IP as a result.
+Caddy appends the connecting address to `X-Forwarded-For` on requests it forwards. The compose file configures `TRUSTED_PROXY_IPS=172.16.0.0/12` for `app`, which covers the Docker bridge network range and tells the app to derive the real client IP from that header. The app walks the header from right to left and uses the first hop that is not a trusted proxy, so client-supplied entries (and headers like `X-Real-IP`, which Caddy does not strip) are never trusted. Rate limiting uses the real client IP as a result.
 
 ## 3. Pre-launch checklist
 
