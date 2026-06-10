@@ -1,0 +1,98 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+# Cancel superseded runs on the same branch/PR to keep feedback fast.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Test and vet
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+
+      - uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: |
+            go.sum
+            tools/go.sum
+
+      - name: Check formatting
+        run: |
+          unformatted="$(gofmt -l .)"
+          if [ -n "$unformatted" ]; then
+            echo "Files need gofmt:" && echo "$unformatted"
+            exit 1
+          fi
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Build
+        run: go build ./...
+
+      - name: Test
+        run: go test ./...
+
+      - name: Vulnerability check
+        run: go tool govulncheck ./...
+
+      - name: Check sqlc generated code is up to date
+        run: |
+          go -C tools tool sqlc generate -f ../sqlc.yaml
+          git diff --exit-code internal/db/generated \
+            || (echo "Generated code is stale. Run: make sqlc" && exit 1)
+
+  docker:
+    name: Docker build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+
+      - name: Build production image
+        run: docker build -t go-spark:ci .
+
+  init-script:
+    name: Init script smoke test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+
+      - uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: |
+            go.sum
+            tools/go.sum
+
+      # The init script is the first thing every new user runs: it renames the
+      # module and project, tidies modules, and deletes itself. Drive it with
+      # canned answers and verify the renamed project still builds and tests.
+      - name: Run init script
+        run: printf 'my-app\ngithub.com/acme/my-app\ny\n' | bash scripts/init.sh
+
+      - name: Verify rename and self-destruct
+        run: |
+          test ! -f scripts/init.sh || (echo "init.sh did not delete itself" && exit 1)
+          grep -q '^module github.com/acme/my-app$' go.mod
+          if grep -rF 'github.com/inkyvoxel/go-spark' --include='*.go' --include='*.mod' .; then
+            echo "Template module path still present after init" && exit 1
+          fi
+
+      - name: Build and test renamed project
+        run: |
+          go build ./...
+          go test ./...
