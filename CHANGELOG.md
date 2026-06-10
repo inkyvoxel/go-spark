@@ -27,7 +27,10 @@ This project follows a simple, human-written changelog format.
 * CLI subcommands for `all`, `serve`, `worker`, and `migrate`.
 * Project-pinned `govulncheck` tooling and `make check` integration.
 * Custom 404 page template for unmatched `GET`/`HEAD` routes.
-* GitHub Actions test workflow.
+* GitHub Actions CI workflow: gofmt, vet, build, tests, govulncheck, sqlc drift check, Docker image build, and an init-script smoke test that renames the project and rebuilds it.
+* Dependabot configuration with monthly, grouped updates for Go modules (root and tools), Docker base images, and GitHub Actions.
+* A short, informal code of conduct, with a note that template users should adapt it to their own community.
+* README badges (CI, Go version, license) and "Use this template" instructions.
 * `make init` script for one-time project setup (module path and project name).
 * Rate limiting with configurable policies and trusted proxy support.
 * Two-factor authentication (TOTP) with QR code setup, code confirmation, backup codes (8 per user), disable flow, and mid-login challenge.

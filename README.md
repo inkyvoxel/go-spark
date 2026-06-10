@@ -1,6 +1,10 @@
 # Go Spark
 
-A Go + SQLite web app starter template. Fork it, run `make init`, and you're off.
+[![CI](https://github.com/inkyvoxel/go-spark/actions/workflows/ci.yml/badge.svg)](https://github.com/inkyvoxel/go-spark/actions/workflows/ci.yml)
+[![Go Version](https://img.shields.io/github/go-mod/go-version/inkyvoxel/go-spark)](go.mod)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
+A Go + SQLite web app starter template. Use it as a template, run `make init`, and you're off.
 
 ## What's Included
 
@@ -24,7 +28,7 @@ A Go + SQLite web app starter template. Fork it, run `make init`, and you're off
 
 ## Getting Started
 
-1. Fork or clone this repository
+1. Click **Use this template** on GitHub to create your own repository with a clean history (or clone this one)
 2. Run `make init` — prompts for your project name and Go module path, rewrites relevant files, then removes itself
 3. Copy the example env file and start the app:
 

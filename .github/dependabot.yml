@@ -1,0 +1,41 @@
+# Monthly, grouped dependency updates to keep PR noise low: expect one or two
+# combined PRs per month per ecosystem, validated by CI before merging.
+version: 2
+updates:
+  - package-ecosystem: gomod
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      go-dependencies:
+        patterns:
+          - "*"
+
+  # Dev tools (sqlc, goose CLI) live in their own module.
+  - package-ecosystem: gomod
+    directory: /tools
+    schedule:
+      interval: monthly
+    groups:
+      go-tools:
+        patterns:
+          - "*"
+
+  # Dockerfile base images (golang, alpine).
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      docker-images:
+        patterns:
+          - "*"
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      github-actions:
+        patterns:
+          - "*"
