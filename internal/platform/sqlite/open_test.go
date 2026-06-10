@@ -1,6 +1,7 @@
 package sqlite
 
 import (
+	"context"
 	"path/filepath"
 	"testing"
 )
@@ -71,6 +72,57 @@ func TestOpenWithOptionsOverridesDefaults(t *testing.T) {
 
 	if maxOpen := db.Stats().MaxOpenConnections; maxOpen != 2 {
 		t.Fatalf("MaxOpenConnections = %d, want 2", maxOpen)
+	}
+}
+
+func TestOpenEnablesWALAndNormalSynchronous(t *testing.T) {
+	db, err := Open(filepath.Join(t.TempDir(), "app.db"))
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	defer db.Close()
+
+	var journalMode string
+	if err := db.QueryRow("PRAGMA journal_mode").Scan(&journalMode); err != nil {
+		t.Fatalf("query journal_mode pragma: %v", err)
+	}
+	if journalMode != "wal" {
+		t.Fatalf("journal_mode = %q, want wal", journalMode)
+	}
+
+	var synchronous int
+	if err := db.QueryRow("PRAGMA synchronous").Scan(&synchronous); err != nil {
+		t.Fatalf("query synchronous pragma: %v", err)
+	}
+	if synchronous != 1 {
+		t.Fatalf("synchronous = %d, want 1 (NORMAL)", synchronous)
+	}
+}
+
+func TestOpenAppliesPragmasToEveryPooledConnection(t *testing.T) {
+	db, err := OpenWithOptions(filepath.Join(t.TempDir(), "app.db"), OpenOptions{MaxOpenConns: 3})
+	if err != nil {
+		t.Fatalf("OpenWithOptions() error = %v", err)
+	}
+	defer db.Close()
+
+	// Hold distinct connections open simultaneously so each check runs on a
+	// different connection, not whichever one Exec'd a pragma at open time.
+	ctx := context.Background()
+	for i := range 3 {
+		conn, err := db.Conn(ctx)
+		if err != nil {
+			t.Fatalf("Conn() error = %v", err)
+		}
+		defer conn.Close()
+
+		var enabled int
+		if err := conn.QueryRowContext(ctx, "PRAGMA foreign_keys").Scan(&enabled); err != nil {
+			t.Fatalf("query foreign_keys pragma on conn %d: %v", i, err)
+		}
+		if enabled != 1 {
+			t.Fatalf("foreign_keys on conn %d = %d, want 1", i, enabled)
+		}
 	}
 }
 

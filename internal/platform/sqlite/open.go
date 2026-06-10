@@ -3,6 +3,7 @@ package sqlite
 import (
 	"database/sql"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 
@@ -50,23 +51,41 @@ func OpenWithOptions(path string, opts OpenOptions) (*sql.DB, error) {
 		return nil, fmt.Errorf("create database directory: %w", err)
 	}
 
-	db, err := sql.Open("sqlite", path)
+	db, err := sql.Open("sqlite", dsn(path, opts))
 	if err != nil {
 		return nil, fmt.Errorf("open sqlite database: %w", err)
 	}
+
+	configureConnectionPool(db, opts)
 
 	if err := db.Ping(); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("ping sqlite database: %w", err)
 	}
 
-	configureConnectionPool(db, opts)
-	if err := applyPragmas(db, opts); err != nil {
-		db.Close()
-		return nil, err
+	return db, nil
+}
+
+// dsn builds a connection string that applies the pragmas to every new
+// connection. foreign_keys and busy_timeout are per-connection settings, so
+// they must live in the DSN: applying them with Exec on the pool would only
+// reach whichever single connection served that call, silently skipping the
+// rest when MaxOpenConns is raised above one.
+func dsn(path string, opts OpenOptions) string {
+	busyTimeoutMillis := opts.BusyTimeoutMillis
+	if busyTimeoutMillis == 0 {
+		busyTimeoutMillis = DefaultBusyTimeoutMillis
 	}
 
-	return db, nil
+	params := url.Values{}
+	params.Add("_pragma", "foreign_keys(1)")
+	params.Add("_pragma", fmt.Sprintf("busy_timeout(%d)", busyTimeoutMillis))
+	params.Add("_pragma", "journal_mode(WAL)")
+	// NORMAL is the recommended durability level with WAL: fsync on
+	// checkpoint rather than every transaction.
+	params.Add("_pragma", "synchronous(NORMAL)")
+
+	return "file:" + path + "?" + params.Encode()
 }
 
 func configureConnectionPool(db *sql.DB, opts OpenOptions) {
@@ -75,25 +94,4 @@ func configureConnectionPool(db *sql.DB, opts OpenOptions) {
 		maxOpenConns = DefaultMaxOpenConns
 	}
 	db.SetMaxOpenConns(maxOpenConns)
-}
-
-func applyPragmas(db *sql.DB, opts OpenOptions) error {
-	if _, err := db.Exec("PRAGMA foreign_keys = ON"); err != nil {
-		return fmt.Errorf("enable sqlite foreign keys: %w", err)
-	}
-
-	if _, err := db.Exec("PRAGMA journal_mode = WAL"); err != nil {
-		return fmt.Errorf("enable sqlite WAL mode: %w", err)
-	}
-
-	busyTimeoutMillis := opts.BusyTimeoutMillis
-	if busyTimeoutMillis == 0 {
-		busyTimeoutMillis = DefaultBusyTimeoutMillis
-	}
-
-	if _, err := db.Exec(fmt.Sprintf("PRAGMA busy_timeout = %d", busyTimeoutMillis)); err != nil {
-		return fmt.Errorf("set sqlite busy timeout: %w", err)
-	}
-
-	return nil
 }
