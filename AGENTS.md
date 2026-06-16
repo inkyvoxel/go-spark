@@ -71,6 +71,7 @@ Never edit files in `internal/db/generated/` directly.
 - **Templates render data, not logic.** Public paths come from `internal/paths`; templates use `.Routes`, not hard-coded URL strings.
 - Keep SQL explicit and readable. Avoid building query strings dynamically.
 - Write focused tests for behavior that can regress. Avoid broad or speculative test coverage.
+- Keep tests deterministic. A test that exercises randomness (e.g. `crypto/rand` nonces, generated tokens) must not have a pass/fail that depends on the random value — assert on invariants, and mutate decoded bytes rather than encoded strings when testing tamper detection. If a test could be flaky, run it under `go test -count=20` to surface it before finishing.
 - Avoid refactors beyond the scope of the task.
 
 ## Before Finishing Any Task
