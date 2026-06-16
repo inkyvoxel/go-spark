@@ -35,7 +35,7 @@ templates/projects/*.html            pages and forms
 internal/services/projects.go        domain types and business rules
 internal/database/project_store.go   SQLite store
 internal/db/queries/projects.sql     sqlc queries
-migrations/00007_projects_schema.sql schema changes
+migrations/00002_projects_schema.sql schema changes
 internal/app/build.go                service/store wiring
 ```
 
