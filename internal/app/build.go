@@ -212,15 +212,29 @@ func newEmailSender(cfg config.Config, logger *slog.Logger) (email.Sender, error
 	}
 }
 
+// minSecretLength is the floor for the root secrets. The documented way to
+// generate them is `openssl rand -hex 32` (64 chars / 256 bits); 32 characters
+// is a conservative lower bound that still rejects obviously weak values (a
+// stray word, a truncated key) without forcing a specific encoding.
+const minSecretLength = 32
+
 func validateSecurityConfig(cfg config.Config) error {
-	if strings.TrimSpace(cfg.PasswordPepper) == "" {
-		return fmt.Errorf("AUTH_PASSWORD_PEPPER must be set")
+	secrets := []struct {
+		name  string
+		value string
+	}{
+		{"AUTH_PASSWORD_PEPPER", cfg.PasswordPepper},
+		{"SECRET_KEY_BASE", cfg.SecretKeyBase},
+		{"AUTH_TOTP_KEY", cfg.TOTPKey},
 	}
-	if strings.TrimSpace(cfg.SecretKeyBase) == "" {
-		return fmt.Errorf("SECRET_KEY_BASE must be set")
-	}
-	if strings.TrimSpace(cfg.TOTPKey) == "" {
-		return fmt.Errorf("AUTH_TOTP_KEY must be set")
+	for _, secret := range secrets {
+		trimmed := strings.TrimSpace(secret.value)
+		if trimmed == "" {
+			return fmt.Errorf("%s must be set", secret.name)
+		}
+		if len(trimmed) < minSecretLength {
+			return fmt.Errorf("%s must be at least %d characters (generate with: openssl rand -hex 32)", secret.name, minSecretLength)
+		}
 	}
 	return nil
 }

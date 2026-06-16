@@ -9,6 +9,5 @@
 
 ## Auth hardening (from auth audit)
 
-- Validate minimum length/entropy of `SECRET_KEY_BASE` and `AUTH_PASSWORD_PEPPER` at startup. Today `validateSecurityConfig` in `internal/app/build.go` only checks they are non-empty, but every signing key (CSRF, flash, totp-pending, passkey-session, backup-code, totp-secret) and the password pepper derive from these. A weak root secret (e.g. `SECRET_KEY_BASE=x`) currently passes. Reject values shorter than ~32 bytes so a weak secret fails closed.
 - Add a coarse per-IP login rate limit to slow credential stuffing. `rateLimitKeyByIPAndEmail` in `internal/server/rate_limit.go` keys the login bucket on `ip|email`, so a single IP gets a fresh allowance per distinct email and can spread one password across many accounts. Layer an additional per-IP limiter alongside the existing per-email one (mind shared NAT egress when picking the threshold).
 - Reduce user-enumeration signals (low priority): `RequestEmailChange` in `internal/services/auth.go` returns a distinct "already used by another account" error, and forgot-password has a timing difference between known and unknown emails (token generation + email enqueue vs. immediate return). Consider equalising both.

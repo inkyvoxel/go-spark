@@ -63,27 +63,47 @@ func TestValidateSecurityConfigRejectsWhitespacePepper(t *testing.T) {
 }
 
 func TestValidateSecurityConfigRequiresSecretKeyBase(t *testing.T) {
-	cfg := config.Config{PasswordPepper: "pepper", SecretKeyBase: ""}
+	cfg := requiredSecurityConfig()
+	cfg.SecretKeyBase = ""
 
 	assertValidateSecurityConfigErrorContains(t, cfg, "SECRET_KEY_BASE")
 }
 
 func TestValidateSecurityConfigRejectsWhitespaceSecretKeyBase(t *testing.T) {
-	cfg := config.Config{PasswordPepper: "pepper", SecretKeyBase: " \n\t "}
+	cfg := requiredSecurityConfig()
+	cfg.SecretKeyBase = " \n\t "
 
 	assertValidateSecurityConfigErrorContains(t, cfg, "SECRET_KEY_BASE")
 }
 
 func TestValidateSecurityConfigRequiresTOTPKey(t *testing.T) {
-	cfg := config.Config{PasswordPepper: "pepper", SecretKeyBase: "csrf-key", TOTPKey: ""}
+	cfg := requiredSecurityConfig()
+	cfg.TOTPKey = ""
 
 	assertValidateSecurityConfigErrorContains(t, cfg, "AUTH_TOTP_KEY")
 }
 
 func TestValidateSecurityConfigRejectsWhitespaceTOTPKey(t *testing.T) {
-	cfg := config.Config{PasswordPepper: "pepper", SecretKeyBase: "csrf-key", TOTPKey: " \n\t "}
+	cfg := requiredSecurityConfig()
+	cfg.TOTPKey = " \n\t "
 
 	assertValidateSecurityConfigErrorContains(t, cfg, "AUTH_TOTP_KEY")
+}
+
+func TestValidateSecurityConfigRejectsShortSecrets(t *testing.T) {
+	const shortSecret = "too-short" // under minSecretLength
+
+	for name, mutate := range map[string]func(*config.Config){
+		"AUTH_PASSWORD_PEPPER": func(c *config.Config) { c.PasswordPepper = shortSecret },
+		"SECRET_KEY_BASE":      func(c *config.Config) { c.SecretKeyBase = shortSecret },
+		"AUTH_TOTP_KEY":        func(c *config.Config) { c.TOTPKey = shortSecret },
+	} {
+		t.Run(name, func(t *testing.T) {
+			cfg := requiredSecurityConfig()
+			mutate(&cfg)
+			assertValidateSecurityConfigErrorContains(t, cfg, name)
+		})
+	}
 }
 
 func TestValidateSecurityConfigAllowsRequiredSecrets(t *testing.T) {
@@ -126,13 +146,17 @@ func TestSecurityConfigWarningsSkipsConfiguredOptions(t *testing.T) {
 	}
 }
 
+// validTestSecret is a 64-character value, matching `openssl rand -hex 32`
+// output length, so it clears minSecretLength.
+const validTestSecret = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+
 func requiredSecurityConfig() config.Config {
 	return config.Config{
 		CookieSecure:   true,
-		SecretKeyBase:  "csrf-key",
-		TOTPKey:        "totp-key",
+		SecretKeyBase:  validTestSecret,
+		TOTPKey:        validTestSecret,
 		AppBaseURL:     "https://app.example.com",
-		PasswordPepper: "pepper",
+		PasswordPepper: validTestSecret,
 	}
 }
 
