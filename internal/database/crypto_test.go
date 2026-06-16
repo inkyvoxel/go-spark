@@ -1,6 +1,7 @@
 package database
 
 import (
+	"encoding/base64"
 	"errors"
 	"testing"
 )
@@ -41,9 +42,16 @@ func TestSecretCipherRejectsTamperedCiphertext(t *testing.T) {
 		t.Fatalf("encrypt() error = %v", err)
 	}
 
-	tampered := []byte(encoded)
-	tampered[len(tampered)-1] ^= 0x01
-	if _, err := cipher.decrypt(string(tampered)); !errors.Is(err, errInvalidCiphertext) {
+	// Tamper with the decoded bytes (nonce || ciphertext || tag) rather than the
+	// base64 string: flipping a trailing base64 character can change only unused
+	// padding bits and decode to the same bytes, which would not exercise GCM's
+	// authentication. Flipping a real byte guarantees the tag check fails.
+	raw, err := base64.RawStdEncoding.DecodeString(encoded)
+	if err != nil {
+		t.Fatalf("decode encoded ciphertext: %v", err)
+	}
+	raw[len(raw)-1] ^= 0x01
+	if _, err := cipher.decrypt(base64.RawStdEncoding.EncodeToString(raw)); !errors.Is(err, errInvalidCiphertext) {
 		t.Fatalf("decrypt(tampered) error = %v, want errInvalidCiphertext", err)
 	}
 
