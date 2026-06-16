@@ -116,6 +116,16 @@ CREATE TABLE email_outbox (
 
 CREATE INDEX email_outbox_pending_idx ON email_outbox(status, available_at);
 CREATE INDEX email_outbox_claim_expiry_idx ON email_outbox(status, claim_expires_at);
+
+CREATE TABLE user_totp (
+    id INTEGER PRIMARY KEY,
+    user_id INTEGER NOT NULL UNIQUE,
+    secret TEXT NOT NULL,
+    enabled_at TIMESTAMP,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    last_used_counter INTEGER,
+    FOREIGN KEY (user_id) REFERENCES users(id)
+);
 `
 
 func TestAuthStoreCreateUserTranslatesDuplicateEmail(t *testing.T) {
@@ -415,7 +425,7 @@ func TestAuthStoreDeleteSessionByIDAndUserIDAndTokenHashNot(t *testing.T) {
 
 func TestAuthStoreUnexpectedCreateUserErrorIsWrapped(t *testing.T) {
 	conn := newAuthStoreTestDB(t)
-	store := NewAuthStore(conn)
+	store := mustNewAuthStore(t, conn)
 
 	if err := conn.Close(); err != nil {
 		t.Fatalf("Close() error = %v", err)
@@ -489,7 +499,7 @@ func TestAuthStoreCreateUserWithEmailVerification(t *testing.T) {
 
 func TestAuthStoreCreateUserWithEmailVerificationRollsBackOnOutboxError(t *testing.T) {
 	conn := newAuthStoreTestDB(t)
-	store := NewAuthStore(conn)
+	store := mustNewAuthStore(t, conn)
 	if _, err := conn.Exec("DROP TABLE email_outbox"); err != nil {
 		t.Fatalf("drop email_outbox: %v", err)
 	}
@@ -740,7 +750,7 @@ func TestAuthStoreResendEmailVerification(t *testing.T) {
 
 func TestAuthStoreResendEmailVerificationRollsBackOnOutboxError(t *testing.T) {
 	conn := newAuthStoreTestDB(t)
-	store := NewAuthStore(conn)
+	store := mustNewAuthStore(t, conn)
 	now := time.Now().UTC()
 
 	user, err := store.CreateUser(context.Background(), "user@example.com", "hash")
@@ -1097,10 +1107,23 @@ func TestAuthStoreConfirmEmailChangeRejectsAlreadyOwnedEmail(t *testing.T) {
 	}
 }
 
+// testTOTPSecretKey is a fixed 32-byte (AES-256) key for store tests.
+var testTOTPSecretKey = []byte("0123456789abcdef0123456789abcdef")
+
 func newTestAuthStore(t *testing.T) *AuthStore {
 	t.Helper()
 
-	return NewAuthStore(newAuthStoreTestDB(t))
+	return mustNewAuthStore(t, newAuthStoreTestDB(t))
+}
+
+func mustNewAuthStore(t *testing.T, conn *sql.DB) *AuthStore {
+	t.Helper()
+
+	store, err := NewAuthStore(conn, testTOTPSecretKey)
+	if err != nil {
+		t.Fatalf("NewAuthStore() error = %v", err)
+	}
+	return store
 }
 
 func newAuthStoreTestDB(t *testing.T) *sql.DB {

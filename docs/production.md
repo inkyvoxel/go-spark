@@ -160,10 +160,11 @@ Tighten to `p=quarantine` or `p=reject` once you are confident all legitimate se
 
 ## 7. Secret rotation
 
-**`SECRET_KEY_BASE`** is the root from which all signing keys are derived: CSRF tokens, flash cookies, session cookies, TOTP backup codes. Rotating it:
+**`SECRET_KEY_BASE`** is the root from which all signing and at-rest encryption keys are derived: CSRF tokens, flash cookies, session cookies, TOTP backup-code hashes, and the key that encrypts TOTP shared secrets at rest. Rotating it:
 
 * invalidates all active sessions — every logged-in user is signed out
 * invalidates any in-flight CSRF tokens — forms submitted at the moment of rotation will fail once with a CSRF error, then succeed on retry
+* breaks both TOTP factors for users with 2FA enabled — stored shared secrets become undecryptable *and* stored backup-code hashes no longer match, since both derive from this key. Those users cannot complete the second-factor step and will need an out-of-band 2FA reset
 
 This is safe to do at any time if you suspect the key is compromised. Generate a new value, update `.env`, and restart:
 

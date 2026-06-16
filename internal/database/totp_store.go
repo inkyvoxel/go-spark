@@ -15,7 +15,11 @@ func (s *AuthStore) GetTOTPByUserID(ctx context.Context, userID int64) (services
 	if err != nil {
 		return services.TOTPRecord{}, fmt.Errorf("get TOTP by user ID: %w", err)
 	}
-	return totpRecordFromDB(row), nil
+	record := totpRecordFromDB(row)
+	if record.Secret, err = s.totpSecrets.decrypt(record.Secret); err != nil {
+		return services.TOTPRecord{}, fmt.Errorf("decrypt TOTP secret: %w", err)
+	}
+	return record, nil
 }
 
 func (s *AuthStore) GetEnabledTOTPByUserID(ctx context.Context, userID int64) (services.TOTPRecord, error) {
@@ -23,13 +27,21 @@ func (s *AuthStore) GetEnabledTOTPByUserID(ctx context.Context, userID int64) (s
 	if err != nil {
 		return services.TOTPRecord{}, fmt.Errorf("get enabled TOTP by user ID: %w", err)
 	}
-	return totpRecordFromDB(row), nil
+	record := totpRecordFromDB(row)
+	if record.Secret, err = s.totpSecrets.decrypt(record.Secret); err != nil {
+		return services.TOTPRecord{}, fmt.Errorf("decrypt TOTP secret: %w", err)
+	}
+	return record, nil
 }
 
 func (s *AuthStore) UpsertPendingTOTP(ctx context.Context, userID int64, secret string) error {
+	encryptedSecret, err := s.totpSecrets.encrypt(secret)
+	if err != nil {
+		return fmt.Errorf("encrypt TOTP secret: %w", err)
+	}
 	if err := s.queries.UpsertPendingTOTP(ctx, db.UpsertPendingTOTPParams{
 		UserID: userID,
-		Secret: secret,
+		Secret: encryptedSecret,
 	}); err != nil {
 		return fmt.Errorf("upsert pending TOTP: %w", err)
 	}

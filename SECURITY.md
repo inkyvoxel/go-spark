@@ -22,6 +22,6 @@ Before deploying a project based on this template:
 * Review deployment-specific headers, logging, backups, and access controls.
 * Keep Go modules and browser assets up to date.
 * Review and tune auth rate-limit settings (`RATE_LIMIT_*`) for your traffic profile.
-* Set `SECRET_KEY_BASE` and keep it out of version control — it signs CSRF tokens, flash messages, and TOTP pending-login cookies, and derives the key used to hash TOTP backup codes.
+* Set `SECRET_KEY_BASE` and keep it out of version control — it signs CSRF tokens, flash messages, and TOTP pending-login cookies, and derives the keys used to hash TOTP backup codes and to encrypt TOTP shared secrets at rest.
 * Set `AUTH_PASSWORD_PEPPER` and treat it as a secret outside the database.
 * Set `AUTH_TOTP_ISSUER` to your app name before users enroll authenticator apps.

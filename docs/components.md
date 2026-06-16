@@ -89,7 +89,14 @@ Several signing and hashing purposes use keys derived from the single `SECRET_KE
 csrfKey          = HMAC-SHA256(SECRET_KEY_BASE, "csrf")
 flashKey         = HMAC-SHA256(SECRET_KEY_BASE, "flash")
 totpBackupKey    = HMAC-SHA256(SECRET_KEY_BASE, "totp_backup_code")
+totpSecretKey    = HMAC-SHA256(SECRET_KEY_BASE, "totp_secret")
 totpPendingKey   = HMAC-SHA256(csrfKey, "totp_pending")
 ```
+
+`totpSecretKey` is the AES-256-GCM key used to encrypt TOTP shared secrets at
+rest (see `internal/database/crypto.go`). Unlike backup codes, which are one-way
+hashed, the shared secret must be recoverable to verify codes, so it is
+encrypted rather than hashed — a leaked database backup does not expose users'
+second factors.
 
 To add a new signing purpose in the server package, derive a purpose-scoped key during server initialisation and store it as a field on `Server`. Application-wide service keys are derived during runtime assembly in `internal/app`. This follows the Rails `secret_key_base` pattern — one root secret, isolated derived keys.

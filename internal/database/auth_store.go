@@ -16,17 +16,25 @@ import (
 )
 
 type AuthStore struct {
-	db      *sql.DB
-	queries *db.Queries
+	db          *sql.DB
+	queries     *db.Queries
+	totpSecrets *secretCipher
 }
 
 var _ services.AuthStore = (*AuthStore)(nil)
 
-func NewAuthStore(conn *sql.DB) *AuthStore {
-	return &AuthStore{
-		db:      conn,
-		queries: db.New(conn),
+// NewAuthStore builds the store. totpSecretKey is a 32-byte key (derived from
+// SECRET_KEY_BASE) used to encrypt TOTP shared secrets at rest.
+func NewAuthStore(conn *sql.DB, totpSecretKey []byte) (*AuthStore, error) {
+	totpSecrets, err := newSecretCipher(totpSecretKey)
+	if err != nil {
+		return nil, fmt.Errorf("configure TOTP secret cipher: %w", err)
 	}
+	return &AuthStore{
+		db:          conn,
+		queries:     db.New(conn),
+		totpSecrets: totpSecrets,
+	}, nil
 }
 
 func (s *AuthStore) CreateUser(ctx context.Context, email, passwordHash string) (services.User, error) {

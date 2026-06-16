@@ -66,7 +66,12 @@ func Build(cfg config.Config, logger *slog.Logger) (Runtime, error) {
 }
 
 func buildRuntime(cfg config.Config, logger *slog.Logger, db *sql.DB, secretKeyBase string) (Runtime, error) {
-	auth, err := services.NewAuthService(database.NewAuthStore(db), services.AuthOptions{
+	authStore, err := database.NewAuthStore(db, deriveKey([]byte(secretKeyBase), "totp_secret"))
+	if err != nil {
+		return Runtime{}, fmt.Errorf("configure auth store: %w", err)
+	}
+
+	auth, err := services.NewAuthService(authStore, services.AuthOptions{
 		PasswordMinLen:           cfg.PasswordMinLength,
 		PasswordPepper:           cfg.PasswordPepper,
 		TOTPIssuer:               cfg.TOTPIssuer,
