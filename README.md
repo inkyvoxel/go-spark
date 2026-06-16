@@ -30,14 +30,15 @@ A Go + SQLite web app starter template. Use it as a template, run `make init`, a
 ## Getting Started
 
 1. Click **Use this template** on GitHub to create your own repository with a clean history (or clone this one)
-2. Run `make init` — prompts for your project name and Go module path, rewrites relevant files, then removes itself
-3. Copy the example env file and start the app:
+2. Run `make init` — prompts for your project name and Go module path, rewrites relevant files, generates a `.env` with random secrets, then removes itself
+3. Start the app:
 
 ```sh
-cp .env.example .env
 make migrate-up
 make start
 ```
+
+> If you skip `make init`, run `cp .env.example .env` and set the required secrets yourself (`SECRET_KEY_BASE`, `AUTH_TOTP_KEY`, `AUTH_PASSWORD_PEPPER` — generate each with `openssl rand -hex 32`).
 
 ## Adding Your First Feature
 

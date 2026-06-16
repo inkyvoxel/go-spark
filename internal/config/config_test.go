@@ -215,6 +215,7 @@ func TestFromEnvUsesEnvironment(t *testing.T) {
 	t.Setenv("DATABASE_PATH", "/tmp/app-test.db")
 	t.Setenv("APP_COOKIE_SECURE", "true")
 	t.Setenv("SECRET_KEY_BASE", "csrf-signing-key")
+	t.Setenv("AUTH_TOTP_KEY", "totp-at-rest-key")
 	t.Setenv("AUTH_PASSWORD_MIN_LENGTH", "16")
 	t.Setenv("APP_BASE_URL", "https://app.example.com/")
 	t.Setenv("AUTH_EMAIL_CHANGE_NOTICE_ENABLED", "false")
@@ -262,6 +263,9 @@ func TestFromEnvUsesEnvironment(t *testing.T) {
 	}
 	if cfg.SecretKeyBase != "csrf-signing-key" {
 		t.Fatalf("SecretKeyBase = %q, want %q", cfg.SecretKeyBase, "csrf-signing-key")
+	}
+	if cfg.TOTPKey != "totp-at-rest-key" {
+		t.Fatalf("TOTPKey = %q, want %q", cfg.TOTPKey, "totp-at-rest-key")
 	}
 	if cfg.EmailChangeNoticeEnabled {
 		t.Fatal("EmailChangeNoticeEnabled = true, want false")

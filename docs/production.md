@@ -22,6 +22,7 @@ Required for deployment:
 |---|---|
 | `DOMAIN` | Your public domain, e.g. `yourdomain.example` |
 | `SECRET_KEY_BASE` | Root signing key — generate with `openssl rand -hex 32` |
+| `AUTH_TOTP_KEY` | Root key for TOTP data at rest — generate with `openssl rand -hex 32` |
 | `AUTH_PASSWORD_PEPPER` | Password hashing pepper — generate with `openssl rand -hex 32` |
 | `AUTH_TOTP_ISSUER` | Issuer name shown in authenticator apps — set to your app's name |
 | `AUTH_PASSKEY_RP_ID` | Passkey relying party ID — optional; defaults to the host of `APP_BASE_URL`. Set to the registrable parent domain for multi-subdomain setups |
@@ -76,7 +77,7 @@ Run through this before accepting real traffic.
 - [ ] `docker compose logs app` shows no startup warnings — check for insecure cookies, non-HTTPS base URL, log-only email, default sender
 - [ ] `AUTH_TOTP_ISSUER` is set to your app name — this value is baked into QR codes when users enrol 2FA; changing it later breaks existing authenticator apps
 - [ ] `APP_BASE_URL` uses your real HTTPS domain — passkeys are bound to this origin, so existing passkeys stop working if the domain (relying party ID) changes
-- [ ] `SECRET_KEY_BASE` and `AUTH_PASSWORD_PEPPER` are not committed to version control
+- [ ] `SECRET_KEY_BASE`, `AUTH_TOTP_KEY`, and `AUTH_PASSWORD_PEPPER` are not committed to version control
 
 **Email**
 - [ ] SPF, DKIM, and DMARC records are in DNS (see [SMTP deliverability](#6-smtp-deliverability))
@@ -160,18 +161,28 @@ Tighten to `p=quarantine` or `p=reject` once you are confident all legitimate se
 
 ## 7. Secret rotation
 
-**`SECRET_KEY_BASE`** is the root from which all signing and at-rest encryption keys are derived: CSRF tokens, flash cookies, session cookies, TOTP backup-code hashes, and the key that encrypts TOTP shared secrets at rest. Rotating it:
+Keys are split across two roots by rotation cost: `SECRET_KEY_BASE` signs ephemeral state and is cheap to rotate, while `AUTH_TOTP_KEY` and `AUTH_PASSWORD_PEPPER` protect data at rest and are expensive to rotate. See [Secret Key Derivation](components.md#secret-key-derivation) for the full map.
 
-* invalidates all active sessions — every logged-in user is signed out
-* invalidates any in-flight CSRF tokens — forms submitted at the moment of rotation will fail once with a CSRF error, then succeed on retry
-* breaks both TOTP factors for users with 2FA enabled — stored shared secrets become undecryptable *and* stored backup-code hashes no longer match, since both derive from this key. Those users cannot complete the second-factor step and will need an out-of-band 2FA reset
+**`SECRET_KEY_BASE`** is the root for signing and ephemeral state: CSRF tokens, flash cookies, and the TOTP/passkey ceremony cookies. Rotating it:
 
-This is safe to do at any time if you suspect the key is compromised. Generate a new value, update `.env`, and restart:
+* does **not** sign users out — session tokens are random values stored as unkeyed hashes, independent of this key
+* does **not** affect 2FA — TOTP secrets and backup codes derive from `AUTH_TOTP_KEY`, not this one
+* invalidates any in-flight CSRF tokens — forms submitted at the moment of rotation will fail once with a CSRF error, then succeed on retry, and any half-finished TOTP/passkey ceremony must be restarted
+
+It is safe to rotate at any time if you suspect it is compromised. Generate a new value, update `.env`, and restart:
 
 ```sh
 openssl rand -hex 32   # generate new value, put it in .env
 docker compose up -d
 ```
+
+**`AUTH_TOTP_KEY`** protects TOTP data at rest — it encrypts the shared secret and hashes backup codes. Rotating it breaks both factors for every user with 2FA enabled: stored secrets become undecryptable *and* stored backup-code hashes no longer match. Those users cannot complete the second-factor step and will need an out-of-band 2FA reset.
+
+Only rotate this if you have confirmed it was compromised (e.g. a database backup leaked). There is no graceful migration path without forcing re-enrolment. If you do need to rotate:
+
+1. Generate a new value (`openssl rand -hex 32`) and update `.env`
+2. Restart the app
+3. Reset 2FA for affected users and notify them to re-enrol
 
 **`AUTH_PASSWORD_PEPPER`** is prepended to every password before Argon2id hashing. Rotating it means every stored hash no longer matches any user's real password — all users are effectively locked out until they reset their password via email.
 

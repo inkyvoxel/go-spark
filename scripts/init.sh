@@ -77,10 +77,30 @@ replace_in_files "$TEMPLATE_PROJECT" "$PROJECT_NAME"
 echo "Tidying Go modules..."
 go mod tidy
 
+# Create .env from the example and fill in the required secrets with random
+# values so the app runs out of the box. An existing .env is left untouched.
+ENV_GENERATED=false
+if [[ ! -f .env ]]; then
+    cp .env.example .env
+    if command -v openssl >/dev/null 2>&1; then
+        for key in SECRET_KEY_BASE AUTH_TOTP_KEY AUTH_PASSWORD_PEPPER; do
+            secret="$(openssl rand -hex 32)"
+            sed "${SED_INPLACE[@]}" "s|^${key}=.*|${key}=${secret}|" .env
+        done
+        ENV_GENERATED=true
+        echo "Created .env with freshly generated secrets."
+    else
+        echo "Created .env, but openssl was not found — set SECRET_KEY_BASE, AUTH_TOTP_KEY,"
+        echo "and AUTH_PASSWORD_PEPPER manually (generate each with: openssl rand -hex 32)."
+    fi
+fi
+
 echo ""
 echo "Done! Next steps:"
 echo ""
-echo "  cp .env.example .env"
+if [[ "$ENV_GENERATED" != "true" ]]; then
+    echo "  # set the required secrets in .env (SECRET_KEY_BASE, AUTH_TOTP_KEY, AUTH_PASSWORD_PEPPER)"
+fi
 echo "  make migrate-up"
 echo "  make start"
 echo ""

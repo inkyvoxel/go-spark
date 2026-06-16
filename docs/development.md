@@ -17,12 +17,11 @@ For production deployment guidance, see [production.md](production.md).
 git clone https://github.com/you/my-app
 cd my-app
 make init
-cp .env.example .env
 make migrate-up
 make start
 ```
 
-`make init` prompts for your project name and Go module path, rewrites the relevant files, and removes itself. It only needs to be run once.
+`make init` prompts for your project name and Go module path, rewrites the relevant files, generates a `.env` with random secrets, and removes itself. It only needs to be run once. (If you skip it, run `cp .env.example .env` and set `SECRET_KEY_BASE`, `AUTH_TOTP_KEY`, and `AUTH_PASSWORD_PEPPER` yourself — generate each with `openssl rand -hex 32`.)
 
 The default database file is `./data/app.db`. You can override the path by setting `DATABASE_PATH` in your `.env`.
 

@@ -66,7 +66,13 @@ func Build(cfg config.Config, logger *slog.Logger) (Runtime, error) {
 }
 
 func buildRuntime(cfg config.Config, logger *slog.Logger, db *sql.DB, secretKeyBase string) (Runtime, error) {
-	authStore, err := database.NewAuthStore(db, deriveKey([]byte(secretKeyBase), "totp_secret"))
+	// TOTP secrets and backup codes are protected at rest under a dedicated root
+	// key, separate from SECRET_KEY_BASE. This keeps signing-key rotation (CSRF,
+	// flash, ceremony cookies) cheap — it no longer invalidates anyone's second
+	// factor. Rotating AUTH_TOTP_KEY, by contrast, forces 2FA re-enrolment.
+	totpKey := []byte(strings.TrimSpace(cfg.TOTPKey))
+
+	authStore, err := database.NewAuthStore(db, deriveKey(totpKey, "totp_secret"))
 	if err != nil {
 		return Runtime{}, fmt.Errorf("configure auth store: %w", err)
 	}
@@ -75,7 +81,7 @@ func buildRuntime(cfg config.Config, logger *slog.Logger, db *sql.DB, secretKeyB
 		PasswordMinLen:           cfg.PasswordMinLength,
 		PasswordPepper:           cfg.PasswordPepper,
 		TOTPIssuer:               cfg.TOTPIssuer,
-		TOTPBackupCodeKey:        deriveKey([]byte(secretKeyBase), "totp_backup_code"),
+		TOTPBackupCodeKey:        deriveKey(totpKey, "totp_backup_code"),
 		EmailChangeNoticeEnabled: boolPtr(cfg.EmailChangeNoticeEnabled),
 		WebAuthnRPID:             passkeyRPID(cfg),
 		WebAuthnRPDisplayName:    passkeyRPDisplayName(cfg),
@@ -212,6 +218,9 @@ func validateSecurityConfig(cfg config.Config) error {
 	}
 	if strings.TrimSpace(cfg.SecretKeyBase) == "" {
 		return fmt.Errorf("SECRET_KEY_BASE must be set")
+	}
+	if strings.TrimSpace(cfg.TOTPKey) == "" {
+		return fmt.Errorf("AUTH_TOTP_KEY must be set")
 	}
 	return nil
 }

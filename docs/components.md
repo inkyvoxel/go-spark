@@ -83,20 +83,39 @@ Use `{{ template "breadcrumb" . }}` in the page template wherever the breadcrumb
 
 ## Secret Key Derivation
 
-Several signing and hashing purposes use keys derived from the single `SECRET_KEY_BASE` environment variable:
+Keys are derived from two roots, split by **rotation profile** rather than by
+feature. This keeps the cheap-to-rotate signing keys separate from the keys that
+protect data at rest, so rotating one does not collaterally invalidate the other.
+
+`SECRET_KEY_BASE` — signing and ephemeral state. Rotating it is cheap: no stored
+data depends on it.
 
 ```
 csrfKey          = HMAC-SHA256(SECRET_KEY_BASE, "csrf")
 flashKey         = HMAC-SHA256(SECRET_KEY_BASE, "flash")
-totpBackupKey    = HMAC-SHA256(SECRET_KEY_BASE, "totp_backup_code")
-totpSecretKey    = HMAC-SHA256(SECRET_KEY_BASE, "totp_secret")
 totpPendingKey   = HMAC-SHA256(csrfKey, "totp_pending")
+passkeySessionKey = HMAC-SHA256(csrfKey, "passkey_session")
+```
+
+`AUTH_TOTP_KEY` — TOTP data at rest. Rotating it forces every 2FA user to
+re-enrol, so it is rotated rarely and deliberately (the same contract as
+`AUTH_PASSWORD_PEPPER` for passwords).
+
+```
+totpSecretKey    = HMAC-SHA256(AUTH_TOTP_KEY, "totp_secret")
+totpBackupKey    = HMAC-SHA256(AUTH_TOTP_KEY, "totp_backup_code")
 ```
 
 `totpSecretKey` is the AES-256-GCM key used to encrypt TOTP shared secrets at
 rest (see `internal/database/crypto.go`). Unlike backup codes, which are one-way
-hashed, the shared secret must be recoverable to verify codes, so it is
-encrypted rather than hashed — a leaked database backup does not expose users'
-second factors.
+hashed with `totpBackupKey`, the shared secret must be recoverable to verify
+codes, so it is encrypted rather than hashed — a leaked database backup does not
+expose users' second factors. Both derive from `AUTH_TOTP_KEY` because they share
+one rotation profile: there is no scenario where you would rotate one but not the
+other.
+
+Note that session validity does **not** depend on either root — session tokens
+are random values stored as unkeyed SHA-256 hashes — so rotating `SECRET_KEY_BASE`
+does not sign users out.
 
 To add a new signing purpose in the server package, derive a purpose-scoped key during server initialisation and store it as a field on `Server`. Application-wide service keys are derived during runtime assembly in `internal/app`. This follows the Rails `secret_key_base` pattern — one root secret, isolated derived keys.

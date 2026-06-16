@@ -74,6 +74,18 @@ func TestValidateSecurityConfigRejectsWhitespaceSecretKeyBase(t *testing.T) {
 	assertValidateSecurityConfigErrorContains(t, cfg, "SECRET_KEY_BASE")
 }
 
+func TestValidateSecurityConfigRequiresTOTPKey(t *testing.T) {
+	cfg := config.Config{PasswordPepper: "pepper", SecretKeyBase: "csrf-key", TOTPKey: ""}
+
+	assertValidateSecurityConfigErrorContains(t, cfg, "AUTH_TOTP_KEY")
+}
+
+func TestValidateSecurityConfigRejectsWhitespaceTOTPKey(t *testing.T) {
+	cfg := config.Config{PasswordPepper: "pepper", SecretKeyBase: "csrf-key", TOTPKey: " \n\t "}
+
+	assertValidateSecurityConfigErrorContains(t, cfg, "AUTH_TOTP_KEY")
+}
+
 func TestValidateSecurityConfigAllowsRequiredSecrets(t *testing.T) {
 	err := validateSecurityConfig(requiredSecurityConfig())
 	if err != nil {
@@ -118,6 +130,7 @@ func requiredSecurityConfig() config.Config {
 	return config.Config{
 		CookieSecure:   true,
 		SecretKeyBase:  "csrf-key",
+		TOTPKey:        "totp-key",
 		AppBaseURL:     "https://app.example.com",
 		PasswordPepper: "pepper",
 	}
