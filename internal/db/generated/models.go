@@ -72,11 +72,12 @@ type TotpBackupCode struct {
 }
 
 type User struct {
-	ID              int64
-	Email           string
-	PasswordHash    string
-	EmailVerifiedAt sql.NullTime
-	CreatedAt       time.Time
+	ID                 int64
+	Email              string
+	PasswordHash       string
+	EmailVerifiedAt    sql.NullTime
+	CreatedAt          time.Time
+	WebauthnUserHandle []byte
 }
 
 type UserTotp struct {
@@ -86,4 +87,20 @@ type UserTotp struct {
 	EnabledAt       sql.NullTime
 	CreatedAt       time.Time
 	LastUsedCounter sql.NullInt64
+}
+
+type WebauthnCredential struct {
+	ID              int64
+	UserID          int64
+	CredentialID    []byte
+	PublicKey       []byte
+	AttestationType string
+	Aaguid          []byte
+	SignCount       int64
+	Transports      string
+	BackupEligible  int64
+	BackupState     int64
+	Name            string
+	CreatedAt       time.Time
+	LastUsedAt      sql.NullTime
 }

@@ -1,9 +1,11 @@
 package services
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -16,7 +18,7 @@ import (
 
 func TestAuthServiceBeginTOTPSetupUsesConfiguredIssuer(t *testing.T) {
 	store := newFakeAuthStore()
-	service := NewAuthService(store, AuthOptions{TOTPIssuer: "Acme Corp"})
+	service := mustNewAuthService(t, store, AuthOptions{TOTPIssuer: "Acme Corp"})
 
 	user, err := store.CreateUser(context.Background(), "user@example.com", "hash")
 	if err != nil {
@@ -422,7 +424,7 @@ func TestAuthServiceLoginCreatesSession(t *testing.T) {
 }
 
 func TestAuthServiceWithPepperSupportsRegisterLoginAndPasswordChange(t *testing.T) {
-	service := NewAuthService(newFakeAuthStore(), AuthOptions{
+	service := mustNewAuthService(t, newFakeAuthStore(), AuthOptions{
 		SessionDuration:     time.Hour,
 		PasswordMinLen:      8,
 		Argon2idMemoryKiB:   64,
@@ -897,7 +899,7 @@ func TestAuthServiceConfirmEmailChangeSkipsOldEmailNoticeWhenDisabled(t *testing
 
 func TestAuthServiceCreateEmailVerificationToken(t *testing.T) {
 	store := newFakeAuthStore()
-	service := NewAuthService(store, AuthOptions{
+	service := mustNewAuthService(t, store, AuthOptions{
 		TokenBytes:                     32,
 		EmailVerificationTokenDuration: time.Hour,
 	})
@@ -928,7 +930,7 @@ func TestAuthServiceCreateEmailVerificationToken(t *testing.T) {
 
 func TestAuthServiceVerifyEmail(t *testing.T) {
 	store := newFakeAuthStore()
-	service := NewAuthService(store, AuthOptions{
+	service := mustNewAuthService(t, store, AuthOptions{
 		TokenBytes:                     32,
 		EmailVerificationTokenDuration: time.Hour,
 	})
@@ -1225,10 +1227,20 @@ func TestAuthServiceResetPasswordWithTokenRejectsShortPassword(t *testing.T) {
 	}
 }
 
+func mustNewAuthService(t *testing.T, store AuthStore, opts AuthOptions) *AuthService {
+	t.Helper()
+
+	service, err := NewAuthService(store, opts)
+	if err != nil {
+		t.Fatalf("NewAuthService() error = %v", err)
+	}
+	return service
+}
+
 func newTestAuthService(t *testing.T) *AuthService {
 	t.Helper()
 
-	return NewAuthService(newFakeAuthStore(), AuthOptions{
+	return mustNewAuthService(t, newFakeAuthStore(), AuthOptions{
 		SessionDuration:     time.Hour,
 		PasswordMinLen:      8,
 		Argon2idMemoryKiB:   64,
@@ -1247,7 +1259,7 @@ func newTestAuthService(t *testing.T) *AuthService {
 func newTestAuthServiceWithNoticeDisabled(t *testing.T) *AuthService {
 	t.Helper()
 
-	return NewAuthService(newFakeAuthStore(), AuthOptions{
+	return mustNewAuthService(t, newFakeAuthStore(), AuthOptions{
 		SessionDuration:     time.Hour,
 		PasswordMinLen:      8,
 		Argon2idMemoryKiB:   64,
@@ -1288,6 +1300,8 @@ type fakeAuthStore struct {
 	emailChangeTokens         map[string]db.EmailChangeToken
 	totpByUserID              map[int64]TOTPRecord
 	backupCodesByUserID       map[int64][]backupCode
+	nextWebAuthnCredID        int64
+	webauthnCredsByUserID     map[int64][]WebAuthnCredential
 	outbox                    []email.Message
 	getUserByEmailErr         error
 	resendErr                 error
@@ -1315,6 +1329,8 @@ func newFakeAuthStore() *fakeAuthStore {
 		emailChangeTokens:        make(map[string]db.EmailChangeToken),
 		totpByUserID:             make(map[int64]TOTPRecord),
 		backupCodesByUserID:      make(map[int64][]backupCode),
+		nextWebAuthnCredID:       1,
+		webauthnCredsByUserID:    make(map[int64][]WebAuthnCredential),
 	}
 }
 
@@ -1324,10 +1340,11 @@ func (s *fakeAuthStore) CreateUser(ctx context.Context, email, passwordHash stri
 	}
 
 	user := db.User{
-		ID:           s.nextUserID,
-		Email:        email,
-		PasswordHash: passwordHash,
-		CreatedAt:    time.Now().UTC(),
+		ID:                 s.nextUserID,
+		Email:              email,
+		PasswordHash:       passwordHash,
+		CreatedAt:          time.Now().UTC(),
+		WebauthnUserHandle: []byte(fmt.Sprintf("handle-%d", s.nextUserID)),
 	}
 	s.nextUserID++
 	s.usersByEmail[email] = user
@@ -1847,4 +1864,86 @@ func (s *fakeAuthStore) ReplaceBackupCodes(ctx context.Context, userID int64, co
 	}
 	s.backupCodesByUserID[userID] = codes
 	return nil
+}
+
+func (s *fakeAuthStore) GetWebAuthnHandleByUserID(ctx context.Context, userID int64) ([]byte, error) {
+	user, ok := s.usersByID[userID]
+	if !ok {
+		return nil, sql.ErrNoRows
+	}
+	return user.WebauthnUserHandle, nil
+}
+
+func (s *fakeAuthStore) GetUserByWebAuthnHandle(ctx context.Context, handle []byte) (User, error) {
+	for _, user := range s.usersByID {
+		if bytes.Equal(user.WebauthnUserHandle, handle) {
+			return userFromDB(user), nil
+		}
+	}
+	return User{}, sql.ErrNoRows
+}
+
+func (s *fakeAuthStore) CreateWebAuthnCredential(ctx context.Context, params CreateWebAuthnCredentialParams) error {
+	s.webauthnCredsByUserID[params.UserID] = append(s.webauthnCredsByUserID[params.UserID], WebAuthnCredential{
+		ID:              s.nextWebAuthnCredID,
+		UserID:          params.UserID,
+		CredentialID:    params.CredentialID,
+		PublicKey:       params.PublicKey,
+		AttestationType: params.AttestationType,
+		AAGUID:          params.AAGUID,
+		SignCount:       params.SignCount,
+		Transports:      params.Transports,
+		BackupEligible:  params.BackupEligible,
+		BackupState:     params.BackupState,
+		Name:            params.Name,
+		CreatedAt:       time.Now().UTC(),
+	})
+	s.nextWebAuthnCredID++
+	return nil
+}
+
+func (s *fakeAuthStore) ListWebAuthnCredentialsByUserID(ctx context.Context, userID int64) ([]WebAuthnCredential, error) {
+	return s.webauthnCredsByUserID[userID], nil
+}
+
+func (s *fakeAuthStore) UpdateWebAuthnCredentialOnLogin(ctx context.Context, params UpdateWebAuthnCredentialParams) error {
+	for userID, creds := range s.webauthnCredsByUserID {
+		for i := range creds {
+			if bytes.Equal(creds[i].CredentialID, params.CredentialID) {
+				creds[i].SignCount = params.SignCount
+				creds[i].BackupState = params.BackupState
+				creds[i].LastUsedAt = sql.NullTime{Time: params.LastUsedAt, Valid: true}
+				s.webauthnCredsByUserID[userID] = creds
+				return nil
+			}
+		}
+	}
+	return nil
+}
+
+func (s *fakeAuthStore) RenameWebAuthnCredential(ctx context.Context, userID, credentialDBID int64, name string) (bool, error) {
+	creds := s.webauthnCredsByUserID[userID]
+	for i := range creds {
+		if creds[i].ID == credentialDBID {
+			creds[i].Name = name
+			s.webauthnCredsByUserID[userID] = creds
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+func (s *fakeAuthStore) DeleteWebAuthnCredential(ctx context.Context, userID, credentialDBID int64) (bool, error) {
+	creds := s.webauthnCredsByUserID[userID]
+	for i := range creds {
+		if creds[i].ID == credentialDBID {
+			s.webauthnCredsByUserID[userID] = append(creds[:i], creds[i+1:]...)
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+func (s *fakeAuthStore) CountWebAuthnCredentialsByUserID(ctx context.Context, userID int64) (int64, error) {
+	return int64(len(s.webauthnCredsByUserID[userID])), nil
 }

@@ -13,6 +13,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/go-webauthn/webauthn/webauthn"
 	"github.com/inkyvoxel/go-spark/internal/email"
 )
 
@@ -41,6 +42,9 @@ var (
 	ErrTOTPAlreadyEnabled         = errors.New("TOTP already enabled")
 	ErrTOTPNotEnabled             = errors.New("TOTP not enabled")
 	ErrTOTPSetupNotStarted        = errors.New("TOTP setup not started")
+	ErrPasskeysDisabled           = errors.New("passkeys not configured")
+	ErrPasskeyCeremony            = errors.New("passkey ceremony failed")
+	ErrPasskeyNotFound            = errors.New("passkey not found")
 )
 
 type AuthService struct {
@@ -57,6 +61,7 @@ type AuthService struct {
 	passwordMinLen                 int
 	totpIssuer                     string
 	backupCodeKey                  []byte
+	webAuthn                       *webauthn.WebAuthn
 }
 
 type TOTPRecord struct {
@@ -154,6 +159,15 @@ type AuthStore interface {
 	ClaimTOTPCounter(ctx context.Context, userID, counter int64) (bool, error)
 	CountUnusedTOTPBackupCodes(ctx context.Context, userID int64) (int64, error)
 	ReplaceBackupCodes(ctx context.Context, userID int64, codeHashes []string) error
+	// WebAuthn / passkeys
+	GetWebAuthnHandleByUserID(ctx context.Context, userID int64) ([]byte, error)
+	GetUserByWebAuthnHandle(ctx context.Context, handle []byte) (User, error)
+	CreateWebAuthnCredential(ctx context.Context, params CreateWebAuthnCredentialParams) error
+	ListWebAuthnCredentialsByUserID(ctx context.Context, userID int64) ([]WebAuthnCredential, error)
+	UpdateWebAuthnCredentialOnLogin(ctx context.Context, params UpdateWebAuthnCredentialParams) error
+	RenameWebAuthnCredential(ctx context.Context, userID, credentialDBID int64, name string) (bool, error)
+	DeleteWebAuthnCredential(ctx context.Context, userID, credentialDBID int64) (bool, error)
+	CountWebAuthnCredentialsByUserID(ctx context.Context, userID int64) (int64, error)
 }
 
 type CreateUserWithEmailVerificationParams struct {
@@ -182,6 +196,9 @@ type AuthOptions struct {
 	EmailChangeNoticeEnabled       *bool
 	TOTPIssuer                     string
 	TOTPBackupCodeKey              []byte
+	WebAuthnRPID                   string
+	WebAuthnRPDisplayName          string
+	WebAuthnRPOrigins              []string
 }
 
 type ResendEmailVerificationParams struct {
@@ -226,7 +243,7 @@ type ChangeEmailImmediatelyParams struct {
 	SendOldEmailNotice     bool
 }
 
-func NewAuthService(store AuthStore, opts AuthOptions) *AuthService {
+func NewAuthService(store AuthStore, opts AuthOptions) (*AuthService, error) {
 	sessionDuration := opts.SessionDuration
 	if sessionDuration == 0 {
 		sessionDuration = 7 * 24 * time.Hour
@@ -266,6 +283,11 @@ func NewAuthService(store AuthStore, opts AuthOptions) *AuthService {
 	// response timing does not reveal which emails are registered.
 	dummyPasswordHash, _ := hasher.Hash("dummy-timing-equalization-password")
 
+	webAuthn, err := newWebAuthn(opts)
+	if err != nil {
+		return nil, fmt.Errorf("configure webauthn: %w", err)
+	}
+
 	return &AuthService{
 		store:                          store,
 		emailChangeNoticeEnabled:       emailChangeNoticeEnabled(opts.EmailChangeNoticeEnabled),
@@ -280,7 +302,8 @@ func NewAuthService(store AuthStore, opts AuthOptions) *AuthService {
 		passwordMinLen:                 passwordMinLen,
 		totpIssuer:                     strings.TrimSpace(opts.TOTPIssuer),
 		backupCodeKey:                  opts.TOTPBackupCodeKey,
-	}
+		webAuthn:                       webAuthn,
+	}, nil
 }
 
 func (s *AuthService) Register(ctx context.Context, emailAddress, password string) (User, error) {

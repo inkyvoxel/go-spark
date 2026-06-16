@@ -1,12 +1,26 @@
 -- name: CreateUser :one
 INSERT INTO users (
     email,
-    password_hash
+    password_hash,
+    webauthn_user_handle
 ) VALUES (
+    ?,
     ?,
     ?
 )
 RETURNING id, email, password_hash, created_at, email_verified_at;
+
+-- name: GetWebAuthnHandleByUserID :one
+SELECT webauthn_user_handle
+FROM users
+WHERE id = ?
+LIMIT 1;
+
+-- name: GetUserByWebAuthnHandle :one
+SELECT id, email, password_hash, created_at, email_verified_at
+FROM users
+WHERE webauthn_user_handle = ?
+LIMIT 1;
 
 -- name: GetUserByEmail :one
 SELECT id, email, password_hash, created_at, email_verified_at

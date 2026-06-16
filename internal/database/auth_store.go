@@ -30,9 +30,14 @@ func NewAuthStore(conn *sql.DB) *AuthStore {
 }
 
 func (s *AuthStore) CreateUser(ctx context.Context, email, passwordHash string) (services.User, error) {
+	handle, err := newWebAuthnUserHandle()
+	if err != nil {
+		return services.User{}, err
+	}
 	user, err := s.queries.CreateUser(ctx, db.CreateUserParams{
-		Email:        email,
-		PasswordHash: passwordHash,
+		Email:              email,
+		PasswordHash:       passwordHash,
+		WebauthnUserHandle: handle,
 	})
 	if err != nil {
 		if isSQLiteUniqueConstraint(err) {
@@ -45,10 +50,15 @@ func (s *AuthStore) CreateUser(ctx context.Context, email, passwordHash string) 
 }
 
 func (s *AuthStore) CreateVerifiedUser(ctx context.Context, email, passwordHash string, verifiedAt time.Time) (services.User, error) {
+	handle, err := newWebAuthnUserHandle()
+	if err != nil {
+		return services.User{}, err
+	}
 	return withTxResult(ctx, s.db, s.queries, "create verified user", func(queries *db.Queries) (services.User, error) {
 		createdUser, err := queries.CreateUser(ctx, db.CreateUserParams{
-			Email:        email,
-			PasswordHash: passwordHash,
+			Email:              email,
+			PasswordHash:       passwordHash,
+			WebauthnUserHandle: handle,
 		})
 		if err != nil {
 			if isSQLiteUniqueConstraint(err) {
@@ -70,10 +80,15 @@ func (s *AuthStore) CreateVerifiedUser(ctx context.Context, email, passwordHash 
 }
 
 func (s *AuthStore) CreateUserWithEmailVerification(ctx context.Context, params services.CreateUserWithEmailVerificationParams) (services.User, error) {
+	handle, err := newWebAuthnUserHandle()
+	if err != nil {
+		return services.User{}, err
+	}
 	return withTxResult(ctx, s.db, s.queries, "register user", func(queries *db.Queries) (services.User, error) {
 		user, err := queries.CreateUser(ctx, db.CreateUserParams{
-			Email:        params.Email,
-			PasswordHash: params.PasswordHash,
+			Email:              params.Email,
+			PasswordHash:       params.PasswordHash,
+			WebauthnUserHandle: handle,
 		})
 		if err != nil {
 			if isSQLiteUniqueConstraint(err) {
@@ -386,6 +401,9 @@ func (s *AuthStore) DeleteAccount(ctx context.Context, userID int64) error {
 		}
 		if err := queries.DeleteTOTPByUserID(ctx, userID); err != nil {
 			return fmt.Errorf("delete TOTP: %w", err)
+		}
+		if err := queries.DeleteWebAuthnCredentialsByUserID(ctx, userID); err != nil {
+			return fmt.Errorf("delete WebAuthn credentials: %w", err)
 		}
 		if err := queries.DeleteUserByID(ctx, userID); err != nil {
 			return fmt.Errorf("delete user: %w", err)

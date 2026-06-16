@@ -46,8 +46,10 @@ func (q *Queries) CreateSession(ctx context.Context, arg CreateSessionParams) (S
 const createUser = `-- name: CreateUser :one
 INSERT INTO users (
     email,
-    password_hash
+    password_hash,
+    webauthn_user_handle
 ) VALUES (
+    ?,
     ?,
     ?
 )
@@ -55,8 +57,9 @@ RETURNING id, email, password_hash, created_at, email_verified_at
 `
 
 type CreateUserParams struct {
-	Email        string
-	PasswordHash string
+	Email              string
+	PasswordHash       string
+	WebauthnUserHandle []byte
 }
 
 type CreateUserRow struct {
@@ -68,7 +71,7 @@ type CreateUserRow struct {
 }
 
 func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (CreateUserRow, error) {
-	row := q.db.QueryRowContext(ctx, createUser, arg.Email, arg.PasswordHash)
+	row := q.db.QueryRowContext(ctx, createUser, arg.Email, arg.PasswordHash, arg.WebauthnUserHandle)
 	var i CreateUserRow
 	err := row.Scan(
 		&i.ID,
@@ -247,6 +250,48 @@ func (q *Queries) GetUserBySessionTokenHash(ctx context.Context, tokenHash strin
 		&i.EmailVerifiedAt,
 	)
 	return i, err
+}
+
+const getUserByWebAuthnHandle = `-- name: GetUserByWebAuthnHandle :one
+SELECT id, email, password_hash, created_at, email_verified_at
+FROM users
+WHERE webauthn_user_handle = ?
+LIMIT 1
+`
+
+type GetUserByWebAuthnHandleRow struct {
+	ID              int64
+	Email           string
+	PasswordHash    string
+	CreatedAt       time.Time
+	EmailVerifiedAt sql.NullTime
+}
+
+func (q *Queries) GetUserByWebAuthnHandle(ctx context.Context, webauthnUserHandle []byte) (GetUserByWebAuthnHandleRow, error) {
+	row := q.db.QueryRowContext(ctx, getUserByWebAuthnHandle, webauthnUserHandle)
+	var i GetUserByWebAuthnHandleRow
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.PasswordHash,
+		&i.CreatedAt,
+		&i.EmailVerifiedAt,
+	)
+	return i, err
+}
+
+const getWebAuthnHandleByUserID = `-- name: GetWebAuthnHandleByUserID :one
+SELECT webauthn_user_handle
+FROM users
+WHERE id = ?
+LIMIT 1
+`
+
+func (q *Queries) GetWebAuthnHandleByUserID(ctx context.Context, id int64) ([]byte, error) {
+	row := q.db.QueryRowContext(ctx, getWebAuthnHandleByUserID, id)
+	var webauthn_user_handle []byte
+	err := row.Scan(&webauthn_user_handle)
+	return webauthn_user_handle, err
 }
 
 const listActiveSessionsByUserID = `-- name: ListActiveSessionsByUserID :many

@@ -1,6 +1,6 @@
 # Agents
 
-Go Spark is a production-ready Go starter for server-rendered web applications. It uses SQLite, `html/template`, and the standard library HTTP stack. Auth (email/password, TOTP, sessions), email delivery via durable outbox, and background jobs are all built in.
+Go Spark is a production-ready Go starter for server-rendered web applications. It uses SQLite, `html/template`, and the standard library HTTP stack. Auth (email/password, TOTP, passkeys/WebAuthn, sessions), email delivery via durable outbox, and background jobs are all built in.
 
 ## Setup
 

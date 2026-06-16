@@ -22,4 +22,5 @@ const (
 	templateTwoFactor            = "two_factor.html"
 	templateTwoFactorBackupCodes = "two_factor_backup_codes.html"
 	templateTwoFactorChallenge   = "two_factor_challenge.html"
+	templatePasskeys             = "passkeys.html"
 )

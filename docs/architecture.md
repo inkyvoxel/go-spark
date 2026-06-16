@@ -75,6 +75,7 @@ The starter uses:
 
 * email and password login
 * two-factor authentication (TOTP) with backup codes — optional per user, enforced at login when enabled
+* passkeys (WebAuthn) — optional per user, for passwordless phishing-resistant sign-in
 * server-side sessions stored in SQLite
 * HTTP-only session cookies
 * email verification
@@ -83,6 +84,8 @@ The starter uses:
 Login defaults to a browser-session cookie. Users can explicitly choose "Remember me on this device" to receive a persistent cookie that lasts until the server-side session expires. Session cookies remain HTTP-only, SameSite=Lax, and Secure when configured or served over TLS.
 
 TOTP follows a three-step flow: the user initiates setup (secret generated and stored as pending), scans the QR code in their authenticator app, then confirms with a valid code — at which point 8 one-time backup codes are generated and shown once. At login, users with 2FA enabled are issued a short-lived signed pending cookie and redirected to a challenge page before a full session is created. The pending cookie carries the explicit remember-me choice so the final session cookie matches what the user selected at the password step.
+
+Passkeys are built on the [`go-webauthn/webauthn`](https://github.com/go-webauthn/webauthn) library — the one place the starter accepts a third-party dependency, because WebAuthn's CBOR/COSE/attestation handling is not something to hand-roll. The relying party is configured from `APP_BASE_URL` (the RP ID defaults to its host, the allowed origin is the URL itself). Each user gets a random 64-byte WebAuthn handle (folded into the base users migration) so the authenticator stores no PII, and credentials live in `webauthn_credentials`. Registration is offered after email confirmation and from the account passkey page; it requires a verified, authenticated session. Because passkeys require **user verification** (biometric, PIN, or security-key gesture), a passkey assertion is treated as full multi-factor authentication: a passkey login skips both the password and the TOTP challenge. Email/password + TOTP remain as a fallback, so removing the last passkey is safe. Login is discoverable (usernameless): the browser surfaces passkeys via conditional-UI autofill and an explicit button, and the server resolves the user from the credential's user handle. Like the TOTP pending cookie, the WebAuthn begin→finish ceremony state is carried in a short-lived, HMAC-signed, path-scoped cookie rather than a server-side store, so no extra cleanup job is needed. The register/login endpoints are JSON over `fetch`, protected by the existing `X-CSRF-Token` header and Origin checks.
 
 It intentionally does not use JWTs or a large auth framework for the default server-rendered flow.
 

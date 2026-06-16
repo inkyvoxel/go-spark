@@ -166,6 +166,7 @@ func parseTemplates() (map[string]*template.Template, error) {
 		templateTwoFactor:            path.Join("account", "two_factor.html"),
 		templateTwoFactorBackupCodes: path.Join("account", "two_factor_backup_codes.html"),
 		templateTwoFactorChallenge:   path.Join("account", "two_factor_challenge.html"),
+		templatePasskeys:             path.Join("account", "passkeys.html"),
 	}
 	funcMap := template.FuncMap{
 		"urlQueryEscape": func(s string) template.URL {
@@ -315,6 +316,37 @@ func (s *Server) registerAuthRoutes(dynamic *http.ServeMux) {
 		route(http.MethodPost, paths.AccountTwoFactorChallenge),
 		s.requireAnonymous(
 			s.withRateLimit("totp-challenge", s.rateLimitPolicies.TOTPChallenge, s.rateLimitKeyByIP(), http.HandlerFunc(s.twoFactorChallenge)),
+		),
+	)
+	dynamic.Handle(route(http.MethodGet, paths.AccountPasskeys), s.requireVerifiedAuth(http.HandlerFunc(s.passkeysPage)))
+	s.postOnly(dynamic, paths.AccountPasskeysRegisterBegin,
+		s.requireVerifiedAuth(
+			s.withRateLimit("passkey-register-begin", s.rateLimitPolicies.PasskeyRegister, s.rateLimitKeyByIPAndUser(), http.HandlerFunc(s.passkeyRegisterBegin)),
+		),
+	)
+	s.postOnly(dynamic, paths.AccountPasskeysRegisterFinish,
+		s.requireVerifiedAuth(
+			s.withRateLimit("passkey-register-finish", s.rateLimitPolicies.PasskeyRegister, s.rateLimitKeyByIPAndUser(), http.HandlerFunc(s.passkeyRegisterFinish)),
+		),
+	)
+	s.postOnly(dynamic, paths.AccountPasskeysRename,
+		s.requireVerifiedAuth(
+			s.withRateLimit("passkey-rename", s.rateLimitPolicies.PasskeyManage, s.rateLimitKeyByIPAndUser(), http.HandlerFunc(s.passkeyRename)),
+		),
+	)
+	s.postOnly(dynamic, paths.AccountPasskeysDelete,
+		s.requireVerifiedAuth(
+			s.withRateLimit("passkey-delete", s.rateLimitPolicies.PasskeyManage, s.rateLimitKeyByIPAndUser(), http.HandlerFunc(s.passkeyDelete)),
+		),
+	)
+	s.postOnly(dynamic, paths.LoginPasskeyBegin,
+		s.requireAnonymous(
+			s.withRateLimit("passkey-login-begin", s.rateLimitPolicies.PasskeyLogin, s.rateLimitKeyByIP(), http.HandlerFunc(s.passkeyLoginBegin)),
+		),
+	)
+	s.postOnly(dynamic, paths.LoginPasskeyFinish,
+		s.requireAnonymous(
+			s.withRateLimit("passkey-login-finish", s.rateLimitPolicies.PasskeyLogin, s.rateLimitKeyByIP(), http.HandlerFunc(s.passkeyLoginFinish)),
 		),
 	)
 }

@@ -66,12 +66,15 @@ func Build(cfg config.Config, logger *slog.Logger) (Runtime, error) {
 }
 
 func buildRuntime(cfg config.Config, logger *slog.Logger, db *sql.DB, secretKeyBase string) (Runtime, error) {
-	auth := services.NewAuthService(database.NewAuthStore(db), services.AuthOptions{
+	auth, err := services.NewAuthService(database.NewAuthStore(db), services.AuthOptions{
 		PasswordMinLen:           cfg.PasswordMinLength,
 		PasswordPepper:           cfg.PasswordPepper,
 		TOTPIssuer:               cfg.TOTPIssuer,
 		TOTPBackupCodeKey:        deriveKey([]byte(secretKeyBase), "totp_backup_code"),
 		EmailChangeNoticeEnabled: boolPtr(cfg.EmailChangeNoticeEnabled),
+		WebAuthnRPID:             passkeyRPID(cfg),
+		WebAuthnRPDisplayName:    passkeyRPDisplayName(cfg),
+		WebAuthnRPOrigins:        []string{cfg.AppBaseURL},
 		ConfirmationEmail: email.AccountConfirmationOptions{
 			AppBaseURL: cfg.AppBaseURL,
 			From:       cfg.EmailFrom,
@@ -81,6 +84,9 @@ func buildRuntime(cfg config.Config, logger *slog.Logger, db *sql.DB, secretKeyB
 			From:       cfg.EmailFrom,
 		},
 	})
+	if err != nil {
+		return Runtime{}, fmt.Errorf("configure auth service: %w", err)
+	}
 
 	backgroundJobs, err := buildJobs(cfg, logger, db)
 	if err != nil {
@@ -124,6 +130,28 @@ func buildRuntime(cfg config.Config, logger *slog.Logger, db *sql.DB, secretKeyB
 
 func boolPtr(v bool) *bool {
 	return &v
+}
+
+const defaultPasskeyRPDisplayName = "Go Spark"
+
+// passkeyRPID resolves the WebAuthn Relying Party ID. It uses the explicit
+// override when set, otherwise the host of APP_BASE_URL (without scheme or port).
+func passkeyRPID(cfg config.Config) string {
+	if strings.TrimSpace(cfg.PasskeyRPID) != "" {
+		return strings.TrimSpace(cfg.PasskeyRPID)
+	}
+	parsed, err := url.Parse(cfg.AppBaseURL)
+	if err != nil {
+		return ""
+	}
+	return parsed.Hostname()
+}
+
+func passkeyRPDisplayName(cfg config.Config) string {
+	if name := strings.TrimSpace(cfg.PasskeyRPDisplayName); name != "" {
+		return name
+	}
+	return defaultPasskeyRPDisplayName
 }
 
 func buildJobs(cfg config.Config, logger *slog.Logger, db *sql.DB) ([]jobs.Job, error) {
@@ -281,6 +309,18 @@ func toServerRateLimitPolicies(cfg config.RateLimitPoliciesConfig) server.RateLi
 		TOTPRegenerateCodes: server.RateLimitPolicy{
 			MaxRequests: cfg.TOTPRegenerateCodes.MaxRequests,
 			Window:      cfg.TOTPRegenerateCodes.Window,
+		},
+		PasskeyRegister: server.RateLimitPolicy{
+			MaxRequests: cfg.PasskeyRegister.MaxRequests,
+			Window:      cfg.PasskeyRegister.Window,
+		},
+		PasskeyLogin: server.RateLimitPolicy{
+			MaxRequests: cfg.PasskeyLogin.MaxRequests,
+			Window:      cfg.PasskeyLogin.Window,
+		},
+		PasskeyManage: server.RateLimitPolicy{
+			MaxRequests: cfg.PasskeyManage.MaxRequests,
+			Window:      cfg.PasskeyManage.Window,
 		},
 	}
 }

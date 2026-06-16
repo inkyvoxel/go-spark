@@ -40,6 +40,9 @@ type RateLimitPoliciesConfig struct {
 	TOTPDisable               RateLimitPolicyConfig
 	TOTPConfirm               RateLimitPolicyConfig
 	TOTPRegenerateCodes       RateLimitPolicyConfig
+	PasskeyRegister           RateLimitPolicyConfig
+	PasskeyLogin              RateLimitPolicyConfig
+	PasskeyManage             RateLimitPolicyConfig
 }
 
 type Config struct {
@@ -68,6 +71,8 @@ type Config struct {
 	RateLimitPolicies           RateLimitPoliciesConfig
 	TrustedProxies              []string
 	TOTPIssuer                  string
+	PasskeyRPID                 string
+	PasskeyRPDisplayName        string
 }
 
 func LoadDotEnv(path string) error {
@@ -221,6 +226,8 @@ func FromEnvWithProcess(defaultPasswordMinLength int, processOverride string) (C
 		// manager cannot silently change the effective pepper.
 		PasswordPepper:              strings.TrimSpace(os.Getenv("AUTH_PASSWORD_PEPPER")),
 		TOTPIssuer:                  strings.TrimSpace(os.Getenv("AUTH_TOTP_ISSUER")),
+		PasskeyRPID:                 strings.TrimSpace(os.Getenv("AUTH_PASSKEY_RP_ID")),
+		PasskeyRPDisplayName:        strings.TrimSpace(os.Getenv("AUTH_PASSKEY_RP_DISPLAY_NAME")),
 		AppBaseURL:                  appBaseURL,
 		EmailFrom:                   emailFrom,
 		EmailProvider:               emailProvider,
@@ -530,6 +537,18 @@ func rateLimitPoliciesFromEnv() (RateLimitPoliciesConfig, error) {
 	if err != nil {
 		return RateLimitPoliciesConfig{}, err
 	}
+	passkeyRegister, err := rateLimitPolicyFromEnv("RATE_LIMIT_PASSKEY_REGISTER")
+	if err != nil {
+		return RateLimitPoliciesConfig{}, err
+	}
+	passkeyLogin, err := rateLimitPolicyFromEnv("RATE_LIMIT_PASSKEY_LOGIN")
+	if err != nil {
+		return RateLimitPoliciesConfig{}, err
+	}
+	passkeyManage, err := rateLimitPolicyFromEnv("RATE_LIMIT_PASSKEY_MANAGE")
+	if err != nil {
+		return RateLimitPoliciesConfig{}, err
+	}
 
 	return RateLimitPoliciesConfig{
 		Login:                     login,
@@ -547,6 +566,9 @@ func rateLimitPoliciesFromEnv() (RateLimitPoliciesConfig, error) {
 		TOTPDisable:               totpDisable,
 		TOTPConfirm:               totpConfirm,
 		TOTPRegenerateCodes:       totpRegenerateCodes,
+		PasskeyRegister:           passkeyRegister,
+		PasskeyLogin:              passkeyLogin,
+		PasskeyManage:             passkeyManage,
 	}, nil
 }
 

@@ -40,6 +40,9 @@ type RateLimitPolicies struct {
 	TOTPDisable               RateLimitPolicy
 	TOTPConfirm               RateLimitPolicy
 	TOTPRegenerateCodes       RateLimitPolicy
+	PasskeyRegister           RateLimitPolicy
+	PasskeyLogin              RateLimitPolicy
+	PasskeyManage             RateLimitPolicy
 }
 
 var defaultRateLimitPolicies = RateLimitPolicies{
@@ -58,6 +61,9 @@ var defaultRateLimitPolicies = RateLimitPolicies{
 	TOTPDisable:               RateLimitPolicy{MaxRequests: 5, Window: 15 * time.Minute},
 	TOTPConfirm:               RateLimitPolicy{MaxRequests: 10, Window: 15 * time.Minute},
 	TOTPRegenerateCodes:       RateLimitPolicy{MaxRequests: 5, Window: 15 * time.Minute},
+	PasskeyRegister:           RateLimitPolicy{MaxRequests: 10, Window: 15 * time.Minute},
+	PasskeyLogin:              RateLimitPolicy{MaxRequests: 10, Window: time.Minute},
+	PasskeyManage:             RateLimitPolicy{MaxRequests: 20, Window: 15 * time.Minute},
 }
 
 type rateLimitKeyFunc func(*http.Request) (key string, keyType string)
@@ -160,6 +166,9 @@ func rateLimitPoliciesWithDefaults(policies RateLimitPolicies) RateLimitPolicies
 		TOTPDisable:               mergeRateLimitPolicy(defaultRateLimitPolicies.TOTPDisable, policies.TOTPDisable),
 		TOTPConfirm:               mergeRateLimitPolicy(defaultRateLimitPolicies.TOTPConfirm, policies.TOTPConfirm),
 		TOTPRegenerateCodes:       mergeRateLimitPolicy(defaultRateLimitPolicies.TOTPRegenerateCodes, policies.TOTPRegenerateCodes),
+		PasskeyRegister:           mergeRateLimitPolicy(defaultRateLimitPolicies.PasskeyRegister, policies.PasskeyRegister),
+		PasskeyLogin:              mergeRateLimitPolicy(defaultRateLimitPolicies.PasskeyLogin, policies.PasskeyLogin),
+		PasskeyManage:             mergeRateLimitPolicy(defaultRateLimitPolicies.PasskeyManage, policies.PasskeyManage),
 	}
 }
 

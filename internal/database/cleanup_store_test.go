@@ -15,8 +15,9 @@ func TestCleanupStorePrunesExpiredSessionsAndTokensAndOldEmails(t *testing.T) {
 	queries := db.New(conn)
 
 	user, err := queries.CreateUser(context.Background(), db.CreateUserParams{
-		Email:        "user@example.com",
-		PasswordHash: "hash",
+		Email:              "user@example.com",
+		PasswordHash:       "hash",
+		WebauthnUserHandle: []byte("cleanup-test-handle"),
 	})
 	if err != nil {
 		t.Fatalf("CreateUser() error = %v", err)

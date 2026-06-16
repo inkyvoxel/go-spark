@@ -14,6 +14,7 @@ A Go + SQLite web app starter template. Use it as a template, run `make init`, a
 * SQL-first workflow with `sqlc` generated queries and `goose` migrations
 * complete email/password auth: registration, login, logout, email verification, password reset, and email change
 * two-factor authentication with TOTP setup, challenge flow, and backup codes
+* passwordless passkey (WebAuthn) sign-in with discoverable credentials and conditional-UI autofill, plus a passkey management page
 * secure browser sessions with HTTP-only cookies and CSRF protection
 * rate limiting for auth and account-sensitive endpoints
 * transactional email templates with SMTP and local log senders

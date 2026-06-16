@@ -4,7 +4,11 @@ CREATE TABLE users (
     email TEXT NOT NULL UNIQUE,
     password_hash TEXT NOT NULL,
     email_verified_at TIMESTAMP,
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    -- Opaque, stable 64-byte random handle used as the WebAuthn user ID
+    -- (§5.4.3). Kept separate from the integer primary key so the value the
+    -- authenticator stores contains no PII and is not enumerable.
+    webauthn_user_handle BLOB NOT NULL UNIQUE
 );
 
 CREATE TABLE sessions (

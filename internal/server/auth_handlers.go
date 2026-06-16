@@ -44,6 +44,9 @@ type templateData struct {
 	TOTPOtpAuthURI           template.URL
 	TOTPBackupCodes          []string
 	TOTPBackupCodesRemaining int
+	// Passkeys
+	PasskeysEnabled bool
+	Passkeys        []services.WebAuthnCredential
 }
 
 type breadcrumbItem struct {
@@ -822,6 +825,9 @@ func (s *Server) validatePasswordPair(password, confirmPassword, passwordField, 
 
 func (s *Server) newTemplateData(w http.ResponseWriter, r *http.Request, title string) templateData {
 	data := newTemplateData(r, title)
+	if s.auth != nil {
+		data.PasskeysEnabled = s.auth.PasskeysEnabled()
+	}
 	if s.passwordMinLength > 0 {
 		data.PasswordMinLength = s.passwordMinLength
 	}

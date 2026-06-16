@@ -24,6 +24,8 @@ Required for deployment:
 | `SECRET_KEY_BASE` | Root signing key — generate with `openssl rand -hex 32` |
 | `AUTH_PASSWORD_PEPPER` | Password hashing pepper — generate with `openssl rand -hex 32` |
 | `AUTH_TOTP_ISSUER` | Issuer name shown in authenticator apps — set to your app's name |
+| `AUTH_PASSKEY_RP_ID` | Passkey relying party ID — optional; defaults to the host of `APP_BASE_URL`. Set to the registrable parent domain for multi-subdomain setups |
+| `AUTH_PASSKEY_RP_DISPLAY_NAME` | Passkey name shown in some browser/OS prompts — set to your app's name |
 | `EMAIL_FROM` | Sender address, e.g. `"My App <hello@yourdomain.example>"` |
 | `SMTP_HOST` | SMTP server hostname |
 | `SMTP_PORT` | SMTP port (default: `587`) |
@@ -73,6 +75,7 @@ Run through this before accepting real traffic.
 **Configuration**
 - [ ] `docker compose logs app` shows no startup warnings — check for insecure cookies, non-HTTPS base URL, log-only email, default sender
 - [ ] `AUTH_TOTP_ISSUER` is set to your app name — this value is baked into QR codes when users enrol 2FA; changing it later breaks existing authenticator apps
+- [ ] `APP_BASE_URL` uses your real HTTPS domain — passkeys are bound to this origin, so existing passkeys stop working if the domain (relying party ID) changes
 - [ ] `SECRET_KEY_BASE` and `AUTH_PASSWORD_PEPPER` are not committed to version control
 
 **Email**

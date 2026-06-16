@@ -2,10 +2,28 @@
 <article>
   <h1>Sign in</h1>
   {{ template "login_form_section" . }}
+  {{ if .PasskeysEnabled }}{{ template "login_passkey_section" . }}{{ end }}
   <p><a href="{{ .Routes.Register }}">Create an account</a></p>
   <p><a href="{{ .Routes.ForgotPassword }}">Forgot your password?</a></p>
   <p><a href="{{ .Routes.ResendVerification }}">Resend verification email</a></p>
 </article>
+{{ end }}
+
+{{ define "login_passkey_section" }}
+<section id="passkey-login" data-begin-url="{{ .Routes.LoginPasskeyBegin }}"
+  data-finish-url="{{ .Routes.LoginPasskeyFinish }}" data-csrf="{{ .CSRFToken }}"
+  {{ if .Next }}data-next="{{ .Next }}" {{ end }}>
+  <p id="passkey-login-error" role="alert" hidden></p>
+  <p data-passkey-unsupported hidden>This browser does not support passkeys.</p>
+  <button type="button" id="passkey-login-button" class="secondary" data-passkey-requires-support>Sign in with a
+    passkey</button>
+</section>
+{{ end }}
+
+{{ define "scripts" }}
+{{ if .PasskeysEnabled }}
+<script src="{{ .Routes.StaticPasskeyJS }}"></script>
+{{ end }}
 {{ end }}
 
 {{ define "login_form_section" }}
@@ -16,8 +34,8 @@
     {{ if .Next }}<input type="hidden" name="next" value="{{ .Next }}">{{ end }}
     <label>
       Email
-      <input type="email" name="email" value="{{ .Email }}" autocomplete="email" pattern="{{ .EmailPattern }}" {{ if
-        index .FieldErrors "email" }}aria-invalid="true" {{ end }} required>
+      <input type="email" name="email" value="{{ .Email }}" autocomplete="username webauthn"
+        pattern="{{ .EmailPattern }}" {{ if index .FieldErrors "email" }}aria-invalid="true" {{ end }} required>
       {{ with index .FieldErrors "email" }}<small role="alert">{{ . }}</small>{{ end }}
     </label>
     <label>

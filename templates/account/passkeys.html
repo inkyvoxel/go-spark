@@ -1,0 +1,88 @@
+{{ define "content" }}
+<article>
+  {{ template "breadcrumb" . }}
+  <h1>Passkeys</h1>
+  <p>Passkeys let you sign in with your fingerprint, face, screen lock, or a security key — no password or
+    authenticator code needed. They are phishing-resistant and unique to this site.</p>
+
+  {{ if not .PasskeysEnabled }}
+  <p role="alert">Passkeys are not configured for this site.</p>
+  {{ else }}
+  {{ template "passkeys_add_section" . }}
+
+  <h2>Your passkeys</h2>
+  <figure>
+    <table>
+      <thead>
+        <tr>
+          <th scope="col">Name</th>
+          <th scope="col">Type</th>
+          <th scope="col">Added</th>
+          <th scope="col">Last used</th>
+          <th scope="col">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{ range .Passkeys }}
+        <tr>
+          <td>{{ .Name }}</td>
+          <td>{{ if .BackupEligible }}Synced{{ else }}This device{{ end }}</td>
+          <td><time datetime="{{ .CreatedAt.UTC.Format " 2006-01-02T15:04:05Z07:00" }}">{{ .CreatedAt.UTC.Format
+              "2006-01-02 15:04 UTC" }}</time></td>
+          <td>
+            {{ if .LastUsedAt.Valid }}
+            <time datetime="{{ .LastUsedAt.Time.UTC.Format " 2006-01-02T15:04:05Z07:00" }}">{{
+              .LastUsedAt.Time.UTC.Format "2006-01-02 15:04 UTC" }}</time>
+            {{ else }}
+            Never
+            {{ end }}
+          </td>
+          <td>
+            <form method="post" action="{{ $.Routes.AccountPasskeysRename }}" class="passkey-inline-form">
+              <input type="hidden" name="csrf_token" value="{{ $.CSRFToken }}">
+              <input type="hidden" name="credential_id" value="{{ .ID }}">
+              <input type="text" name="name" value="{{ .Name }}" maxlength="64" aria-label="Passkey name" required>
+              <button type="submit" class="secondary outline">Rename</button>
+            </form>
+            <form method="post" action="{{ $.Routes.AccountPasskeysDelete }}">
+              <input type="hidden" name="csrf_token" value="{{ $.CSRFToken }}">
+              <input type="hidden" name="credential_id" value="{{ .ID }}">
+              <button type="submit" class="secondary outline">Remove</button>
+            </form>
+          </td>
+        </tr>
+        {{ else }}
+        <tr>
+          <td colspan="5">You haven't added any passkeys yet.</td>
+        </tr>
+        {{ end }}
+      </tbody>
+    </table>
+  </figure>
+  {{ end }}
+
+  <p><a href="{{ .Routes.Account }}">Back to account</a></p>
+</article>
+{{ end }}
+
+{{ define "passkeys_add_section" }}
+<section id="passkey-add-section">
+  <p id="passkey-error" role="alert" hidden></p>
+  <p data-passkey-unsupported role="alert" hidden>This browser does not support passkeys.</p>
+  <form id="passkey-register-form">
+    <label>
+      Passkey name (optional)
+      <input type="text" id="passkey-name" name="name" maxlength="64" placeholder="e.g. My laptop">
+    </label>
+    <button type="submit" id="passkey-register-button" data-passkey-requires-support
+      data-begin-url="{{ .Routes.AccountPasskeysRegisterBegin }}"
+      data-finish-url="{{ .Routes.AccountPasskeysRegisterFinish }}" data-csrf="{{ .CSRFToken }}">Add a passkey</button>
+  </form>
+</section>
+{{ end }}
+
+{{ define "scripts" }}
+{{ if .PasskeysEnabled }}
+<script src="{{ .Routes.StaticPasskeyJS }}"></script>
+{{ end }}
+{{ end }}

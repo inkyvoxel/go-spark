@@ -13,6 +13,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/go-webauthn/webauthn/protocol"
+	"github.com/go-webauthn/webauthn/webauthn"
 	"github.com/inkyvoxel/go-spark/internal/paths"
 	"github.com/inkyvoxel/go-spark/internal/services"
 )
@@ -54,6 +56,16 @@ type authService interface {
 	TOTPSetupState(context.Context, int64) (pending, enabled bool, err error)
 	VerifyTOTPLogin(context.Context, int64, string) (services.AuthSession, error)
 	RegenerateBackupCodes(context.Context, int64, string) ([]string, error)
+	// Passkeys / WebAuthn
+	PasskeysEnabled() bool
+	BeginPasskeyRegistration(context.Context, int64) (*protocol.CredentialCreation, *webauthn.SessionData, error)
+	FinishPasskeyRegistration(context.Context, int64, webauthn.SessionData, *protocol.ParsedCredentialCreationData, string) error
+	BeginPasskeyLogin(context.Context) (*protocol.CredentialAssertion, *webauthn.SessionData, error)
+	FinishPasskeyLogin(context.Context, webauthn.SessionData, *protocol.ParsedCredentialAssertionData) (services.User, services.AuthSession, error)
+	ListPasskeys(context.Context, int64) ([]services.WebAuthnCredential, error)
+	CountPasskeys(context.Context, int64) (int, error)
+	RenamePasskey(context.Context, int64, int64, string) error
+	DeletePasskey(context.Context, int64, int64) error
 }
 
 type authContextKey struct{}

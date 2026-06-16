@@ -12,6 +12,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/go-webauthn/webauthn/protocol"
+	"github.com/go-webauthn/webauthn/webauthn"
 	"github.com/inkyvoxel/go-spark/internal/paths"
 	"github.com/inkyvoxel/go-spark/internal/services"
 )
@@ -369,6 +371,10 @@ type fakeAuthLookup struct {
 	user                 services.User
 	token                string
 	err                  error
+	passkeysEnabled      bool
+	passkeyLoginUser     services.User
+	passkeyLoginSession  services.AuthSession
+	passkeyLoginErr      error
 	registered           bool
 	registerEmail        string
 	registerPass         string
@@ -557,6 +563,42 @@ func (f *fakeAuthLookup) VerifyTOTPLogin(ctx context.Context, userID int64, code
 
 func (f *fakeAuthLookup) RegenerateBackupCodes(ctx context.Context, userID int64, code string) ([]string, error) {
 	return nil, nil
+}
+
+func (f *fakeAuthLookup) PasskeysEnabled() bool {
+	return f.passkeysEnabled
+}
+
+func (f *fakeAuthLookup) BeginPasskeyRegistration(ctx context.Context, userID int64) (*protocol.CredentialCreation, *webauthn.SessionData, error) {
+	return &protocol.CredentialCreation{}, &webauthn.SessionData{Expires: time.Now().UTC().Add(time.Minute)}, nil
+}
+
+func (f *fakeAuthLookup) FinishPasskeyRegistration(ctx context.Context, userID int64, session webauthn.SessionData, response *protocol.ParsedCredentialCreationData, name string) error {
+	return nil
+}
+
+func (f *fakeAuthLookup) BeginPasskeyLogin(ctx context.Context) (*protocol.CredentialAssertion, *webauthn.SessionData, error) {
+	return &protocol.CredentialAssertion{}, &webauthn.SessionData{Expires: time.Now().UTC().Add(time.Minute)}, nil
+}
+
+func (f *fakeAuthLookup) FinishPasskeyLogin(ctx context.Context, session webauthn.SessionData, response *protocol.ParsedCredentialAssertionData) (services.User, services.AuthSession, error) {
+	return f.passkeyLoginUser, f.passkeyLoginSession, f.passkeyLoginErr
+}
+
+func (f *fakeAuthLookup) ListPasskeys(ctx context.Context, userID int64) ([]services.WebAuthnCredential, error) {
+	return nil, nil
+}
+
+func (f *fakeAuthLookup) CountPasskeys(ctx context.Context, userID int64) (int, error) {
+	return 0, nil
+}
+
+func (f *fakeAuthLookup) RenamePasskey(ctx context.Context, userID, credentialDBID int64, name string) error {
+	return nil
+}
+
+func (f *fakeAuthLookup) DeletePasskey(ctx context.Context, userID, credentialDBID int64) error {
+	return nil
 }
 
 func newAuthMiddlewareTestServer(auth authService) *Server {

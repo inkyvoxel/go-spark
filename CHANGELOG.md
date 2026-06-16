@@ -35,6 +35,12 @@ This project follows a simple, human-written changelog format.
 * Rate limiting with configurable policies and trusted proxy support.
 * Two-factor authentication (TOTP) with QR code setup, code confirmation, backup codes (8 per user), disable flow, and mid-login challenge.
 * TOTP replay protection: each accepted code's time-step counter is recorded and codes are rejected once used, so a captured code cannot be replayed within its validity window.
+* Passkey (WebAuthn) support via `github.com/go-webauthn/webauthn`: passwordless, phishing-resistant sign-in that complements email/password and TOTP. A user-verified passkey login fully authenticates and skips the TOTP step, while password + TOTP remain as a fallback.
+* Discoverable (usernameless) passkey login with browser conditional-UI autofill plus an explicit "Sign in with a passkey" button.
+* Account passkey management page to register, rename, and remove passkeys, and an optional "set up a passkey" prompt after email confirmation.
+* Per-user random 64-byte WebAuthn handle folded into the base users migration, and a `webauthn_credentials` table storing each credential's public key, sign counter, and backup-eligibility/state flags.
+* WebAuthn ceremony state is carried in short-lived, HMAC-signed, path-scoped cookies (no server-side session store needed), mirroring the TOTP pending-login cookie.
+* Configurable passkey relying party: `AUTH_PASSKEY_RP_ID` (defaults to the host of `APP_BASE_URL`) and `AUTH_PASSKEY_RP_DISPLAY_NAME`, plus rate-limit overrides for passkey register/login/manage.
 
 ### Changed
 
