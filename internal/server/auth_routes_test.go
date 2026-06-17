@@ -552,8 +552,11 @@ func TestRoutesRegister(t *testing.T) {
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusSeeOther)
 	}
-	if location := rec.Header().Get("Location"); location != paths.VerifyEmail {
-		t.Fatalf("Location = %q, want %q", location, paths.VerifyEmail)
+	// Registration no longer auto-logs-in: it shows a neutral "check your email"
+	// outcome and sends the user to sign in after verifying. This keeps the
+	// response identical whether or not the address was already registered.
+	if location := rec.Header().Get("Location"); location != paths.Login {
+		t.Fatalf("Location = %q, want %q", location, paths.Login)
 	}
 	if !auth.registered {
 		t.Fatal("Register() was not called")
@@ -561,12 +564,27 @@ func TestRoutesRegister(t *testing.T) {
 	if auth.registerEmail != "new@example.com" || auth.registerPass != "password" {
 		t.Fatalf("register credentials = %q/%q", auth.registerEmail, auth.registerPass)
 	}
-	session := cookieFromRecorder(t, rec, sessionCookieName)
-	if session.Value != "new-session-token" {
-		t.Fatalf("session cookie = %q, want %q", session.Value, "new-session-token")
+	for _, c := range rec.Result().Cookies() {
+		if c.Name == sessionCookieName && c.Value != "" {
+			t.Fatalf("session cookie set after register = %q, want none", c.Value)
+		}
 	}
-	if session.MaxAge != 0 {
-		t.Fatalf("session MaxAge = %d, want browser session cookie", session.MaxAge)
+	// The neutral "check your inbox" flash is the core of the anti-enumeration
+	// behavior: it must be shown without revealing whether the address existed.
+	var flashCookie *http.Cookie
+	for _, c := range rec.Result().Cookies() {
+		if c.Name == flashCookieName {
+			flashCookie = c
+		}
+	}
+	if flashCookie == nil {
+		t.Fatal("no flash cookie set after register")
+	}
+	flashReq := httptest.NewRequest(http.MethodGet, paths.Login, nil)
+	flashReq.AddCookie(flashCookie)
+	flash, ok := srv.popFlash(httptest.NewRecorder(), flashReq)
+	if !ok || flash.Type != "success" || !strings.Contains(flash.Message, "verification link") {
+		t.Fatalf("flash = %+v ok=%v, want neutral success mentioning a verification link", flash, ok)
 	}
 }
 
@@ -621,36 +639,6 @@ func TestRoutesRegisterValidatesRequiredFields(t *testing.T) {
 		if !strings.Contains(body, want) {
 			t.Fatalf("body = %q, want %q", body, want)
 		}
-	}
-}
-
-func TestRoutesRegisterShowsServiceValidationErrors(t *testing.T) {
-	auth := &fakeAuthLookup{
-		registerErr: services.ErrEmailAlreadyRegistered,
-	}
-	srv := newAuthRouteTestServer(t, auth)
-
-	form := url.Values{
-		"email":            []string{"new@example.com"},
-		"password":         []string{"password"},
-		"confirm_password": []string{"password"},
-		csrfFieldName:      []string{"csrf"},
-	}
-	req := httptest.NewRequest(http.MethodPost, paths.Register, strings.NewReader(form.Encode()))
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	addCSRFCookieAndHeader(t, srv, req)
-	rec := httptest.NewRecorder()
-
-	srv.Routes().ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusUnprocessableEntity {
-		t.Fatalf("status = %d, want %d", rec.Code, http.StatusUnprocessableEntity)
-	}
-	if !strings.Contains(rec.Body.String(), "An account with this email already exists.") {
-		t.Fatalf("body = %q, want duplicate email error", rec.Body.String())
-	}
-	if strings.Contains(rec.Body.String(), http.StatusText(http.StatusInternalServerError)) {
-		t.Fatalf("body = %q, want validation error instead of internal server error", rec.Body.String())
 	}
 }
 
@@ -1233,12 +1221,12 @@ func TestRoutesChangeEmailValidatesFields(t *testing.T) {
 func TestRoutesChangeEmailRejectsServiceValidation(t *testing.T) {
 	auth := &fakeAuthLookup{
 		user:           verifiedRouteUser(),
-		changeEmailErr: services.ErrEmailAlreadyRegistered,
+		changeEmailErr: services.ErrEmailUnchanged,
 	}
 	srv := newAuthRouteTestServer(t, auth)
 
 	form := url.Values{
-		"email":            []string{"taken@example.com"},
+		"email":            []string{"same@example.com"},
 		"current_password": []string{"password"},
 		csrfFieldName:      []string{"csrf"},
 	}
@@ -1253,8 +1241,8 @@ func TestRoutesChangeEmailRejectsServiceValidation(t *testing.T) {
 	if rec.Code != http.StatusUnprocessableEntity {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusUnprocessableEntity)
 	}
-	if !strings.Contains(rec.Body.String(), "An account with this email already exists.") {
-		t.Fatalf("body = %q, want duplicate email error", rec.Body.String())
+	if !strings.Contains(rec.Body.String(), "Choose a different email address.") {
+		t.Fatalf("body = %q, want unchanged email error", rec.Body.String())
 	}
 }
 

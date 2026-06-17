@@ -381,14 +381,29 @@ func TestAuthServiceRegisterValidatesInput(t *testing.T) {
 	}
 }
 
-func TestAuthServiceRegisterRejectsDuplicateEmail(t *testing.T) {
+func TestAuthServiceRegisterDuplicateEmailIsNeutral(t *testing.T) {
 	service := newTestAuthService(t)
+	store := service.store.(*fakeAuthStore)
 
 	if _, err := service.Register(context.Background(), "user@example.com", "password"); err != nil {
 		t.Fatalf("Register() error = %v", err)
 	}
-	if _, err := service.Register(context.Background(), "USER@example.com", "password"); !errors.Is(err, ErrEmailAlreadyRegistered) {
-		t.Fatalf("Register() error = %v, want %v", err, ErrEmailAlreadyRegistered)
+
+	// Registering an existing address must not reveal that it is taken: it
+	// returns the same nil error as a genuine signup, but creates no second
+	// account and enqueues no further email.
+	user, err := service.Register(context.Background(), "USER@example.com", "password")
+	if err != nil {
+		t.Fatalf("Register() duplicate error = %v, want nil", err)
+	}
+	if user.ID != 0 {
+		t.Fatalf("Register() duplicate user = %+v, want zero user", user)
+	}
+	if len(store.usersByEmail) != 1 {
+		t.Fatalf("user count = %d, want 1 (no duplicate created)", len(store.usersByEmail))
+	}
+	if len(store.outbox) != 1 {
+		t.Fatalf("outbox count = %d, want 1 (no second confirmation email)", len(store.outbox))
 	}
 }
 
@@ -731,7 +746,6 @@ func TestAuthServiceRequestEmailChangeRejectsInvalidInputs(t *testing.T) {
 		{name: "incorrect current password", password: "wrong-password", email: "new@example.com", want: ErrCurrentPasswordIncorrect},
 		{name: "invalid email", password: "password", email: "not-an-email", want: ErrInvalidEmail},
 		{name: "unchanged email", password: "password", email: "USER@example.com", want: ErrEmailUnchanged},
-		{name: "already registered", password: "password", email: "taken@example.com", want: ErrEmailAlreadyRegistered},
 	}
 
 	for _, tt := range tests {
@@ -741,6 +755,35 @@ func TestAuthServiceRequestEmailChangeRejectsInvalidInputs(t *testing.T) {
 				t.Fatalf("RequestEmailChange() error = %v, want %v", err, tt.want)
 			}
 		})
+	}
+}
+
+func TestAuthServiceRequestEmailChangeTakenEmailIsNeutral(t *testing.T) {
+	service := newTestAuthService(t)
+	store := service.store.(*fakeAuthStore)
+
+	user, err := service.Register(context.Background(), "user@example.com", "password")
+	if err != nil {
+		t.Fatalf("Register() error = %v", err)
+	}
+	if _, err := service.Register(context.Background(), "taken@example.com", "password"); err != nil {
+		t.Fatalf("Register() taken error = %v", err)
+	}
+
+	outboxBefore := len(store.outbox)
+	tokensBefore := len(store.emailChangeTokens)
+
+	// Requesting a change to an address owned by another account must look
+	// identical to a successful request (nil error), but it must never persist
+	// a token or send a verification link to that address.
+	if err := service.RequestEmailChange(context.Background(), user.ID, "password", "taken@example.com"); err != nil {
+		t.Fatalf("RequestEmailChange() taken error = %v, want nil", err)
+	}
+	if len(store.outbox) != outboxBefore {
+		t.Fatalf("outbox count = %d, want %d (no email sent for taken address)", len(store.outbox), outboxBefore)
+	}
+	if len(store.emailChangeTokens) != tokensBefore {
+		t.Fatalf("email change token count = %d, want %d (no token persisted)", len(store.emailChangeTokens), tokensBefore)
 	}
 }
 

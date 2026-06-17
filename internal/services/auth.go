@@ -314,8 +314,12 @@ func (s *AuthService) Register(ctx context.Context, emailAddress, password strin
 	if utf8.RuneCountInString(password) < s.passwordMinLen {
 		return User{}, ErrInvalidPassword
 	}
+
+	// Treat an already-registered address as a neutral success: the caller
+	// shows the same "check your inbox" outcome either way, so registration
+	// never confirms whether an address exists.
 	if _, err := s.store.GetUserByEmail(ctx, emailAddress); err == nil {
-		return User{}, ErrEmailAlreadyRegistered
+		return User{}, nil
 	} else if !errors.Is(err, sql.ErrNoRows) {
 		return User{}, fmt.Errorf("get user by email: %w", err)
 	}
@@ -348,8 +352,11 @@ func (s *AuthService) Register(ctx context.Context, emailAddress, password strin
 		},
 	)
 	if err != nil {
+		// A unique-constraint failure means the address was registered between
+		// our check and the insert. Treat it as the same neutral success so the
+		// race does not become an enumeration oracle.
 		if errors.Is(err, ErrEmailAlreadyRegistered) {
-			return User{}, ErrEmailAlreadyRegistered
+			return User{}, nil
 		}
 		return User{}, fmt.Errorf("create user: %w", err)
 	}
@@ -559,14 +566,13 @@ func (s *AuthService) RequestEmailChange(ctx context.Context, userID int64, curr
 		return ErrEmailUnchanged
 	}
 
-	existingUser, err := s.store.GetUserByEmail(ctx, newEmail)
-	if err == nil && existingUser.ID != user.ID {
-		return ErrEmailAlreadyRegistered
-	}
-	if err == nil {
-		return ErrEmailUnchanged
-	}
-	if !errors.Is(err, sql.ErrNoRows) {
+	// An address owned by another account returns a neutral success: the
+	// requester's own address was already rejected as unchanged above, so a
+	// match here means the address is taken. We never persist a token or send a
+	// verification link to an address the requester does not control.
+	if _, err := s.store.GetUserByEmail(ctx, newEmail); err == nil {
+		return nil
+	} else if !errors.Is(err, sql.ErrNoRows) {
 		return fmt.Errorf("get user by email: %w", err)
 	}
 
@@ -626,6 +632,9 @@ func (s *AuthService) RequestPasswordReset(ctx context.Context, emailAddress str
 
 	user, err := s.store.GetUserByEmail(ctx, emailAddress)
 	if errors.Is(err, sql.ErrNoRows) {
+		// Unknown address: return a neutral success without generating a token
+		// or sending mail, so the response never reveals whether the address is
+		// registered.
 		return nil
 	}
 	if err != nil {

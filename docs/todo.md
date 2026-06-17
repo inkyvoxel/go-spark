@@ -10,4 +10,3 @@
 ## Auth hardening (from auth audit)
 
 - Add a coarse per-IP login rate limit to slow credential stuffing. `rateLimitKeyByIPAndEmail` in `internal/server/rate_limit.go` keys the login bucket on `ip|email`, so a single IP gets a fresh allowance per distinct email and can spread one password across many accounts. Layer an additional per-IP limiter alongside the existing per-email one (mind shared NAT egress when picking the threshold).
-- Reduce user-enumeration signals (low priority): `RequestEmailChange` in `internal/services/auth.go` returns a distinct "already used by another account" error, and forgot-password has a timing difference between known and unknown emails (token generation + email enqueue vs. immediate return). Consider equalising both.

@@ -110,26 +110,13 @@ func (s *Server) register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, session, err := s.auth.Login(r.Context(), email, password)
-	if err != nil {
-		data := s.newTemplateData(w, r, "Create Account")
-		data.Email = strings.TrimSpace(email)
-		s.handleAuthFormError(w, r, templateRegister, data, err)
-		return
-	}
-
-	s.setSessionCookie(w, r, session, false)
-	if err := s.rotateCSRFCookieForSession(w, r, session.Token); err != nil {
-		s.loggerForRequest(r).Error("rotate csrf token after register login", "err", err)
-		s.internalServerError(w, r)
-		return
-	}
-	s.loggerForRequest(r).Info("auth register succeeded", "user_id", user.ID)
-	redirect := paths.Account
-	if !user.EmailVerifiedAt.Valid {
-		redirect = paths.VerifyEmail
-	}
-	http.Redirect(w, r, redirect, http.StatusSeeOther)
+	// Show the same neutral outcome whether or not the address was already
+	// registered. Register does not auto-login: a genuine new account must be
+	// verified via the emailed link first, so an existing address can be
+	// handled identically without ever confirming it exists.
+	s.loggerForRequest(r).Info("auth register requested")
+	s.setFlash(w, r, flashSuccess("If that email isn't already registered, we've sent a verification link. Check your inbox to activate your account, then sign in."))
+	http.Redirect(w, r, paths.Login, http.StatusSeeOther)
 }
 
 func (s *Server) loginForm(w http.ResponseWriter, r *http.Request) {
@@ -592,8 +579,6 @@ func (s *Server) changeEmail(w http.ResponseWriter, r *http.Request) {
 			data.FieldErrors = map[string]string{"email": "Enter a valid email address."}
 		case errors.Is(err, services.ErrEmailUnchanged):
 			data.FieldErrors = map[string]string{"email": "Choose a different email address."}
-		case errors.Is(err, services.ErrEmailAlreadyRegistered):
-			data.FieldErrors = map[string]string{"email": "An account with this email already exists."}
 		default:
 			s.loggerForRequest(r).Error("change email", "user_id", user.ID, "err", err)
 			s.internalServerError(w, r)
@@ -738,12 +723,6 @@ func (s *Server) handleAuthFormError(w http.ResponseWriter, r *http.Request, tem
 	if errors.Is(err, services.ErrInvalidPassword) {
 		data.Error = "Check your details and try again."
 		data.FieldErrors = map[string]string{"password": fmt.Sprintf("Use at least %d characters.", data.PasswordMinLength)}
-		s.renderStatus(w, http.StatusUnprocessableEntity, templateName, data)
-		return
-	}
-	if errors.Is(err, services.ErrEmailAlreadyRegistered) {
-		data.Error = "Check your details and try again."
-		data.FieldErrors = map[string]string{"email": "An account with this email already exists."}
 		s.renderStatus(w, http.StatusUnprocessableEntity, templateName, data)
 		return
 	}
