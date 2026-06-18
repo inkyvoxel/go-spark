@@ -100,10 +100,14 @@ func buildRuntime(cfg config.Config, logger *slog.Logger, db *sql.DB, secretKeyB
 		return Runtime{}, fmt.Errorf("configure background jobs runner: %w", err)
 	}
 
+	// Example feature wiring. Remove with the rest of the projects example.
+	projectService := services.NewProjectService(database.NewProjectStore(db))
+
 	webApp, err := server.New(server.Options{
 		Logger:            logger,
 		DB:                db,
 		Auth:              auth,
+		Projects:          projectService,
 		CookieSecure:      cfg.CookieSecure,
 		AppBaseURL:        cfg.AppBaseURL,
 		SecretKeyBase:     secretKeyBase,

@@ -23,4 +23,6 @@ const (
 	templateTwoFactorBackupCodes = "two_factor_backup_codes.html"
 	templateTwoFactorChallenge   = "two_factor_challenge.html"
 	templatePasskeys             = "passkeys.html"
+	// Example feature (projects). Remove with the rest of the example.
+	templateProjects = "projects_index.html"
 )

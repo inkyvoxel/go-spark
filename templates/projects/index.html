@@ -1,0 +1,53 @@
+{{ define "content" }}
+<article>
+  <h1>Projects</h1>
+  <p>
+    An example feature included with this starter — create, list, and delete
+    projects you own. Copy it for your own features or remove it; see
+    <code>docs/extending.md</code>.
+  </p>
+
+  {{ if .Error }}<p role="alert">{{ .Error }}</p>{{ end }}
+
+  <form method="post" action="{{ .Routes.Projects }}">
+    <label>
+      Project name
+      <input type="text" name="name" maxlength="100" required {{ with index .FieldErrors "name" }}aria-invalid="true"
+        aria-describedby="project-name-error" {{ end }}>
+      {{ with index .FieldErrors "name" }}<small id="project-name-error">{{ . }}</small>{{ end }}
+    </label>
+    <button type="submit">Add project</button>
+  </form>
+
+  <figure>
+    <table>
+      <thead>
+        <tr>
+          <th scope="col">Name</th>
+          <th scope="col">Created</th>
+          <th scope="col">Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{ range .Projects }}
+        <tr>
+          <td>{{ .Name }}</td>
+          <td><time datetime="{{ .CreatedAt.UTC.Format " 2006-01-02T15:04:05Z07:00" }}">{{ .CreatedAt.UTC.Format
+              "2006-01-02 15:04 UTC" }}</time></td>
+          <td>
+            <form method="post" action="{{ $.Routes.ProjectsDelete }}">
+              <input type="hidden" name="project_id" value="{{ .ID }}">
+              <button type="submit" class="secondary outline">Delete</button>
+            </form>
+          </td>
+        </tr>
+        {{ else }}
+        <tr>
+          <td colspan="3">No projects yet.</td>
+        </tr>
+        {{ end }}
+      </tbody>
+    </table>
+  </figure>
+</article>
+{{ end }}

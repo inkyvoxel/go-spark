@@ -41,6 +41,9 @@ const (
 	AccountPasskeysRegisterFinish   = AccountPasskeys + "/register/finish"
 	AccountPasskeysRename           = AccountPasskeys + "/rename"
 	AccountPasskeysDelete           = AccountPasskeys + "/delete"
+	// Example feature (projects). Remove with the rest of the example.
+	Projects       = "/projects"
+	ProjectsDelete = Projects + "/delete"
 )
 
 // ponytail: kept deliberately. This map restates the const block above, but
@@ -85,4 +88,6 @@ var TemplateRoutes = map[string]string{
 	"AccountPasskeysRegisterFinish":   AccountPasskeysRegisterFinish,
 	"AccountPasskeysRename":           AccountPasskeysRename,
 	"AccountPasskeysDelete":           AccountPasskeysDelete,
+	"Projects":                        Projects,
+	"ProjectsDelete":                  ProjectsDelete,
 }

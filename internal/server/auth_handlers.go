@@ -46,6 +46,8 @@ type templateData struct {
 	// Passkeys
 	PasskeysEnabled bool
 	Passkeys        []services.WebAuthnCredential
+	// Projects (example feature; remove with the projects example)
+	Projects []services.Project
 }
 
 type breadcrumbItem struct {

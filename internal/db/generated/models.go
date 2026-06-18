@@ -55,6 +55,13 @@ type PasswordResetToken struct {
 	CreatedAt  time.Time
 }
 
+type Project struct {
+	ID        int64
+	UserID    int64
+	Name      string
+	CreatedAt time.Time
+}
+
 type Session struct {
 	ID        int64
 	UserID    int64

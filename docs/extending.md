@@ -3,6 +3,11 @@
 This is the quick onboarding map for adding your first app feature after you
 fork the starter.
 
+> **A working version of this walkthrough ships in the repo** as the example
+> `projects` feature (create / list / delete). Read it alongside this guide —
+> every layer below has a real counterpart. When you no longer need it, see
+> [Removing the example feature](#removing-the-example-feature) below.
+
 Most features follow this path:
 
 ```text
@@ -287,6 +292,46 @@ Add focused tests where the behavior lives:
 * store tests for SQL and transactions
 * email tests for rendered messages and links
 * job tests for background behavior
+
+## Removing the Example Feature
+
+The `projects` feature is a demo. When you are ready to replace it with your own
+work, remove it cleanly — it is isolated in `project*`-named files plus a few
+tagged wiring lines.
+
+Delete these files:
+
+```sh
+rm internal/server/project_handlers.go internal/server/project_handlers_test.go
+rm internal/services/projects.go internal/services/projects_test.go
+rm internal/database/project_store.go internal/database/project_store_test.go
+rm internal/db/queries/projects.sql
+rm migrations/00002_projects_schema.sql
+rm -r templates/projects
+```
+
+Then remove the small, comment-tagged wiring in each of these files (search for
+`projects example` / `example feature`):
+
+* `internal/paths/paths.go` — the `Projects` / `ProjectsDelete` constants and their `TemplateRoutes` entries
+* `internal/server/template_constants.go` — the `templateProjects` constant
+* `internal/server/server.go` — the `parseTemplates` entry, the `Server` and `Options` `projects` fields, the `New` assignment, and the `registerProjectRoutes` call
+* `internal/server/auth_handlers.go` — the `Projects` field on `templateData`
+* `internal/app/build.go` — the project store/service wiring
+* `templates/layout.html` — the "Projects" nav link
+
+Finally, regenerate the SQL layer and verify:
+
+```sh
+make sqlc     # drops internal/db/generated/projects.sql.go and the Project model
+make check
+```
+
+If you have **not** applied the example migration yet, deleting
+`migrations/00002_projects_schema.sql` is enough. If you **already** ran
+`make migrate-up`, also drop the table from your local database (e.g.
+`make migrate-down` once, before deleting the file, or `DROP TABLE projects;`)
+so your schema matches the migrations.
 
 ## Before finishing
 

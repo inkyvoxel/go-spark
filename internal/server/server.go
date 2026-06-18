@@ -30,6 +30,7 @@ const (
 type Server struct {
 	db                *sql.DB
 	auth              authService
+	projects          projectService // example feature; remove with the projects example
 	logger            *slog.Logger
 	templates         map[string]*template.Template
 	cookieSecure      bool
@@ -46,6 +47,7 @@ type Server struct {
 type Options struct {
 	DB                *sql.DB
 	Auth              authService
+	Projects          projectService // example feature; remove with the projects example
 	Logger            *slog.Logger
 	CookieSecure      bool
 	AppBaseURL        string
@@ -89,6 +91,7 @@ func New(opts Options) (*Server, error) {
 	return &Server{
 		db:                opts.DB,
 		auth:              opts.Auth,
+		projects:          opts.Projects,
 		logger:            logger,
 		templates:         templates,
 		cookieSecure:      opts.CookieSecure,
@@ -171,6 +174,7 @@ func parseTemplates() (map[string]*template.Template, error) {
 		templateTwoFactorBackupCodes: path.Join("account", "two_factor_backup_codes.html"),
 		templateTwoFactorChallenge:   path.Join("account", "two_factor_challenge.html"),
 		templatePasskeys:             path.Join("account", "passkeys.html"),
+		templateProjects:             path.Join("projects", "index.html"),
 	}
 	funcMap := template.FuncMap{
 		"urlQueryEscape": func(s string) template.URL {
@@ -209,6 +213,7 @@ func (s *Server) Routes() http.Handler {
 	mux.Handle(route(http.MethodGet, paths.StaticPrefix), staticFileHandler())
 
 	s.registerAuthRoutes(dynamic)
+	s.registerProjectRoutes(dynamic) // example feature; remove with the projects example
 	dynamic.HandleFunc(route(http.MethodGet, "/{$}"), s.home)
 	dynamic.HandleFunc(route(http.MethodGet, "/{path...}"), s.notFoundPage)
 

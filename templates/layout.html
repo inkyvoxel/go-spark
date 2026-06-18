@@ -19,6 +19,7 @@
       </ul>
       <ul>
         {{ if .Authenticated }}
+        <li><a href="{{ .Routes.Projects }}">Projects</a></li>
         <li><a href="{{ .Routes.Account }}">Account</a></li>
         <li><button form="logout-form" class="secondary">Sign out</button></li>
         {{ else }}
