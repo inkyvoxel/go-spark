@@ -10,14 +10,8 @@
   {{ end }}
   {{ else }}
   <h1>Email confirmed</h1>
-  <p>Your email address has been confirmed.</p>
-  {{ if .PasskeysEnabled }}
-  <p>Want faster, password-free sign-in next time? Add a passkey to your account.</p>
-  <p><a href="{{ .Routes.AccountPasskeys }}" role="button">Set up a passkey</a></p>
-  <p><a href="{{ .Routes.Account }}">Skip for now</a></p>
-  {{ else }}
-  <p><a href="{{ .Routes.Account }}">Go to your account</a></p>
-  {{ end }}
+  <p>Your email address has been confirmed. You can now sign in.</p>
+  <p><a href="{{ .Routes.Login }}" role="button">Sign in</a></p>
   {{ end }}
 </article>
 {{ end }}
