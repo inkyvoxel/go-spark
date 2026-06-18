@@ -133,7 +133,7 @@ func TestCSRFRejectsPostWithMismatchedOriginHeader(t *testing.T) {
 	}
 }
 
-func TestCSRFAllowsPostWithNullOriginHeader(t *testing.T) {
+func TestCSRFRejectsPostWithNullOriginHeader(t *testing.T) {
 	srv := newAuthMiddlewareTestServer(nil)
 	token := mustSignedCSRFToken(t, srv, csrfAnonymousSessionHash, time.Now().UTC())
 
@@ -141,44 +141,6 @@ func TestCSRFAllowsPostWithNullOriginHeader(t *testing.T) {
 	req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: token})
 	req.Header.Set(csrfHeaderName, token)
 	req.Header.Set("Origin", "null")
-	rec := httptest.NewRecorder()
-
-	srv.csrf(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusNoContent)
-	})).ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusNoContent {
-		t.Fatalf("status = %d, want %d", rec.Code, http.StatusNoContent)
-	}
-}
-
-func TestCSRFAllowsPostWithMatchingRefererWhenOriginMissing(t *testing.T) {
-	srv := newAuthMiddlewareTestServer(nil)
-	token := mustSignedCSRFToken(t, srv, csrfAnonymousSessionHash, time.Now().UTC())
-
-	req := httptest.NewRequest(http.MethodPost, "/submit", nil)
-	req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: token})
-	req.Header.Set(csrfHeaderName, token)
-	req.Header.Set("Referer", "http://localhost:8080/account/change-password")
-	rec := httptest.NewRecorder()
-
-	srv.csrf(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusNoContent)
-	})).ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusNoContent {
-		t.Fatalf("status = %d, want %d", rec.Code, http.StatusNoContent)
-	}
-}
-
-func TestCSRFRejectsPostWithMismatchedRefererWhenOriginMissing(t *testing.T) {
-	srv := newAuthMiddlewareTestServer(nil)
-	token := mustSignedCSRFToken(t, srv, csrfAnonymousSessionHash, time.Now().UTC())
-
-	req := httptest.NewRequest(http.MethodPost, "/submit", nil)
-	req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: token})
-	req.Header.Set(csrfHeaderName, token)
-	req.Header.Set("Referer", "https://evil.example/form")
 	rec := httptest.NewRecorder()
 
 	srv.csrf(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -190,50 +152,66 @@ func TestCSRFRejectsPostWithMismatchedRefererWhenOriginMissing(t *testing.T) {
 	}
 }
 
-func TestCSRFRejectsPostWithMalformedOriginOrReferer(t *testing.T) {
+func TestCSRFRejectsPostWithMalformedOrigin(t *testing.T) {
 	srv := newAuthMiddlewareTestServer(nil)
 	token := mustSignedCSRFToken(t, srv, csrfAnonymousSessionHash, time.Now().UTC())
 
-	tests := []struct {
-		name    string
-		headers map[string]string
-	}{
-		{
-			name: "malformed Origin",
-			headers: map[string]string{
-				"Origin": "://bad-origin",
-			},
-		},
-		{
-			name: "malformed Referer",
-			headers: map[string]string{
-				"Referer": "://bad-referer",
-			},
-		},
-	}
+	req := httptest.NewRequest(http.MethodPost, "/submit", nil)
+	req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: token})
+	req.Header.Set(csrfHeaderName, token)
+	req.Header.Set("Origin", "://bad-origin")
+	rec := httptest.NewRecorder()
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			req := httptest.NewRequest(http.MethodPost, "/submit", nil)
-			req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: token})
-			req.Header.Set(csrfHeaderName, token)
-			for key, value := range tt.headers {
-				req.Header.Set(key, value)
-			}
-			rec := httptest.NewRecorder()
+	srv.csrf(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatal("next handler should not run")
+	})).ServeHTTP(rec, req)
 
-			srv.csrf(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				t.Fatal("next handler should not run")
-			})).ServeHTTP(rec, req)
-
-			if rec.Code != http.StatusForbidden {
-				t.Fatalf("status = %d, want %d", rec.Code, http.StatusForbidden)
-			}
-		})
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusForbidden)
 	}
 }
 
-func TestCSRFAllowsPostWhenOriginAndRefererAreMissing(t *testing.T) {
+// Browsers send Sec-Fetch-Site on every request since 2023; it is the primary
+// signal http.CrossOriginProtection uses.
+func TestCSRFRejectsPostWithCrossSiteFetchMetadata(t *testing.T) {
+	srv := newAuthMiddlewareTestServer(nil)
+	token := mustSignedCSRFToken(t, srv, csrfAnonymousSessionHash, time.Now().UTC())
+
+	req := httptest.NewRequest(http.MethodPost, "/submit", nil)
+	req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: token})
+	req.Header.Set(csrfHeaderName, token)
+	req.Header.Set("Sec-Fetch-Site", "cross-site")
+	rec := httptest.NewRecorder()
+
+	srv.csrf(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatal("next handler should not run")
+	})).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusForbidden)
+	}
+}
+
+func TestCSRFAllowsPostWithSameOriginFetchMetadata(t *testing.T) {
+	srv := newAuthMiddlewareTestServer(nil)
+	token := mustSignedCSRFToken(t, srv, csrfAnonymousSessionHash, time.Now().UTC())
+
+	req := httptest.NewRequest(http.MethodPost, "/submit", nil)
+	req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: token})
+	req.Header.Set(csrfHeaderName, token)
+	req.Header.Set("Sec-Fetch-Site", "same-origin")
+	rec := httptest.NewRecorder()
+
+	srv.csrf(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	})).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusNoContent)
+	}
+}
+
+func TestCSRFAllowsPostWhenOriginAndFetchMetadataAreMissing(t *testing.T) {
 	srv := newAuthMiddlewareTestServer(nil)
 	token := mustSignedCSRFToken(t, srv, csrfAnonymousSessionHash, time.Now().UTC())
 
@@ -406,12 +384,12 @@ func TestCSRFRejectsOversizedFormBody(t *testing.T) {
 	}
 }
 
-func TestCSRFSafeMethodsIgnoreOriginAndRefererValidation(t *testing.T) {
+func TestCSRFSafeMethodsSkipCrossOriginChecks(t *testing.T) {
 	srv := newAuthMiddlewareTestServer(nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	req.Header.Set("Origin", "https://evil.example")
-	req.Header.Set("Referer", "https://evil.example/landing")
+	req.Header.Set("Sec-Fetch-Site", "cross-site")
 	rec := httptest.NewRecorder()
 
 	srv.csrf(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

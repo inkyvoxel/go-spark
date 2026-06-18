@@ -89,6 +89,16 @@ Passkeys are built on the [`go-webauthn/webauthn`](https://github.com/go-webauth
 
 It intentionally does not use JWTs or a large auth framework for the default server-rendered flow.
 
+## CSRF Protection
+
+State-changing requests are protected by two independent layers, following the [OWASP CSRF Prevention Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html).
+
+The primary layer is a **signed double-submit token**: a per-request value carrying the session hash and an expiry, HMAC-signed with a key derived from `SECRET_KEY_BASE`, sent both as a cookie and as a form field (`csrf_token`) or `X-CSRF-Token` header. Because the token is bound to the session and signed server-side, it is the strongest double-submit variant OWASP describes, and it is environment-independent — it holds even if a reverse proxy strips or rewrites origin headers.
+
+The second layer is the standard library's [`http.CrossOriginProtection`](https://pkg.go.dev/net/http#CrossOriginProtection), which rejects cross-origin unsafe requests using the `Sec-Fetch-Site` header (sent by all browsers since 2023), falling back to comparing the `Origin` header against the request host. The app's own origin (`APP_BASE_URL`) is registered as trusted so requests still pass behind a Host-rewriting proxy. Session and CSRF cookies are additionally `SameSite=Lax`.
+
+Keeping both layers is deliberate. OWASP still treats a CSRF token as the primary defense for cookie-authenticated apps and origin verification as defense-in-depth, not a replacement. An origin-only posture — dropping the token and relying on `CrossOriginProtection` alone — is defensible for a private app targeting only modern browsers, but this template keeps the token so a downstream deployment with an unusual proxy or CDN cannot silently lose CSRF protection. The only cost is the token plumbing in `internal/server/csrf.go` and the hidden `csrf_token` field in form templates. Note that origin verification no longer consults the `Referer` header; the token covers the rare clients that send neither `Sec-Fetch-Site` nor `Origin`.
+
 ## Data Layer
 
 The project is SQL-first:

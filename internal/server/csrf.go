@@ -11,7 +11,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"net/url"
 	"strings"
 	"time"
 )
@@ -83,7 +82,7 @@ func (s *Server) csrf(next http.Handler) http.Handler {
 			http.Error(w, http.StatusText(http.StatusForbidden), http.StatusForbidden)
 			return
 		}
-		if !s.validRequestSourceOrigin(r) {
+		if err := s.crossOriginProtection().Check(r); err != nil {
 			http.Error(w, http.StatusText(http.StatusForbidden), http.StatusForbidden)
 			return
 		}
@@ -92,62 +91,31 @@ func (s *Server) csrf(next http.Handler) http.Handler {
 	})
 }
 
-func (s *Server) validRequestSourceOrigin(r *http.Request) bool {
-	origin := strings.TrimSpace(r.Header.Get("Origin"))
-	if strings.EqualFold(origin, "null") {
-		origin = ""
-	}
-	if origin != "" {
-		normalized, ok := normalizeHeaderOrigin(origin)
-		if !ok || s.appBaseOrigin == "" {
-			return false
-		}
-		return normalized == s.appBaseOrigin
-	}
+// defaultCrossOriginProtection rejects cross-origin unsafe requests using the
+// Sec-Fetch-Site header (falling back to Origin vs Host) and trusts no extra
+// origins. Servers built via New get one configured with the app's own origin.
+var defaultCrossOriginProtection = http.NewCrossOriginProtection()
 
-	referer := strings.TrimSpace(r.Header.Get("Referer"))
-	if referer == "" {
-		return true
+// newCrossOriginProtection builds the origin-based CSRF defense. The app's own
+// origin is registered as trusted so requests still pass behind a proxy that
+// rewrites the Host (e.g. TLS termination) for the rare browsers that omit
+// Sec-Fetch-Site.
+func newCrossOriginProtection(appBaseOrigin string) (*http.CrossOriginProtection, error) {
+	protection := http.NewCrossOriginProtection()
+	if appBaseOrigin == "" {
+		return protection, nil
 	}
-	normalized, ok := normalizeRefererOrigin(referer)
-	if !ok || s.appBaseOrigin == "" {
-		return false
+	if err := protection.AddTrustedOrigin(appBaseOrigin); err != nil {
+		return nil, fmt.Errorf("trust app origin %q: %w", appBaseOrigin, err)
 	}
-	return normalized == s.appBaseOrigin
+	return protection, nil
 }
 
-func normalizeHeaderOrigin(raw string) (string, bool) {
-	parsed, err := url.Parse(strings.TrimSpace(raw))
-	if err != nil {
-		return "", false
+func (s *Server) crossOriginProtection() *http.CrossOriginProtection {
+	if s.crossOrigin != nil {
+		return s.crossOrigin
 	}
-	if parsed.Scheme == "" || parsed.Host == "" {
-		return "", false
-	}
-	if parsed.Scheme != "http" && parsed.Scheme != "https" {
-		return "", false
-	}
-	if parsed.Path != "" && parsed.Path != "/" {
-		return "", false
-	}
-	if parsed.RawQuery != "" || parsed.Fragment != "" || parsed.User != nil {
-		return "", false
-	}
-	return strings.ToLower(parsed.Scheme) + "://" + strings.ToLower(parsed.Host), true
-}
-
-func normalizeRefererOrigin(raw string) (string, bool) {
-	parsed, err := url.Parse(strings.TrimSpace(raw))
-	if err != nil {
-		return "", false
-	}
-	if parsed.Scheme == "" || parsed.Host == "" {
-		return "", false
-	}
-	if parsed.Scheme != "http" && parsed.Scheme != "https" {
-		return "", false
-	}
-	return strings.ToLower(parsed.Scheme) + "://" + strings.ToLower(parsed.Host), true
+	return defaultCrossOriginProtection
 }
 
 func sessionTokenFromRequest(r *http.Request) string {

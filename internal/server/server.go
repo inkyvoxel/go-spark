@@ -32,7 +32,7 @@ type Server struct {
 	logger            *slog.Logger
 	templates         map[string]*template.Template
 	cookieSecure      bool
-	appBaseOrigin     string
+	crossOrigin       *http.CrossOriginProtection
 	passwordMinLength int
 	csrfKey           []byte
 	flashKey          []byte
@@ -70,7 +70,10 @@ func New(opts Options) (*Server, error) {
 	secretKeyBase := []byte(strings.TrimSpace(opts.SecretKeyBase))
 	csrfKey := deriveKey(secretKeyBase, "csrf")
 	flashKey := deriveKey(secretKeyBase, "flash")
-	appBaseOrigin := normalizeOrigin(opts.AppBaseURL)
+	crossOrigin, err := newCrossOriginProtection(normalizeOrigin(opts.AppBaseURL))
+	if err != nil {
+		return nil, fmt.Errorf("configure cross-origin protection: %w", err)
+	}
 
 	templates, err := parseTemplates()
 	if err != nil {
@@ -88,7 +91,7 @@ func New(opts Options) (*Server, error) {
 		logger:            logger,
 		templates:         templates,
 		cookieSecure:      opts.CookieSecure,
-		appBaseOrigin:     appBaseOrigin,
+		crossOrigin:       crossOrigin,
 		passwordMinLength: passwordMinLength,
 		csrfKey:           csrfKey,
 		flashKey:          flashKey,

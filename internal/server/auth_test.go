@@ -602,10 +602,14 @@ func (f *fakeAuthLookup) DeletePasskey(ctx context.Context, userID, credentialDB
 }
 
 func newAuthMiddlewareTestServer(auth authService) *Server {
+	crossOrigin, err := newCrossOriginProtection("http://localhost:8080")
+	if err != nil {
+		panic(err)
+	}
 	return &Server{
-		auth:          auth,
-		logger:        slog.New(slog.NewTextHandler(io.Discard, nil)),
-		appBaseOrigin: "http://localhost:8080",
-		csrfKey:       []byte("test-csrf-signing-key"),
+		auth:        auth,
+		logger:      slog.New(slog.NewTextHandler(io.Discard, nil)),
+		crossOrigin: crossOrigin,
+		csrfKey:     []byte("test-csrf-signing-key"),
 	}
 }
