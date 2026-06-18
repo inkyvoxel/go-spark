@@ -219,9 +219,12 @@ func (s *Server) Routes() http.Handler {
 
 	handler := s.loadSession(http.Handler(dynamic))
 	handler = s.csrf(handler)
-	mux.Handle(paths.Home, s.cacheControlHeaders(s.securityHeaders(s.limitRequestBody(handler))))
+	mux.Handle(paths.Home, s.cacheControlHeaders(s.limitRequestBody(handler)))
 
-	return s.withRequestID(s.logRequests(mux))
+	// securityHeaders wraps the whole mux so static assets and the health and
+	// robots endpoints get the baseline headers (notably X-Content-Type-Options:
+	// nosniff) too, not just the dynamic application routes.
+	return s.withRequestID(s.logRequests(s.securityHeaders(mux)))
 }
 
 func (s *Server) registerAuthRoutes(dynamic *http.ServeMux) {

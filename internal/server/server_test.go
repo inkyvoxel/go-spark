@@ -256,6 +256,24 @@ func TestRoutesSetSecurityHeaders(t *testing.T) {
 	}
 }
 
+func TestRoutesSetSecurityHeadersOnStaticAndHealthEndpoints(t *testing.T) {
+	srv := testServer(t)
+
+	for _, path := range []string{paths.StaticStyles, paths.Healthz, paths.RobotsTxt} {
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		rec := httptest.NewRecorder()
+
+		srv.Routes().ServeHTTP(rec, req)
+
+		if got := rec.Header().Get("X-Content-Type-Options"); got != "nosniff" {
+			t.Fatalf("%s: X-Content-Type-Options = %q, want %q", path, got, "nosniff")
+		}
+		if got := rec.Header().Get("Content-Security-Policy"); got != cspHeaderValue {
+			t.Fatalf("%s: Content-Security-Policy = %q, want %q", path, got, cspHeaderValue)
+		}
+	}
+}
+
 func TestRoutesSetHSTSWhenSecureCookiesEnabled(t *testing.T) {
 	srv := testServer(t)
 	srv.cookieSecure = true
