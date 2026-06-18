@@ -1,12 +1,8 @@
 package server
 
 import (
-	"crypto/hmac"
-	"crypto/sha256"
-	"encoding/base64"
 	"encoding/json"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/inkyvoxel/go-spark/internal/services"
@@ -38,15 +34,9 @@ func (s *Server) setFlash(w http.ResponseWriter, r *http.Request, msg flashMessa
 		return
 	}
 
-	h := hmac.New(sha256.New, s.flashSigningKey())
-	h.Write(payload)
-	sig := h.Sum(nil)
-
-	value := base64.RawURLEncoding.EncodeToString(payload) + "." + base64.RawURLEncoding.EncodeToString(sig)
-
 	http.SetCookie(w, &http.Cookie{
 		Name:     flashCookieName,
-		Value:    value,
+		Value:    signValue(s.flashSigningKey(), payload),
 		Path:     "/",
 		MaxAge:   int((5 * time.Minute).Seconds()),
 		HttpOnly: true,
@@ -71,24 +61,8 @@ func (s *Server) popFlash(w http.ResponseWriter, r *http.Request) (flashMessage,
 		SameSite: http.SameSiteLaxMode,
 	})
 
-	parts := strings.SplitN(cookie.Value, ".", 2)
-	if len(parts) != 2 {
-		return flashMessage{}, false
-	}
-
-	payload, err := base64.RawURLEncoding.DecodeString(parts[0])
-	if err != nil {
-		return flashMessage{}, false
-	}
-
-	sig, err := base64.RawURLEncoding.DecodeString(parts[1])
-	if err != nil {
-		return flashMessage{}, false
-	}
-
-	h := hmac.New(sha256.New, s.flashSigningKey())
-	h.Write(payload)
-	if !hmac.Equal(sig, h.Sum(nil)) {
+	payload, ok := verifyValue(s.flashSigningKey(), cookie.Value)
+	if !ok {
 		return flashMessage{}, false
 	}
 

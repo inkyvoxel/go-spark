@@ -2,9 +2,6 @@ package server
 
 import (
 	"context"
-	"crypto/hmac"
-	"crypto/sha256"
-	"encoding/base64"
 	"errors"
 	"fmt"
 	"net/http"
@@ -296,16 +293,9 @@ func (s *Server) setTOTPPendingCookie(w http.ResponseWriter, r *http.Request, us
 	now := time.Now().UTC()
 	payload := fmt.Sprintf("%d:%t:%d", userID, rememberMe, now.Unix())
 
-	h := hmac.New(sha256.New, s.totpPendingKey())
-	h.Write([]byte(payload))
-	sig := h.Sum(nil)
-
-	value := base64.RawURLEncoding.EncodeToString([]byte(payload)) + "." +
-		base64.RawURLEncoding.EncodeToString(sig)
-
 	http.SetCookie(w, &http.Cookie{
 		Name:     totpPendingCookieName,
-		Value:    value,
+		Value:    signValue(s.totpPendingKey(), []byte(payload)),
 		Path:     totpPendingCookiePath,
 		Expires:  now.Add(totpPendingCookieTTL),
 		MaxAge:   int(totpPendingCookieTTL.Seconds()),
@@ -336,28 +326,12 @@ func (s *Server) totpPendingLoginFromCookie(r *http.Request) (totpPendingLogin, 
 		return totpPendingLogin{}, false
 	}
 
-	parts := strings.SplitN(cookie.Value, ".", 2)
-	if len(parts) != 2 {
+	payloadBytes, ok := verifyValue(s.totpPendingKey(), cookie.Value)
+	if !ok {
 		return totpPendingLogin{}, false
 	}
 
-	payloadBytes, err := base64.RawURLEncoding.DecodeString(parts[0])
-	if err != nil {
-		return totpPendingLogin{}, false
-	}
-	sig, err := base64.RawURLEncoding.DecodeString(parts[1])
-	if err != nil {
-		return totpPendingLogin{}, false
-	}
-
-	h := hmac.New(sha256.New, s.totpPendingKey())
-	h.Write(payloadBytes)
-	if !hmac.Equal(sig, h.Sum(nil)) {
-		return totpPendingLogin{}, false
-	}
-
-	payload := string(payloadBytes)
-	fields := strings.Split(payload, ":")
+	fields := strings.Split(string(payloadBytes), ":")
 	if len(fields) != 3 {
 		return totpPendingLogin{}, false
 	}

@@ -1,12 +1,8 @@
 package server
 
 import (
-	"crypto/hmac"
-	"crypto/sha256"
-	"encoding/base64"
 	"encoding/json"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/go-webauthn/webauthn/webauthn"
@@ -38,14 +34,9 @@ func (s *Server) setPasskeySessionCookie(w http.ResponseWriter, r *http.Request,
 		return err
 	}
 
-	mac := hmac.New(sha256.New, s.passkeySessionKey())
-	mac.Write(payload)
-	value := base64.RawURLEncoding.EncodeToString(payload) + "." +
-		base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
-
 	http.SetCookie(w, &http.Cookie{
 		Name:     name,
-		Value:    value,
+		Value:    signValue(s.passkeySessionKey(), payload),
 		Path:     path,
 		Expires:  session.Expires,
 		MaxAge:   passkeyCookieMaxAge(session.Expires),
@@ -72,23 +63,8 @@ func (s *Server) passkeySessionFromCookie(r *http.Request, name string) (webauth
 		return webauthn.SessionData{}, false
 	}
 
-	parts := strings.SplitN(cookie.Value, ".", 2)
-	if len(parts) != 2 {
-		return webauthn.SessionData{}, false
-	}
-
-	payload, err := base64.RawURLEncoding.DecodeString(parts[0])
-	if err != nil {
-		return webauthn.SessionData{}, false
-	}
-	sig, err := base64.RawURLEncoding.DecodeString(parts[1])
-	if err != nil {
-		return webauthn.SessionData{}, false
-	}
-
-	mac := hmac.New(sha256.New, s.passkeySessionKey())
-	mac.Write(payload)
-	if !hmac.Equal(sig, mac.Sum(nil)) {
+	payload, ok := verifyValue(s.passkeySessionKey(), cookie.Value)
+	if !ok {
 		return webauthn.SessionData{}, false
 	}
 
