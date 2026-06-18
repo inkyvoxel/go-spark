@@ -23,9 +23,9 @@ const (
 )
 
 // passkeySessionKey derives the HMAC key used to sign the WebAuthn ceremony
-// cookie from the root CSRF key, matching the totp_pending cookie pattern.
+// cookie from the root cookie-signing key, matching the totp_pending cookie pattern.
 func (s *Server) passkeySessionKey() []byte {
-	return services.DeriveKey(s.csrfKey, "passkey_session")
+	return services.DeriveKey(s.cookieSigningKey, "passkey_session")
 }
 
 // setPasskeySessionCookie stores the WebAuthn SessionData in a short-lived,

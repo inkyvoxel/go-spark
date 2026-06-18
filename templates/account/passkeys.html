@@ -39,13 +39,11 @@
           </td>
           <td>
             <form method="post" action="{{ $.Routes.AccountPasskeysRename }}" class="passkey-inline-form">
-              <input type="hidden" name="csrf_token" value="{{ $.CSRFToken }}">
               <input type="hidden" name="credential_id" value="{{ .ID }}">
               <input type="text" name="name" value="{{ .Name }}" maxlength="64" aria-label="Passkey name" required>
               <button type="submit" class="secondary outline">Rename</button>
             </form>
             <form method="post" action="{{ $.Routes.AccountPasskeysDelete }}">
-              <input type="hidden" name="csrf_token" value="{{ $.CSRFToken }}">
               <input type="hidden" name="credential_id" value="{{ .ID }}">
               <button type="submit" class="secondary outline">Remove</button>
             </form>
@@ -76,7 +74,7 @@
     </label>
     <button type="submit" id="passkey-register-button" data-passkey-requires-support
       data-begin-url="{{ .Routes.AccountPasskeysRegisterBegin }}"
-      data-finish-url="{{ .Routes.AccountPasskeysRegisterFinish }}" data-csrf="{{ .CSRFToken }}">Add a passkey</button>
+      data-finish-url="{{ .Routes.AccountPasskeysRegisterFinish }}">Add a passkey</button>
   </form>
 </section>
 {{ end }}

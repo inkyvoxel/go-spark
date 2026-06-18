@@ -35,7 +35,7 @@ type Server struct {
 	cookieSecure      bool
 	crossOrigin       *http.CrossOriginProtection
 	passwordMinLength int
-	csrfKey           []byte
+	cookieSigningKey  []byte
 	flashKey          []byte
 	rateLimiter       *fixedWindowRateLimiter
 	rateLimitPolicies RateLimitPolicies
@@ -69,7 +69,7 @@ func New(opts Options) (*Server, error) {
 		passwordMinLength = services.DefaultPasswordMinLength
 	}
 	secretKeyBase := []byte(strings.TrimSpace(opts.SecretKeyBase))
-	csrfKey := services.DeriveKey(secretKeyBase, "csrf")
+	cookieSigningKey := services.DeriveKey(secretKeyBase, "cookie-signing")
 	flashKey := services.DeriveKey(secretKeyBase, "flash")
 	crossOrigin, err := newCrossOriginProtection(normalizeOrigin(opts.AppBaseURL))
 	if err != nil {
@@ -94,7 +94,7 @@ func New(opts Options) (*Server, error) {
 		cookieSecure:      opts.CookieSecure,
 		crossOrigin:       crossOrigin,
 		passwordMinLength: passwordMinLength,
-		csrfKey:           csrfKey,
+		cookieSigningKey:  cookieSigningKey,
 		flashKey:          flashKey,
 		rateLimiter:       newFixedWindowRateLimiter(),
 		rateLimitPolicies: ratelimit.Resolve(opts.RateLimitPolicies),
@@ -520,8 +520,17 @@ func isAuthSensitivePostPath(path string) bool {
 
 func (s *Server) limitRequestBody(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if isUnsafeMethod(r.Method) && r.Body != nil {
-			r.Body = http.MaxBytesReader(w, r.Body, maxRequestBodyBytes)
+		if isUnsafeMethod(r.Method) {
+			// Reject declared-oversize bodies up front so the limit holds
+			// regardless of which downstream reader touches the body first
+			// (e.g. the rate limiter parses the form before the handler does).
+			if r.ContentLength > maxRequestBodyBytes {
+				http.Error(w, http.StatusText(http.StatusRequestEntityTooLarge), http.StatusRequestEntityTooLarge)
+				return
+			}
+			if r.Body != nil {
+				r.Body = http.MaxBytesReader(w, r.Body, maxRequestBodyBytes)
+			}
 		}
 		next.ServeHTTP(w, r)
 	})

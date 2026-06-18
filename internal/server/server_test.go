@@ -407,7 +407,6 @@ func TestParseTemplatesLoginIncludesRememberMeSwitch(t *testing.T) {
 	err = templates[templateLogin].ExecuteTemplate(&body, templateLayout, templateData{
 		Title:        "Sign In",
 		Routes:       paths.TemplateRoutes,
-		CSRFToken:    "csrf",
 		EmailPattern: emailPattern,
 		FieldErrors:  map[string]string{},
 	})
@@ -455,10 +454,9 @@ func TestParseTemplatesTwoFactorChallengeEncodesNextInFormAction(t *testing.T) {
 
 	var body strings.Builder
 	err = templates[templateTwoFactorChallenge].ExecuteTemplate(&body, templateLayout, templateData{
-		Title:     "Two-Factor Authentication",
-		Routes:    paths.TemplateRoutes,
-		CSRFToken: "csrf",
-		Next:      "/account?tab=sessions",
+		Title:  "Two-Factor Authentication",
+		Routes: paths.TemplateRoutes,
+		Next:   "/account?tab=sessions",
 	})
 	if err != nil {
 		t.Fatalf("ExecuteTemplate() error = %v", err)
@@ -477,10 +475,10 @@ func testServer(t *testing.T) *Server {
 	t.Helper()
 
 	return &Server{
-		db:            testDB(t),
-		logger:        slog.New(slog.NewTextHandler(io.Discard, nil)),
-		csrfKey:       []byte("test-csrf-signing-key"),
-		postOnlyPaths: make(map[string]struct{}),
+		db:               testDB(t),
+		logger:           slog.New(slog.NewTextHandler(io.Discard, nil)),
+		cookieSigningKey: []byte("test-cookie-signing-key"),
+		postOnlyPaths:    make(map[string]struct{}),
 		templates: testTemplates(t, map[string]string{
 			templateHome:          `<h1>{{ .Title }}</h1>`,
 			templateNotFound:      `<h1>Page not found</h1>`,

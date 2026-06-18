@@ -163,11 +163,12 @@ Tighten to `p=quarantine` or `p=reject` once you are confident all legitimate se
 
 Keys are split across two roots by rotation cost: `SECRET_KEY_BASE` signs ephemeral state and is cheap to rotate, while `AUTH_TOTP_KEY` and `AUTH_PASSWORD_PEPPER` protect data at rest and are expensive to rotate. See [Secret Key Derivation](components.md#secret-key-derivation) for the full map.
 
-**`SECRET_KEY_BASE`** is the root for signing and ephemeral state: CSRF tokens, flash cookies, and the TOTP/passkey ceremony cookies. Rotating it:
+**`SECRET_KEY_BASE`** is the root for signing and ephemeral state: flash cookies and the TOTP/passkey ceremony cookies. Rotating it:
 
 * does **not** sign users out — session tokens are random values stored as unkeyed hashes, independent of this key
 * does **not** affect 2FA — TOTP secrets and backup codes derive from `AUTH_TOTP_KEY`, not this one
-* invalidates any in-flight CSRF tokens — forms submitted at the moment of rotation will fail once with a CSRF error, then succeed on retry, and any half-finished TOTP/passkey ceremony must be restarted
+* does **not** affect CSRF protection — that is origin-based (`Sec-Fetch-Site`/`Origin`) and uses no signed token
+* invalidates in-flight signed cookies — any half-finished TOTP or passkey ceremony must be restarted, and a queued flash message is dropped
 
 It is safe to rotate at any time if you suspect it is compromised. Generate a new value, update `.env`, and restart:
 

@@ -231,11 +231,6 @@ func (s *Server) passkeyLoginFinish(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.setSessionCookie(w, r, authSession, false)
-	if err := s.rotateCSRFCookieForSession(w, r, authSession.Token); err != nil {
-		s.loggerForRequest(r).Error("rotate csrf token after passkey login", "err", err)
-		s.writeJSONError(w, http.StatusInternalServerError, "Could not complete passkey sign-in.")
-		return
-	}
 
 	next := safeRedirectPath(r.URL.Query().Get("next"))
 	if !user.EmailVerifiedAt.Valid {

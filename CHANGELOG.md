@@ -18,7 +18,7 @@ This project follows a simple, human-written changelog format.
 * Auth service foundation with Argon2id password hashing and database-backed sessions.
 * SQLC auth queries for users and sessions.
 * Session middleware and current-user request context helpers.
-* CSRF token cookie, request validation middleware, and tests.
+* Cross-origin request protection (`Sec-Fetch-Site`/`Origin`) middleware and tests.
 * Register, login, logout, and authenticated account routes.
 * Account verification, resend verification, password reset, and account credential update flows.
 * Session management routes for revoking current or other active sessions.

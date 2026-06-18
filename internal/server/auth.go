@@ -177,7 +177,6 @@ func (s *Server) loadSession(next http.Handler) http.Handler {
 		user, err := s.auth.UserBySessionToken(r.Context(), cookie.Value)
 		if errors.Is(err, services.ErrInvalidSession) {
 			s.clearSessionCookie(w, r)
-			s.clearCSRFCookie(w, r)
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -282,7 +281,7 @@ func safeRedirectPath(value string) string {
 }
 
 func (s *Server) totpPendingKey() []byte {
-	return services.DeriveKey(s.csrfKey, "totp_pending")
+	return services.DeriveKey(s.cookieSigningKey, "totp_pending")
 }
 
 // setTOTPPendingCookie stores a short-lived signed cookie carrying the userID

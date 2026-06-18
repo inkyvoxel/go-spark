@@ -11,7 +11,6 @@
 <section id="account-change-email-section">
   {{ if .Error }}<p role="alert">{{ .Error }}</p>{{ end }}
   <form method="post" action="{{ .Routes.ChangeEmail }}">
-    <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
     <label>
       New email address
       <input type="email" name="email" value="{{ .Email }}" autocomplete="email" pattern="{{ .EmailPattern }}" {{ if

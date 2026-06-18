@@ -22,7 +22,6 @@ const emailPattern = `[^@\s]+@[^@\s]+\.[^@\s]+`
 type templateData struct {
 	Title             string
 	RequestID         string
-	CSRFToken         string
 	Routes            map[string]string
 	Breadcrumbs       []breadcrumbItem
 	Flash             *flashMessage
@@ -67,7 +66,6 @@ func newTemplateData(r *http.Request, title string) templateData {
 	data := templateData{
 		Title:             title,
 		RequestID:         requestID(r.Context()),
-		CSRFToken:         csrfToken(r.Context()),
 		Routes:            paths.TemplateRoutes,
 		EmailPattern:      emailPattern,
 		PasswordMinLength: services.DefaultPasswordMinLength,
@@ -253,7 +251,6 @@ func (s *Server) confirmEmailChange(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.clearSessionCookie(w, r)
-	s.clearCSRFCookie(w, r)
 	s.loggerForRequest(r).Info("auth email change confirmed")
 	data.Authenticated = false
 	data.Verified = false
@@ -323,11 +320,6 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.setSessionCookie(w, r, session, rememberMe)
-	if err := s.rotateCSRFCookieForSession(w, r, session.Token); err != nil {
-		s.loggerForRequest(r).Error("rotate csrf token after login", "err", err)
-		s.internalServerError(w, r)
-		return
-	}
 	s.loggerForRequest(r).Info("auth login succeeded", "user_id", user.ID)
 	http.Redirect(w, r, next, http.StatusSeeOther)
 }
@@ -347,7 +339,6 @@ func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.clearSessionCookie(w, r)
-	s.clearCSRFCookie(w, r)
 	s.loggerForRequest(r).Info("auth logout succeeded")
 	http.Redirect(w, r, paths.Home, http.StatusSeeOther)
 }
@@ -389,7 +380,6 @@ func (s *Server) revokeSession(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case errors.Is(err, services.ErrInvalidSession):
 			s.clearSessionCookie(w, r)
-			s.clearCSRFCookie(w, r)
 			http.Redirect(w, r, paths.Login, http.StatusSeeOther)
 			return
 		case errors.Is(err, services.ErrCannotRevokeCurrentSession):
@@ -425,7 +415,6 @@ func (s *Server) revokeOtherSessions(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case errors.Is(err, services.ErrInvalidSession):
 			s.clearSessionCookie(w, r)
-			s.clearCSRFCookie(w, r)
 			http.Redirect(w, r, paths.Login, http.StatusSeeOther)
 			return
 		default:
@@ -531,7 +520,6 @@ func (s *Server) changePassword(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.clearSessionCookie(w, r)
-	s.clearCSRFCookie(w, r)
 	s.loggerForRequest(r).Info("auth password changed", "user_id", user.ID)
 	s.setFlash(w, r, flashSuccess("Your password has been changed. Sign in with your new password."))
 	http.Redirect(w, r, paths.Login, http.StatusSeeOther)
@@ -708,7 +696,6 @@ func (s *Server) deleteAccount(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.clearSessionCookie(w, r)
-	s.clearCSRFCookie(w, r)
 	s.loggerForRequest(r).Info("auth account deleted", "user_id", user.ID)
 	http.Redirect(w, r, paths.Home, http.StatusSeeOther)
 }
@@ -759,7 +746,6 @@ func (s *Server) populateAccountSessions(w http.ResponseWriter, r *http.Request,
 	if err != nil {
 		if errors.Is(err, services.ErrInvalidSession) {
 			s.clearSessionCookie(w, r)
-			s.clearCSRFCookie(w, r)
 			http.Redirect(w, r, paths.Login, http.StatusSeeOther)
 			return false
 		}

@@ -20,7 +20,6 @@
   <p>Two-factor authentication adds an extra layer of security to your account. When enabled, you'll need your
     authenticator app in addition to your password to sign in.</p>
   <form method="post" action="{{ .Routes.AccountTwoFactorSetup }}">
-    <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
     <button type="submit">Enable two-factor authentication</button>
   </form>
 </section>
@@ -37,7 +36,6 @@
   <pre><code>{{ .TOTPSecret }}</code></pre>
 
   <form method="post" action="{{ .Routes.AccountTwoFactorConfirm }}">
-    <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
     <label>
       Verification code
       <input type="text" name="code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6"
@@ -46,7 +44,6 @@
     <button type="submit">Confirm and enable</button>
   </form>
   <form method="post" action="{{ .Routes.AccountTwoFactorSetup }}">
-    <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
     <button type="submit" class="secondary outline">Generate a new code</button>
   </form>
 </section>
@@ -62,7 +59,6 @@
   <p>This will invalidate your existing backup codes and generate a new set. Enter a code from your authenticator app
     or an existing backup code to continue.</p>
   <form method="post" action="{{ .Routes.AccountTwoFactorRegenerateCodes }}">
-    <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
     <label>
       Code
       <input type="text" name="code" autocomplete="one-time-code" maxlength="39"
@@ -75,7 +71,6 @@
   <h2>Disable two-factor authentication</h2>
   <p>Enter a code from your authenticator app, or one of your backup codes, to disable two-factor authentication.</p>
   <form method="post" action="{{ .Routes.AccountTwoFactorDisable }}">
-    <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
     <label>
       Code
       <input type="text" name="code" autocomplete="one-time-code" maxlength="39"

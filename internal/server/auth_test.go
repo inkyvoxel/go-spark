@@ -607,9 +607,9 @@ func newAuthMiddlewareTestServer(auth authService) *Server {
 		panic(err)
 	}
 	return &Server{
-		auth:        auth,
-		logger:      slog.New(slog.NewTextHandler(io.Discard, nil)),
-		crossOrigin: crossOrigin,
-		csrfKey:     []byte("test-csrf-signing-key"),
+		auth:             auth,
+		logger:           slog.New(slog.NewTextHandler(io.Discard, nil)),
+		crossOrigin:      crossOrigin,
+		cookieSigningKey: []byte("test-cookie-signing-key"),
 	}
 }

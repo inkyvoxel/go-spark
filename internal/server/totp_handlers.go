@@ -268,12 +268,6 @@ func (s *Server) twoFactorChallenge(w http.ResponseWriter, r *http.Request) {
 
 	s.clearTOTPPendingCookie(w, r)
 	s.setSessionCookie(w, r, session, pendingLogin.RememberMe)
-	if err := s.rotateCSRFCookieForSession(w, r, session.Token); err != nil {
-		s.loggerForRequest(r).Error("rotate csrf token after TOTP login", "err", err)
-		s.internalServerError(w, r)
-		return
-	}
-
 	s.loggerForRequest(r).Info("auth TOTP login succeeded", "user_id", pendingLogin.UserID)
 	if next == "" {
 		next = paths.Account

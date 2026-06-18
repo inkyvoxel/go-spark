@@ -59,8 +59,8 @@ func Build(cfg config.Config, logger *slog.Logger) (Runtime, error) {
 
 func buildRuntime(cfg config.Config, logger *slog.Logger, db *sql.DB, secretKeyBase string) (Runtime, error) {
 	// TOTP secrets and backup codes are protected at rest under a dedicated root
-	// key, separate from SECRET_KEY_BASE. This keeps signing-key rotation (CSRF,
-	// flash, ceremony cookies) cheap — it no longer invalidates anyone's second
+	// key, separate from SECRET_KEY_BASE. This keeps signing-key rotation (flash
+	// and ceremony cookies) cheap — it no longer invalidates anyone's second
 	// factor. Rotating AUTH_TOTP_KEY, by contrast, forces 2FA re-enrolment.
 	totpKey := []byte(strings.TrimSpace(cfg.TOTPKey))
 

@@ -11,7 +11,6 @@
 <section id="resend-verification-form-section">
   {{ if .Error }}<p role="alert">{{ .Error }}</p>{{ end }}
   <form method="post" action="{{ .Routes.ResendVerification }}">
-    <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
     <label>
       Email
       <input type="email" name="email" value="{{ .Email }}" autocomplete="email" pattern="{{ .EmailPattern }}" {{ if

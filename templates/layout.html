@@ -29,7 +29,6 @@
     </nav>
     {{ if .Authenticated }}
     <form id="logout-form" method="post" action="{{ .Routes.Logout }}" hidden>
-      <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
     </form>
     {{ end }}
   </header>

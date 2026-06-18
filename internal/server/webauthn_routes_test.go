@@ -9,15 +9,16 @@ import (
 	"github.com/inkyvoxel/go-spark/internal/paths"
 )
 
-func TestRoutesPasskeyLoginBeginRequiresCSRF(t *testing.T) {
+func TestRoutesPasskeyLoginBeginRejectsCrossOrigin(t *testing.T) {
 	srv := newAuthRouteTestServer(t, &fakeAuthLookup{passkeysEnabled: true})
 
 	req := httptest.NewRequest(http.MethodPost, paths.LoginPasskeyBegin, nil)
+	req.Header.Set("Sec-Fetch-Site", "cross-site")
 	rec := httptest.NewRecorder()
 	srv.Routes().ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusForbidden {
-		t.Fatalf("status = %d, want %d (missing CSRF)", rec.Code, http.StatusForbidden)
+		t.Fatalf("status = %d, want %d (cross-origin)", rec.Code, http.StatusForbidden)
 	}
 }
 
@@ -25,7 +26,7 @@ func TestRoutesPasskeyLoginBeginReturnsJSON(t *testing.T) {
 	srv := newAuthRouteTestServer(t, &fakeAuthLookup{passkeysEnabled: true})
 
 	req := httptest.NewRequest(http.MethodPost, paths.LoginPasskeyBegin, nil)
-	addCSRFCookieAndHeader(t, srv, req)
+	setSameOriginFetch(req)
 	rec := httptest.NewRecorder()
 	srv.Routes().ServeHTTP(rec, req)
 
@@ -49,7 +50,7 @@ func TestRoutesPasskeyLoginFinishWithoutCeremonyCookie(t *testing.T) {
 	srv := newAuthRouteTestServer(t, &fakeAuthLookup{passkeysEnabled: true})
 
 	req := httptest.NewRequest(http.MethodPost, paths.LoginPasskeyFinish, strings.NewReader("{}"))
-	addCSRFCookieAndHeader(t, srv, req)
+	setSameOriginFetch(req)
 	rec := httptest.NewRecorder()
 	srv.Routes().ServeHTTP(rec, req)
 
@@ -62,7 +63,7 @@ func TestRoutesPasskeyRegisterBeginRequiresAuth(t *testing.T) {
 	srv := newAuthRouteTestServer(t, &fakeAuthLookup{passkeysEnabled: true})
 
 	req := httptest.NewRequest(http.MethodPost, paths.AccountPasskeysRegisterBegin, nil)
-	addCSRFCookieAndHeader(t, srv, req)
+	setSameOriginFetch(req)
 	rec := httptest.NewRecorder()
 	srv.Routes().ServeHTTP(rec, req)
 

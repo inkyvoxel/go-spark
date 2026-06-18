@@ -11,7 +11,6 @@
 <section id="verify-email-resend-section">
   <p role="status">Check your email to confirm your account.</p>
   <form method="post" action="{{ .Routes.VerifyEmailResend }}">
-    <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
     <button type="submit">Resend verification email</button>
   </form>
 </section>

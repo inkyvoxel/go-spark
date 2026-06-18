@@ -90,13 +90,14 @@
     };
   }
 
-  function postJSON(url, csrf, body) {
+  // Same-origin fetch: the browser sends Sec-Fetch-Site: same-origin, which the
+  // server's cross-origin protection uses in place of a CSRF token.
+  function postJSON(url, body) {
     return fetch(url, {
       method: "POST",
       credentials: "same-origin",
       headers: {
         "Content-Type": "application/json",
-        "X-CSRF-Token": csrf,
       },
       body: body === undefined ? undefined : JSON.stringify(body),
     });
@@ -141,7 +142,6 @@
     var errorEl = document.getElementById("passkey-error");
     var beginURL = button.getAttribute("data-begin-url");
     var finishURL = button.getAttribute("data-finish-url");
-    var csrf = button.getAttribute("data-csrf");
 
     form.addEventListener("submit", async function (event) {
       event.preventDefault();
@@ -149,7 +149,7 @@
       button.setAttribute("aria-busy", "true");
       button.disabled = true;
       try {
-        var beginResponse = await postJSON(beginURL, csrf);
+        var beginResponse = await postJSON(beginURL);
         if (!beginResponse.ok) {
           showError(errorEl, await readError(beginResponse, "Could not start passkey registration."));
           return;
@@ -163,7 +163,6 @@
         var name = nameInput && nameInput.value ? nameInput.value.trim() : "";
         var finishResponse = await postJSON(
           finishURL + "?name=" + encodeURIComponent(name),
-          csrf,
           encodeAttestation(credential)
         );
         if (!finishResponse.ok) {
@@ -197,12 +196,11 @@
     var errorEl = document.getElementById("passkey-login-error");
     var beginURL = container.getAttribute("data-begin-url");
     var finishURL = container.getAttribute("data-finish-url");
-    var csrf = container.getAttribute("data-csrf");
     var next = container.getAttribute("data-next") || "";
 
     async function authenticate(mediation) {
       clearError(errorEl);
-      var beginResponse = await postJSON(beginURL, csrf);
+      var beginResponse = await postJSON(beginURL);
       if (!beginResponse.ok) {
         if (mediation !== "conditional") {
           showError(errorEl, await readError(beginResponse, "Could not start passkey sign-in."));
@@ -219,7 +217,7 @@
         return;
       }
       var finishURLWithNext = next ? finishURL + "?next=" + encodeURIComponent(next) : finishURL;
-      var finishResponse = await postJSON(finishURLWithNext, csrf, encodeAssertion(credential));
+      var finishResponse = await postJSON(finishURLWithNext, encodeAssertion(credential));
       if (!finishResponse.ok) {
         showError(errorEl, await readError(finishResponse, "That passkey could not be verified."));
         return;

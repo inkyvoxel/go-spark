@@ -28,13 +28,12 @@ func TestRoutesLogin(t *testing.T) {
 	srv := newAuthRouteTestServer(t, auth)
 
 	form := url.Values{
-		"email":       []string{"user@example.com"},
-		"password":    []string{"password"},
-		csrfFieldName: []string{"csrf"},
+		"email":    []string{"user@example.com"},
+		"password": []string{"password"},
 	}
 	req := httptest.NewRequest(http.MethodPost, paths.Login, strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	addCSRFCookieAndHeader(t, srv, req)
+	setSameOriginFetch(req)
 	rec := httptest.NewRecorder()
 
 	srv.Routes().ServeHTTP(rec, req)
@@ -62,10 +61,6 @@ func TestRoutesLogin(t *testing.T) {
 	if !session.HttpOnly {
 		t.Fatal("session cookie HttpOnly = false, want true")
 	}
-	csrf := cookieFromRecorder(t, rec, csrfCookieName)
-	if !srv.validSignedCSRFToken(csrf.Value, csrfSessionHash("session-token"), time.Now().UTC()) {
-		t.Fatal("csrf token was not rotated to a valid session-bound token after login")
-	}
 }
 
 func TestRoutesLoginRememberMeSetsPersistentSessionCookie(t *testing.T) {
@@ -82,11 +77,10 @@ func TestRoutesLoginRememberMeSetsPersistentSessionCookie(t *testing.T) {
 		"email":       []string{"user@example.com"},
 		"password":    []string{"password"},
 		"remember_me": []string{"1"},
-		csrfFieldName: []string{"csrf"},
 	}
 	req := httptest.NewRequest(http.MethodPost, paths.Login, strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	addCSRFCookieAndHeader(t, srv, req)
+	setSameOriginFetch(req)
 	rec := httptest.NewRecorder()
 
 	srv.Routes().ServeHTTP(rec, req)
@@ -115,13 +109,12 @@ func TestRoutesLoginSetsSecureSessionCookieWhenConfigured(t *testing.T) {
 	srv.cookieSecure = true
 
 	form := url.Values{
-		"email":       []string{"user@example.com"},
-		"password":    []string{"password"},
-		csrfFieldName: []string{"csrf"},
+		"email":    []string{"user@example.com"},
+		"password": []string{"password"},
 	}
 	req := httptest.NewRequest(http.MethodPost, paths.Login, strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	addCSRFCookieAndHeader(t, srv, req)
+	setSameOriginFetch(req)
 	rec := httptest.NewRecorder()
 
 	srv.Routes().ServeHTTP(rec, req)
@@ -143,14 +136,13 @@ func TestRoutesLoginRedirectsToSafeNextPath(t *testing.T) {
 	srv := newAuthRouteTestServer(t, auth)
 
 	form := url.Values{
-		"email":       []string{"user@example.com"},
-		"password":    []string{"password"},
-		"next":        []string{"/dashboard?tab=home"},
-		csrfFieldName: []string{"csrf"},
+		"email":    []string{"user@example.com"},
+		"password": []string{"password"},
+		"next":     []string{"/dashboard?tab=home"},
 	}
 	req := httptest.NewRequest(http.MethodPost, paths.Login, strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	addCSRFCookieAndHeader(t, srv, req)
+	setSameOriginFetch(req)
 	rec := httptest.NewRecorder()
 
 	srv.Routes().ServeHTTP(rec, req)
@@ -174,14 +166,13 @@ func TestRoutesLoginRejectsUnsafeNextPath(t *testing.T) {
 	srv := newAuthRouteTestServer(t, auth)
 
 	form := url.Values{
-		"email":       []string{"user@example.com"},
-		"password":    []string{"password"},
-		"next":        []string{"https://evil.example"},
-		csrfFieldName: []string{"csrf"},
+		"email":    []string{"user@example.com"},
+		"password": []string{"password"},
+		"next":     []string{"https://evil.example"},
 	}
 	req := httptest.NewRequest(http.MethodPost, paths.Login, strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	addCSRFCookieAndHeader(t, srv, req)
+	setSameOriginFetch(req)
 	rec := httptest.NewRecorder()
 
 	srv.Routes().ServeHTTP(rec, req)
@@ -209,11 +200,10 @@ func TestRoutesLoginWithTOTPRemembersPersistentCookieChoice(t *testing.T) {
 		"email":       []string{"user@example.com"},
 		"password":    []string{"password"},
 		"remember_me": []string{"1"},
-		csrfFieldName: []string{"csrf"},
 	}
 	loginReq := httptest.NewRequest(http.MethodPost, paths.Login, strings.NewReader(loginForm.Encode()))
 	loginReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	addCSRFCookieAndHeader(t, srv, loginReq)
+	setSameOriginFetch(loginReq)
 	loginRec := httptest.NewRecorder()
 
 	srv.Routes().ServeHTTP(loginRec, loginReq)
@@ -224,13 +214,12 @@ func TestRoutesLoginWithTOTPRemembersPersistentCookieChoice(t *testing.T) {
 	pending := cookieFromRecorder(t, loginRec, totpPendingCookieName)
 
 	challengeForm := url.Values{
-		"code":        []string{"123456"},
-		csrfFieldName: []string{"csrf"},
+		"code": []string{"123456"},
 	}
 	challengeReq := httptest.NewRequest(http.MethodPost, paths.AccountTwoFactorChallenge, strings.NewReader(challengeForm.Encode()))
 	challengeReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	challengeReq.AddCookie(pending)
-	addCSRFCookieAndHeader(t, srv, challengeReq)
+	setSameOriginFetch(challengeReq)
 	challengeRec := httptest.NewRecorder()
 
 	srv.Routes().ServeHTTP(challengeRec, challengeReq)
@@ -254,21 +243,14 @@ func TestRoutesLoginRejectsOversizedBody(t *testing.T) {
 	auth := &fakeAuthLookup{}
 	srv := newAuthRouteTestServer(t, auth)
 
-	token, err := srv.newSignedCSRFToken(csrfAnonymousSessionHash, time.Now().UTC())
-	if err != nil {
-		t.Fatalf("newSignedCSRFToken() error = %v", err)
-	}
-
 	overSizedPayload := strings.Repeat("a", maxRequestBodyBytes+1024)
 	form := url.Values{
-		"email":       []string{"user@example.com"},
-		"password":    []string{"password"},
-		csrfFieldName: []string{token},
-		"payload":     []string{overSizedPayload},
+		"email":    []string{"user@example.com"},
+		"password": []string{"password"},
+		"payload":  []string{overSizedPayload},
 	}
 	req := httptest.NewRequest(http.MethodPost, paths.Login, strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: token})
 	rec := httptest.NewRecorder()
 
 	srv.Routes().ServeHTTP(rec, req)
@@ -321,14 +303,13 @@ func TestRoutesLoginWithTOTPURLEncodesNestedNext(t *testing.T) {
 	srv := newAuthRouteTestServer(t, auth)
 
 	form := url.Values{
-		"email":       []string{"user@example.com"},
-		"password":    []string{"password"},
-		"next":        []string{"/account?tab=sessions"},
-		csrfFieldName: []string{"csrf"},
+		"email":    []string{"user@example.com"},
+		"password": []string{"password"},
+		"next":     []string{"/account?tab=sessions"},
 	}
 	req := httptest.NewRequest(http.MethodPost, paths.Login, strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	addCSRFCookieAndHeader(t, srv, req)
+	setSameOriginFetch(req)
 	rec := httptest.NewRecorder()
 
 	srv.Routes().ServeHTTP(rec, req)
@@ -354,13 +335,12 @@ func TestRoutesTwoFactorChallengePreservesNestedNext(t *testing.T) {
 	srv := newAuthRouteTestServer(t, auth)
 
 	loginForm := url.Values{
-		"email":       []string{"user@example.com"},
-		"password":    []string{"password"},
-		csrfFieldName: []string{"csrf"},
+		"email":    []string{"user@example.com"},
+		"password": []string{"password"},
 	}
 	loginReq := httptest.NewRequest(http.MethodPost, paths.Login, strings.NewReader(loginForm.Encode()))
 	loginReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	addCSRFCookieAndHeader(t, srv, loginReq)
+	setSameOriginFetch(loginReq)
 	loginRec := httptest.NewRecorder()
 	srv.Routes().ServeHTTP(loginRec, loginReq)
 	if loginRec.Code != http.StatusSeeOther {
@@ -369,14 +349,13 @@ func TestRoutesTwoFactorChallengePreservesNestedNext(t *testing.T) {
 	pending := cookieFromRecorder(t, loginRec, totpPendingCookieName)
 
 	challengeForm := url.Values{
-		"code":        []string{"123456"},
-		csrfFieldName: []string{"csrf"},
+		"code": []string{"123456"},
 	}
 	target := paths.AccountTwoFactorChallenge + "?next=" + url.QueryEscape("/account?tab=sessions")
 	req := httptest.NewRequest(http.MethodPost, target, strings.NewReader(challengeForm.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.AddCookie(pending)
-	addCSRFCookieAndHeader(t, srv, req)
+	setSameOriginFetch(req)
 	rec := httptest.NewRecorder()
 
 	srv.Routes().ServeHTTP(rec, req)
@@ -506,14 +485,13 @@ func TestRoutesLoginRedirectsUnverifiedUserToVerifyEmail(t *testing.T) {
 	srv := newAuthRouteTestServer(t, auth)
 
 	form := url.Values{
-		"email":       []string{"user@example.com"},
-		"password":    []string{"password"},
-		"next":        []string{"/dashboard?tab=home"},
-		csrfFieldName: []string{"csrf"},
+		"email":    []string{"user@example.com"},
+		"password": []string{"password"},
+		"next":     []string{"/dashboard?tab=home"},
 	}
 	req := httptest.NewRequest(http.MethodPost, paths.Login, strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	addCSRFCookieAndHeader(t, srv, req)
+	setSameOriginFetch(req)
 	rec := httptest.NewRecorder()
 
 	srv.Routes().ServeHTTP(rec, req)
@@ -540,11 +518,10 @@ func TestRoutesRegister(t *testing.T) {
 		"email":            []string{"new@example.com"},
 		"password":         []string{"password"},
 		"confirm_password": []string{"password"},
-		csrfFieldName:      []string{"csrf"},
 	}
 	req := httptest.NewRequest(http.MethodPost, paths.Register, strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	addCSRFCookieAndHeader(t, srv, req)
+	setSameOriginFetch(req)
 	rec := httptest.NewRecorder()
 
 	srv.Routes().ServeHTTP(rec, req)
@@ -596,11 +573,10 @@ func TestRoutesRegisterRejectsMismatchedPasswordConfirmation(t *testing.T) {
 		"email":            []string{"new@example.com"},
 		"password":         []string{"password"},
 		"confirm_password": []string{"different"},
-		csrfFieldName:      []string{"csrf"},
 	}
 	req := httptest.NewRequest(http.MethodPost, paths.Register, strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	addCSRFCookieAndHeader(t, srv, req)
+	setSameOriginFetch(req)
 	rec := httptest.NewRecorder()
 
 	srv.Routes().ServeHTTP(rec, req)
@@ -620,10 +596,10 @@ func TestRoutesRegisterValidatesRequiredFields(t *testing.T) {
 	auth := &fakeAuthLookup{}
 	srv := newAuthRouteTestServer(t, auth)
 
-	form := url.Values{csrfFieldName: []string{"csrf"}}
+	form := url.Values{}
 	req := httptest.NewRequest(http.MethodPost, paths.Register, strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	addCSRFCookieAndHeader(t, srv, req)
+	setSameOriginFetch(req)
 	rec := httptest.NewRecorder()
 
 	srv.Routes().ServeHTTP(rec, req)
@@ -836,11 +812,11 @@ func TestRoutesLogout(t *testing.T) {
 	auth := &fakeAuthLookup{}
 	srv := newAuthRouteTestServer(t, auth)
 
-	form := url.Values{csrfFieldName: []string{"csrf"}}
+	form := url.Values{}
 	req := httptest.NewRequest(http.MethodPost, paths.Logout, strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.AddCookie(&http.Cookie{Name: sessionCookieName, Value: "session-token"})
-	addCSRFCookieAndHeader(t, srv, req)
+	setSameOriginFetch(req)
 	rec := httptest.NewRecorder()
 
 	srv.Routes().ServeHTTP(rec, req)
@@ -854,10 +830,6 @@ func TestRoutesLogout(t *testing.T) {
 	session := cookieFromRecorder(t, rec, sessionCookieName)
 	if session.MaxAge != -1 {
 		t.Fatalf("session MaxAge = %d, want %d", session.MaxAge, -1)
-	}
-	csrf := cookieFromRecorder(t, rec, csrfCookieName)
-	if csrf.MaxAge != -1 {
-		t.Fatalf("csrf MaxAge = %d, want %d", csrf.MaxAge, -1)
 	}
 }
 
@@ -945,13 +917,12 @@ func TestRoutesRevokeSessionRejectsCurrentSession(t *testing.T) {
 	srv := newAuthRouteTestServer(t, auth)
 
 	form := url.Values{
-		"session_id":  []string{"7"},
-		csrfFieldName: []string{"csrf"},
+		"session_id": []string{"7"},
 	}
 	req := httptest.NewRequest(http.MethodPost, paths.AccountSessionsRevoke, strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.AddCookie(&http.Cookie{Name: sessionCookieName, Value: "session-token"})
-	addCSRFCookieAndHeader(t, srv, req)
+	setSameOriginFetch(req)
 	rec := httptest.NewRecorder()
 
 	srv.Routes().ServeHTTP(rec, req)
@@ -970,13 +941,11 @@ func TestRoutesRevokeOtherSessionsRedirects(t *testing.T) {
 	}
 	srv := newAuthRouteTestServer(t, auth)
 
-	form := url.Values{
-		csrfFieldName: []string{"csrf"},
-	}
+	form := url.Values{}
 	req := httptest.NewRequest(http.MethodPost, paths.AccountSessionsRevokeOthers, strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.AddCookie(&http.Cookie{Name: sessionCookieName, Value: "session-token"})
-	addCSRFCookieAndHeader(t, srv, req)
+	setSameOriginFetch(req)
 	rec := httptest.NewRecorder()
 
 	srv.Routes().ServeHTTP(rec, req)
@@ -1166,12 +1135,11 @@ func TestRoutesChangeEmail(t *testing.T) {
 	form := url.Values{
 		"email":            []string{"new@example.com"},
 		"current_password": []string{"password"},
-		csrfFieldName:      []string{"csrf"},
 	}
 	req := httptest.NewRequest(http.MethodPost, paths.ChangeEmail, strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.AddCookie(&http.Cookie{Name: sessionCookieName, Value: "session-token"})
-	addCSRFCookieAndHeader(t, srv, req)
+	setSameOriginFetch(req)
 	rec := httptest.NewRecorder()
 
 	srv.Routes().ServeHTTP(rec, req)
@@ -1196,11 +1164,11 @@ func TestRoutesChangeEmailValidatesFields(t *testing.T) {
 	}
 	srv := newAuthRouteTestServer(t, auth)
 
-	form := url.Values{csrfFieldName: []string{"csrf"}}
+	form := url.Values{}
 	req := httptest.NewRequest(http.MethodPost, paths.ChangeEmail, strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.AddCookie(&http.Cookie{Name: sessionCookieName, Value: "session-token"})
-	addCSRFCookieAndHeader(t, srv, req)
+	setSameOriginFetch(req)
 	rec := httptest.NewRecorder()
 
 	srv.Routes().ServeHTTP(rec, req)
@@ -1228,12 +1196,11 @@ func TestRoutesChangeEmailRejectsServiceValidation(t *testing.T) {
 	form := url.Values{
 		"email":            []string{"same@example.com"},
 		"current_password": []string{"password"},
-		csrfFieldName:      []string{"csrf"},
 	}
 	req := httptest.NewRequest(http.MethodPost, paths.ChangeEmail, strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.AddCookie(&http.Cookie{Name: sessionCookieName, Value: "session-token"})
-	addCSRFCookieAndHeader(t, srv, req)
+	setSameOriginFetch(req)
 	rec := httptest.NewRecorder()
 
 	srv.Routes().ServeHTTP(rec, req)
@@ -1246,7 +1213,7 @@ func TestRoutesChangeEmailRejectsServiceValidation(t *testing.T) {
 	}
 }
 
-func TestRoutesChangeEmailRequiresCSRF(t *testing.T) {
+func TestRoutesChangeEmailRejectsCrossOrigin(t *testing.T) {
 	auth := &fakeAuthLookup{
 		user: verifiedRouteUser(),
 	}
@@ -1259,6 +1226,7 @@ func TestRoutesChangeEmailRequiresCSRF(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, paths.ChangeEmail, strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.AddCookie(&http.Cookie{Name: sessionCookieName, Value: "session-token"})
+	req.Header.Set("Sec-Fetch-Site", "cross-site")
 	rec := httptest.NewRecorder()
 
 	srv.Routes().ServeHTTP(rec, req)
@@ -1277,12 +1245,11 @@ func TestRoutesChangeEmailRequiresVerifiedEmail(t *testing.T) {
 	form := url.Values{
 		"email":            []string{"new@example.com"},
 		"current_password": []string{"password"},
-		csrfFieldName:      []string{"csrf"},
 	}
 	req := httptest.NewRequest(http.MethodPost, paths.ChangeEmail, strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.AddCookie(&http.Cookie{Name: sessionCookieName, Value: "session-token"})
-	addCSRFCookieAndHeader(t, srv, req)
+	setSameOriginFetch(req)
 	rec := httptest.NewRecorder()
 
 	srv.Routes().ServeHTTP(rec, req)
@@ -1301,11 +1268,11 @@ func TestRoutesResendVerification(t *testing.T) {
 	}
 	srv := newAuthRouteTestServer(t, auth)
 
-	form := url.Values{csrfFieldName: []string{"csrf"}}
+	form := url.Values{}
 	req := httptest.NewRequest(http.MethodPost, paths.VerifyEmailResend, strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.AddCookie(&http.Cookie{Name: sessionCookieName, Value: "session-token"})
-	addCSRFCookieAndHeader(t, srv, req)
+	setSameOriginFetch(req)
 	rec := httptest.NewRecorder()
 
 	srv.Routes().ServeHTTP(rec, req)
@@ -1331,11 +1298,11 @@ func TestRoutesResendVerificationHandlesError(t *testing.T) {
 	}
 	srv := newAuthRouteTestServer(t, auth)
 
-	form := url.Values{csrfFieldName: []string{"csrf"}}
+	form := url.Values{}
 	req := httptest.NewRequest(http.MethodPost, paths.VerifyEmailResend, strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.AddCookie(&http.Cookie{Name: sessionCookieName, Value: "session-token"})
-	addCSRFCookieAndHeader(t, srv, req)
+	setSameOriginFetch(req)
 	rec := httptest.NewRecorder()
 
 	srv.Routes().ServeHTTP(rec, req)
@@ -1348,7 +1315,7 @@ func TestRoutesResendVerificationHandlesError(t *testing.T) {
 	}
 }
 
-func TestRoutesResendVerificationRequiresCSRF(t *testing.T) {
+func TestRoutesResendVerificationRejectsCrossOrigin(t *testing.T) {
 	auth := &fakeAuthLookup{
 		user: services.User{ID: 1, Email: "user@example.com"},
 	}
@@ -1357,6 +1324,7 @@ func TestRoutesResendVerificationRequiresCSRF(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, paths.VerifyEmailResend, strings.NewReader(url.Values{}.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.AddCookie(&http.Cookie{Name: sessionCookieName, Value: "session-token"})
+	req.Header.Set("Sec-Fetch-Site", "cross-site")
 	rec := httptest.NewRecorder()
 
 	srv.Routes().ServeHTTP(rec, req)
@@ -1369,10 +1337,10 @@ func TestRoutesResendVerificationRequiresCSRF(t *testing.T) {
 func TestRoutesResendVerificationRequiresAuth(t *testing.T) {
 	srv := newAuthRouteTestServer(t, &fakeAuthLookup{})
 
-	form := url.Values{csrfFieldName: []string{"csrf"}}
+	form := url.Values{}
 	req := httptest.NewRequest(http.MethodPost, paths.VerifyEmailResend, strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	addCSRFCookieAndHeader(t, srv, req)
+	setSameOriginFetch(req)
 	rec := httptest.NewRecorder()
 
 	srv.Routes().ServeHTTP(rec, req)
@@ -1392,12 +1360,11 @@ func TestRoutesChangePassword(t *testing.T) {
 		"current_password": []string{"old-password"},
 		"new_password":     []string{"new-password"},
 		"confirm_password": []string{"new-password"},
-		csrfFieldName:      []string{"csrf"},
 	}
 	req := httptest.NewRequest(http.MethodPost, paths.ChangePassword, strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.AddCookie(&http.Cookie{Name: sessionCookieName, Value: "session-token"})
-	addCSRFCookieAndHeader(t, srv, req)
+	setSameOriginFetch(req)
 	rec := httptest.NewRecorder()
 
 	srv.Routes().ServeHTTP(rec, req)
@@ -1429,13 +1396,11 @@ func TestRoutesChangePasswordValidatesFields(t *testing.T) {
 	}
 	srv := newAuthRouteTestServer(t, auth)
 
-	form := url.Values{
-		csrfFieldName: []string{"csrf"},
-	}
+	form := url.Values{}
 	req := httptest.NewRequest(http.MethodPost, paths.ChangePassword, strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.AddCookie(&http.Cookie{Name: sessionCookieName, Value: "session-token"})
-	addCSRFCookieAndHeader(t, srv, req)
+	setSameOriginFetch(req)
 	rec := httptest.NewRecorder()
 
 	srv.Routes().ServeHTTP(rec, req)
@@ -1465,12 +1430,11 @@ func TestRoutesChangePasswordRejectsIncorrectCurrentPassword(t *testing.T) {
 		"current_password": []string{"wrong-password"},
 		"new_password":     []string{"new-password"},
 		"confirm_password": []string{"new-password"},
-		csrfFieldName:      []string{"csrf"},
 	}
 	req := httptest.NewRequest(http.MethodPost, paths.ChangePassword, strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.AddCookie(&http.Cookie{Name: sessionCookieName, Value: "session-token"})
-	addCSRFCookieAndHeader(t, srv, req)
+	setSameOriginFetch(req)
 	rec := httptest.NewRecorder()
 
 	srv.Routes().ServeHTTP(rec, req)
@@ -1484,7 +1448,7 @@ func TestRoutesChangePasswordRejectsIncorrectCurrentPassword(t *testing.T) {
 	}
 }
 
-func TestRoutesChangePasswordRequiresCSRF(t *testing.T) {
+func TestRoutesChangePasswordRejectsCrossOrigin(t *testing.T) {
 	auth := &fakeAuthLookup{
 		user: verifiedRouteUser(),
 	}
@@ -1498,6 +1462,7 @@ func TestRoutesChangePasswordRequiresCSRF(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, paths.ChangePassword, strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.AddCookie(&http.Cookie{Name: sessionCookieName, Value: "session-token"})
+	req.Header.Set("Sec-Fetch-Site", "cross-site")
 	rec := httptest.NewRecorder()
 
 	srv.Routes().ServeHTTP(rec, req)
@@ -1514,11 +1479,10 @@ func TestRoutesChangePasswordRequiresAuth(t *testing.T) {
 		"current_password": []string{"old-password"},
 		"new_password":     []string{"new-password"},
 		"confirm_password": []string{"new-password"},
-		csrfFieldName:      []string{"csrf"},
 	}
 	req := httptest.NewRequest(http.MethodPost, paths.ChangePassword, strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	addCSRFCookieAndHeader(t, srv, req)
+	setSameOriginFetch(req)
 	rec := httptest.NewRecorder()
 
 	srv.Routes().ServeHTTP(rec, req)
@@ -1554,12 +1518,11 @@ func TestRoutesChangePasswordRequiresVerifiedEmail(t *testing.T) {
 		"current_password": []string{"old-password"},
 		"new_password":     []string{"new-password"},
 		"confirm_password": []string{"new-password"},
-		csrfFieldName:      []string{"csrf"},
 	}
 	req := httptest.NewRequest(http.MethodPost, paths.ChangePassword, strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.AddCookie(&http.Cookie{Name: sessionCookieName, Value: "session-token"})
-	addCSRFCookieAndHeader(t, srv, req)
+	setSameOriginFetch(req)
 	rec := httptest.NewRecorder()
 
 	srv.Routes().ServeHTTP(rec, req)
@@ -1614,12 +1577,11 @@ func TestRoutesPublicResendVerification(t *testing.T) {
 	srv := newAuthRouteTestServer(t, auth)
 
 	form := url.Values{
-		"email":       []string{"user@example.com"},
-		csrfFieldName: []string{"csrf"},
+		"email": []string{"user@example.com"},
 	}
 	req := httptest.NewRequest(http.MethodPost, paths.ResendVerification, strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	addCSRFCookieAndHeader(t, srv, req)
+	setSameOriginFetch(req)
 	rec := httptest.NewRecorder()
 
 	srv.Routes().ServeHTTP(rec, req)
@@ -1645,12 +1607,11 @@ func TestRoutesPublicResendVerificationRejectsInvalidEmail(t *testing.T) {
 	srv := newAuthRouteTestServer(t, auth)
 
 	form := url.Values{
-		"email":       []string{"not-an-email"},
-		csrfFieldName: []string{"csrf"},
+		"email": []string{"not-an-email"},
 	}
 	req := httptest.NewRequest(http.MethodPost, paths.ResendVerification, strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	addCSRFCookieAndHeader(t, srv, req)
+	setSameOriginFetch(req)
 	rec := httptest.NewRecorder()
 
 	srv.Routes().ServeHTTP(rec, req)
@@ -1670,12 +1631,11 @@ func TestRoutesPublicResendVerificationHandlesError(t *testing.T) {
 	srv := newAuthRouteTestServer(t, auth)
 
 	form := url.Values{
-		"email":       []string{"user@example.com"},
-		csrfFieldName: []string{"csrf"},
+		"email": []string{"user@example.com"},
 	}
 	req := httptest.NewRequest(http.MethodPost, paths.ResendVerification, strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	addCSRFCookieAndHeader(t, srv, req)
+	setSameOriginFetch(req)
 	rec := httptest.NewRecorder()
 
 	srv.Routes().ServeHTTP(rec, req)
@@ -1688,12 +1648,13 @@ func TestRoutesPublicResendVerificationHandlesError(t *testing.T) {
 	}
 }
 
-func TestRoutesPublicResendVerificationRequiresCSRF(t *testing.T) {
+func TestRoutesPublicResendVerificationRejectsCrossOrigin(t *testing.T) {
 	srv := newAuthRouteTestServer(t, &fakeAuthLookup{})
 
 	form := url.Values{"email": []string{"user@example.com"}}
 	req := httptest.NewRequest(http.MethodPost, paths.ResendVerification, strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("Sec-Fetch-Site", "cross-site")
 	rec := httptest.NewRecorder()
 
 	srv.Routes().ServeHTTP(rec, req)
@@ -1744,12 +1705,11 @@ func TestRoutesForgotPassword(t *testing.T) {
 	srv := newAuthRouteTestServer(t, auth)
 
 	form := url.Values{
-		"email":       []string{"user@example.com"},
-		csrfFieldName: []string{"csrf"},
+		"email": []string{"user@example.com"},
 	}
 	req := httptest.NewRequest(http.MethodPost, paths.ForgotPassword, strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	addCSRFCookieAndHeader(t, srv, req)
+	setSameOriginFetch(req)
 	rec := httptest.NewRecorder()
 
 	srv.Routes().ServeHTTP(rec, req)
@@ -1772,12 +1732,11 @@ func TestRoutesForgotPasswordRejectsInvalidEmail(t *testing.T) {
 	srv := newAuthRouteTestServer(t, auth)
 
 	form := url.Values{
-		"email":       []string{"not-an-email"},
-		csrfFieldName: []string{"csrf"},
+		"email": []string{"not-an-email"},
 	}
 	req := httptest.NewRequest(http.MethodPost, paths.ForgotPassword, strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	addCSRFCookieAndHeader(t, srv, req)
+	setSameOriginFetch(req)
 	rec := httptest.NewRecorder()
 
 	srv.Routes().ServeHTTP(rec, req)
@@ -1797,12 +1756,11 @@ func TestRoutesForgotPasswordHandlesError(t *testing.T) {
 	srv := newAuthRouteTestServer(t, auth)
 
 	form := url.Values{
-		"email":       []string{"user@example.com"},
-		csrfFieldName: []string{"csrf"},
+		"email": []string{"user@example.com"},
 	}
 	req := httptest.NewRequest(http.MethodPost, paths.ForgotPassword, strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	addCSRFCookieAndHeader(t, srv, req)
+	setSameOriginFetch(req)
 	rec := httptest.NewRecorder()
 
 	srv.Routes().ServeHTTP(rec, req)
@@ -1815,12 +1773,13 @@ func TestRoutesForgotPasswordHandlesError(t *testing.T) {
 	}
 }
 
-func TestRoutesForgotPasswordRequiresCSRF(t *testing.T) {
+func TestRoutesForgotPasswordRejectsCrossOrigin(t *testing.T) {
 	srv := newAuthRouteTestServer(t, &fakeAuthLookup{})
 
 	form := url.Values{"email": []string{"user@example.com"}}
 	req := httptest.NewRequest(http.MethodPost, paths.ForgotPassword, strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("Sec-Fetch-Site", "cross-site")
 	rec := httptest.NewRecorder()
 
 	srv.Routes().ServeHTTP(rec, req)
@@ -1973,12 +1932,11 @@ func TestRoutesResetPassword(t *testing.T) {
 	form := url.Values{
 		"new_password":     []string{"new-password"},
 		"confirm_password": []string{"new-password"},
-		csrfFieldName:      []string{"csrf"},
 	}
 	req := httptest.NewRequest(http.MethodPost, paths.ResetPassword, strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.AddCookie(&http.Cookie{Name: resetCookieName, Value: "raw-token"})
-	addCSRFCookieAndHeader(t, srv, req)
+	setSameOriginFetch(req)
 	rec := httptest.NewRecorder()
 
 	srv.Routes().ServeHTTP(rec, req)
@@ -2001,13 +1959,11 @@ func TestRoutesResetPassword(t *testing.T) {
 func TestRoutesResetPasswordValidatesFields(t *testing.T) {
 	srv := newAuthRouteTestServer(t, &fakeAuthLookup{})
 
-	form := url.Values{
-		csrfFieldName: []string{"csrf"},
-	}
+	form := url.Values{}
 	req := httptest.NewRequest(http.MethodPost, paths.ResetPassword, strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.AddCookie(&http.Cookie{Name: resetCookieName, Value: "raw-token"})
-	addCSRFCookieAndHeader(t, srv, req)
+	setSameOriginFetch(req)
 	rec := httptest.NewRecorder()
 
 	srv.Routes().ServeHTTP(rec, req)
@@ -2032,12 +1988,11 @@ func TestRoutesResetPasswordRejectsInvalidToken(t *testing.T) {
 	form := url.Values{
 		"new_password":     []string{"new-password"},
 		"confirm_password": []string{"new-password"},
-		csrfFieldName:      []string{"csrf"},
 	}
 	req := httptest.NewRequest(http.MethodPost, paths.ResetPassword, strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.AddCookie(&http.Cookie{Name: resetCookieName, Value: "bad-token"})
-	addCSRFCookieAndHeader(t, srv, req)
+	setSameOriginFetch(req)
 	rec := httptest.NewRecorder()
 
 	srv.Routes().ServeHTTP(rec, req)
@@ -2054,7 +2009,7 @@ func TestRoutesResetPasswordRejectsInvalidToken(t *testing.T) {
 	}
 }
 
-func TestRoutesResetPasswordRequiresCSRF(t *testing.T) {
+func TestRoutesResetPasswordRejectsCrossOrigin(t *testing.T) {
 	srv := newAuthRouteTestServer(t, &fakeAuthLookup{})
 
 	form := url.Values{
@@ -2064,6 +2019,7 @@ func TestRoutesResetPasswordRequiresCSRF(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, paths.ResetPassword, strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.AddCookie(&http.Cookie{Name: resetCookieName, Value: "raw-token"})
+	req.Header.Set("Sec-Fetch-Site", "cross-site")
 	rec := httptest.NewRecorder()
 
 	srv.Routes().ServeHTTP(rec, req)
@@ -2093,23 +2049,23 @@ func newAuthRouteTestServer(t *testing.T, auth authService) *Server {
 	t.Helper()
 
 	return &Server{
-		db:            testDB(t),
-		auth:          auth,
-		logger:        slog.New(slog.NewTextHandler(io.Discard, nil)),
-		csrfKey:       []byte("test-csrf-signing-key"),
-		postOnlyPaths: make(map[string]struct{}),
+		db:               testDB(t),
+		auth:             auth,
+		logger:           slog.New(slog.NewTextHandler(io.Discard, nil)),
+		cookieSigningKey: []byte("test-cookie-signing-key"),
+		postOnlyPaths:    make(map[string]struct{}),
 		templates: testTemplates(t, map[string]string{
 			templateHome:               `home {{ if .Authenticated }}Account Sign out {{ .User.Email }}{{ else }}Sign in Create account{{ end }}`,
-			templateRegister:           `{{ define "content" }}{{ template "register_form_section" . }}{{ end }}{{ define "register_form_section" }}register {{ .Error }} {{ with index .FieldErrors "email" }}{{ . }}{{ end }} {{ with index .FieldErrors "password" }}{{ . }}{{ end }} {{ with index .FieldErrors "confirm_password" }}{{ . }}{{ end }} {{ .Email }} {{ .PasswordMinLength }} {{ .CSRFToken }}{{ end }}`,
-			templateLogin:              `{{ define "content" }}{{ template "login_form_section" . }} ` + paths.ForgotPassword + ` ` + paths.ResendVerification + `{{ end }}{{ define "login_form_section" }}login {{ .Error }} {{ with index .FieldErrors "email" }}{{ . }}{{ end }} {{ with index .FieldErrors "password" }}{{ . }}{{ end }} {{ .CSRFToken }} {{ .Next }} flash={{ if .Flash }}{{ .Flash.Type }}:{{ .Flash.Message }}{{ end }}{{ end }}`,
-			templateAccount:            `{{ define "content" }}account {{ .User.Email }} {{ .Routes.ChangePassword }} {{ .Routes.ChangeEmail }} {{ .CSRFToken }} flash={{ if .Flash }}{{ .Flash.Type }}:{{ .Flash.Message }}{{ end }} {{ template "account_sessions_section" . }}{{ end }}{{ define "account_sessions_section" }}sessions {{ if .Error }}error={{ .Error }}{{ end }} revoke={{ .Routes.AccountSessionsRevoke }} revoke-others={{ .Routes.AccountSessionsRevokeOthers }} {{ range .ManagedSessions }}session={{ .ID }}:{{ .Current }} {{ end }}{{ end }}`,
+			templateRegister:           `{{ define "content" }}{{ template "register_form_section" . }}{{ end }}{{ define "register_form_section" }}register {{ .Error }} {{ with index .FieldErrors "email" }}{{ . }}{{ end }} {{ with index .FieldErrors "password" }}{{ . }}{{ end }} {{ with index .FieldErrors "confirm_password" }}{{ . }}{{ end }} {{ .Email }} {{ .PasswordMinLength }} {{ end }}`,
+			templateLogin:              `{{ define "content" }}{{ template "login_form_section" . }} ` + paths.ForgotPassword + ` ` + paths.ResendVerification + `{{ end }}{{ define "login_form_section" }}login {{ .Error }} {{ with index .FieldErrors "email" }}{{ . }}{{ end }} {{ with index .FieldErrors "password" }}{{ . }}{{ end }}  {{ .Next }} flash={{ if .Flash }}{{ .Flash.Type }}:{{ .Flash.Message }}{{ end }}{{ end }}`,
+			templateAccount:            `{{ define "content" }}account {{ .User.Email }} {{ .Routes.ChangePassword }} {{ .Routes.ChangeEmail }}  flash={{ if .Flash }}{{ .Flash.Type }}:{{ .Flash.Message }}{{ end }} {{ template "account_sessions_section" . }}{{ end }}{{ define "account_sessions_section" }}sessions {{ if .Error }}error={{ .Error }}{{ end }} revoke={{ .Routes.AccountSessionsRevoke }} revoke-others={{ .Routes.AccountSessionsRevokeOthers }} {{ range .ManagedSessions }}session={{ .ID }}:{{ .Current }} {{ end }}{{ end }}`,
 			templateChangeEmail:        `{{ define "content" }}change-email-page {{ .Routes.Account }} {{ range .Breadcrumbs }}breadcrumb={{ .Label }}:{{ .URL }}:{{ .Current }} {{ end }}{{ template "change_email_form_section" . }}{{ end }}{{ define "change_email_form_section" }}change-email-visible button-label=send-verification {{ .Error }} {{ .Email }} {{ with index .FieldErrors "email" }}{{ . }}{{ end }} {{ with index .FieldErrors "current_password" }}{{ . }}{{ end }}{{ end }}`,
 			templateChangePassword:     `{{ define "content" }}change-password-page {{ .Routes.Account }} {{ range .Breadcrumbs }}breadcrumb={{ .Label }}:{{ .URL }}:{{ .Current }} {{ end }}{{ template "change_password_form_section" . }}{{ end }}{{ define "change_password_form_section" }}change-password-visible {{ .Error }} {{ with index .FieldErrors "current_password" }}{{ . }}{{ end }} {{ with index .FieldErrors "new_password" }}{{ . }}{{ end }} {{ with index .FieldErrors "confirm_password" }}{{ . }}{{ end }}{{ end }}`,
 			templateConfirmEmail:       `confirm {{ if .Error }}{{ .Error }} {{ if .Authenticated }}Go to your account{{ else }}Sign in{{ end }}{{ else }}Email confirmed{{ end }}`,
 			templateConfirmEmailChange: `confirm-email-change {{ .Error }} authenticated={{ .Authenticated }} {{ .Routes.Login }}`,
-			templateForgotPassword:     `{{ define "content" }}{{ template "forgot_password_form_section" . }}{{ end }}{{ define "forgot_password_form_section" }}forgot-form {{ .Error }} {{ with index .FieldErrors "email" }}{{ . }}{{ end }} {{ .Email }} flash={{ if .Flash }}{{ .Flash.Type }}:{{ .Flash.Message }}{{ end }} {{ .CSRFToken }}{{ end }}`,
-			templateResetPassword:      `{{ define "content" }}{{ if .ResetTokenInvalid }}{{ .Error }}{{ else }}{{ template "reset_password_form_section" . }}{{ end }}{{ end }}{{ define "reset_password_form_section" }}reset-form {{ .Error }} {{ with index .FieldErrors "new_password" }}{{ . }}{{ end }} {{ with index .FieldErrors "confirm_password" }}{{ . }}{{ end }} {{ if .ResetTokenInvalid }}invalid or has expired{{ end }} {{ .CSRFToken }}{{ end }}`,
-			templateResendVerification: `{{ define "content" }}{{ template "resend_verification_form_section" . }}{{ end }}{{ define "resend_verification_form_section" }}resend-form {{ .Error }} {{ with index .FieldErrors "email" }}{{ . }}{{ end }} {{ .Email }} flash={{ if .Flash }}{{ .Flash.Type }}:{{ .Flash.Message }}{{ end }} {{ .CSRFToken }}{{ end }}`,
+			templateForgotPassword:     `{{ define "content" }}{{ template "forgot_password_form_section" . }}{{ end }}{{ define "forgot_password_form_section" }}forgot-form {{ .Error }} {{ with index .FieldErrors "email" }}{{ . }}{{ end }} {{ .Email }} flash={{ if .Flash }}{{ .Flash.Type }}:{{ .Flash.Message }}{{ end }} {{ end }}`,
+			templateResetPassword:      `{{ define "content" }}{{ if .ResetTokenInvalid }}{{ .Error }}{{ else }}{{ template "reset_password_form_section" . }}{{ end }}{{ end }}{{ define "reset_password_form_section" }}reset-form {{ .Error }} {{ with index .FieldErrors "new_password" }}{{ . }}{{ end }} {{ with index .FieldErrors "confirm_password" }}{{ . }}{{ end }} {{ if .ResetTokenInvalid }}invalid or has expired{{ end }} {{ end }}`,
+			templateResendVerification: `{{ define "content" }}{{ template "resend_verification_form_section" . }}{{ end }}{{ define "resend_verification_form_section" }}resend-form {{ .Error }} {{ with index .FieldErrors "email" }}{{ . }}{{ end }} {{ .Email }} flash={{ if .Flash }}{{ .Flash.Type }}:{{ .Flash.Message }}{{ end }} {{ end }}`,
 			templateVerifyEmail:        `{{ define "content" }}verify-email {{ .User.Email }} {{ template "verify_email_resend_section" . }}{{ end }}{{ define "verify_email_resend_section" }}flash={{ if .Flash }}{{ .Flash.Type }}:{{ .Flash.Message }}{{ end }}{{ end }}`,
 		}),
 		passwordMinLength: 8,
@@ -2145,16 +2101,10 @@ func cookieFromRecorder(t *testing.T, rec *httptest.ResponseRecorder, name strin
 	return nil
 }
 
-func addCSRFCookieAndHeader(t *testing.T, srv *Server, req *http.Request) {
-	t.Helper()
-
-	token, err := srv.newSignedCSRFToken(csrfSessionHash(sessionTokenFromRequest(req)), time.Now().UTC())
-	if err != nil {
-		t.Fatalf("newSignedCSRFToken() error = %v", err)
-	}
-
-	req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: token})
-	req.Header.Set(csrfHeaderName, token)
+// setSameOriginFetch marks a request as a same-origin browser fetch so it
+// passes the server's cross-origin protection, the way a real browser would.
+func setSameOriginFetch(req *http.Request) {
+	req.Header.Set("Sec-Fetch-Site", "same-origin")
 }
 
 func verifiedRouteUser() services.User {

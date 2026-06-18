@@ -14,6 +14,11 @@ import (
 
 const flashCookieName = "flash"
 
+// defaultTestFlashSigningKey is the fallback signing key used only when a Server
+// is constructed without a derived flashKey (e.g. in tests). Real servers built
+// via New always derive flashKey from SECRET_KEY_BASE.
+const defaultTestFlashSigningKey = "insecure-default-flash-signing-key"
+
 type flashMessage struct {
 	Type    string `json:"t"`
 	Message string `json:"m"`
@@ -99,5 +104,5 @@ func (s *Server) flashSigningKey() []byte {
 	if len(s.flashKey) != 0 {
 		return s.flashKey
 	}
-	return services.DeriveKey([]byte(defaultTestCSRFSigningKey), "flash")
+	return services.DeriveKey([]byte(defaultTestFlashSigningKey), "flash")
 }

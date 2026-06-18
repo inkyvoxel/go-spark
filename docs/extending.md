@@ -147,11 +147,10 @@ Register each page in:
 * `internal/server/template_constants.go`
 * the `pages` map in `parseTemplates`
 
-Forms need CSRF:
-
-```html
-<input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
-```
+Forms need no CSRF token. State-changing requests are protected by origin
+checks (`http.CrossOriginProtection` plus `SameSite=Lax` cookies), so a normal
+same-origin form `POST` is covered automatically — see
+[architecture.md](architecture.md#csrf-protection).
 
 If a page needs feature-specific data, add a small field to `templateData`,
 such as `Projects []services.Project`.

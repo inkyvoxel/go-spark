@@ -91,10 +91,10 @@ protect data at rest, so rotating one does not collaterally invalidate the other
 data depends on it.
 
 ```
-csrfKey          = HMAC-SHA256(SECRET_KEY_BASE, "csrf")
-flashKey         = HMAC-SHA256(SECRET_KEY_BASE, "flash")
-totpPendingKey   = HMAC-SHA256(csrfKey, "totp_pending")
-passkeySessionKey = HMAC-SHA256(csrfKey, "passkey_session")
+cookieSigningKey  = HMAC-SHA256(SECRET_KEY_BASE, "cookie-signing")
+flashKey          = HMAC-SHA256(SECRET_KEY_BASE, "flash")
+totpPendingKey    = HMAC-SHA256(cookieSigningKey, "totp_pending")
+passkeySessionKey = HMAC-SHA256(cookieSigningKey, "passkey_session")
 ```
 
 `AUTH_TOTP_KEY` — TOTP data at rest. Rotating it forces every 2FA user to

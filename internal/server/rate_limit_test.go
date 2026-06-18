@@ -403,12 +403,12 @@ func TestRouteRateLimitProtectedPostRoutesReturn429AfterThreshold(t *testing.T) 
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			first := postFormWithCSRF(t, srv, routes, tt.path, tt.form, tt.sessionToken, tt.resetToken)
+			first := postForm(t, srv, routes, tt.path, tt.form, tt.sessionToken, tt.resetToken)
 			if first.Code == http.StatusTooManyRequests {
 				t.Fatalf("first status = %d, want non-429", first.Code)
 			}
 
-			second := postFormWithCSRF(t, srv, routes, tt.path, tt.form, tt.sessionToken, tt.resetToken)
+			second := postForm(t, srv, routes, tt.path, tt.form, tt.sessionToken, tt.resetToken)
 			if second.Code != http.StatusTooManyRequests {
 				t.Fatalf("second status = %d, want %d", second.Code, http.StatusTooManyRequests)
 			}
@@ -427,17 +427,17 @@ func TestRouteRateLimitKeyingByIPAndEmail(t *testing.T) {
 	}
 	routes := srv.Routes()
 
-	first := postFormWithCSRF(t, srv, routes, paths.ForgotPassword, url.Values{"email": []string{"a@example.com"}}, "", "")
+	first := postForm(t, srv, routes, paths.ForgotPassword, url.Values{"email": []string{"a@example.com"}}, "", "")
 	if first.Code == http.StatusTooManyRequests {
 		t.Fatalf("first status = %d, want non-429", first.Code)
 	}
 
-	second := postFormWithCSRF(t, srv, routes, paths.ForgotPassword, url.Values{"email": []string{"a@example.com"}}, "", "")
+	second := postForm(t, srv, routes, paths.ForgotPassword, url.Values{"email": []string{"a@example.com"}}, "", "")
 	if second.Code != http.StatusTooManyRequests {
 		t.Fatalf("second status = %d, want %d", second.Code, http.StatusTooManyRequests)
 	}
 
-	third := postFormWithCSRF(t, srv, routes, paths.ForgotPassword, url.Values{"email": []string{"b@example.com"}}, "", "")
+	third := postForm(t, srv, routes, paths.ForgotPassword, url.Values{"email": []string{"b@example.com"}}, "", "")
 	if third.Code == http.StatusTooManyRequests {
 		t.Fatalf("third status = %d, want non-429 for different email", third.Code)
 	}
@@ -451,7 +451,7 @@ func TestRouteRateLimitKeyingByIPAndResetTokenCookie(t *testing.T) {
 	}
 	routes := srv.Routes()
 
-	first := postFormWithCSRF(t, srv, routes, paths.ResetPassword, url.Values{
+	first := postForm(t, srv, routes, paths.ResetPassword, url.Values{
 		"new_password":     []string{"new-password"},
 		"confirm_password": []string{"new-password"},
 	}, "", "token-a")
@@ -459,7 +459,7 @@ func TestRouteRateLimitKeyingByIPAndResetTokenCookie(t *testing.T) {
 		t.Fatalf("first status = %d, want non-429", first.Code)
 	}
 
-	second := postFormWithCSRF(t, srv, routes, paths.ResetPassword, url.Values{
+	second := postForm(t, srv, routes, paths.ResetPassword, url.Values{
 		"new_password":     []string{"new-password"},
 		"confirm_password": []string{"new-password"},
 	}, "", "token-a")
@@ -467,7 +467,7 @@ func TestRouteRateLimitKeyingByIPAndResetTokenCookie(t *testing.T) {
 		t.Fatalf("second status = %d, want %d", second.Code, http.StatusTooManyRequests)
 	}
 
-	third := postFormWithCSRF(t, srv, routes, paths.ResetPassword, url.Values{
+	third := postForm(t, srv, routes, paths.ResetPassword, url.Values{
 		"new_password":     []string{"new-password"},
 		"confirm_password": []string{"new-password"},
 	}, "", "token-b")
@@ -493,7 +493,7 @@ func TestRouteRateLimitKeyingByIPAndUser(t *testing.T) {
 		"new_password":     []string{"new-password"},
 		"confirm_password": []string{"new-password"},
 	}
-	first := postFormWithCSRF(t, srv, routes, paths.ChangePassword, changePasswordForm, "session-token", "")
+	first := postForm(t, srv, routes, paths.ChangePassword, changePasswordForm, "session-token", "")
 	if first.Code == http.StatusTooManyRequests {
 		t.Fatalf("first status = %d, want non-429", first.Code)
 	}
@@ -501,13 +501,13 @@ func TestRouteRateLimitKeyingByIPAndUser(t *testing.T) {
 	auth.user = verifiedRouteUser()
 	auth.user.ID = 2
 	auth.user.Email = "user2@example.com"
-	second := postFormWithCSRF(t, srv, routes, paths.ChangePassword, changePasswordForm, "session-token", "")
+	second := postForm(t, srv, routes, paths.ChangePassword, changePasswordForm, "session-token", "")
 	if second.Code == http.StatusTooManyRequests {
 		t.Fatalf("second status = %d, want non-429 for different user", second.Code)
 	}
 
 	auth.user = verifiedRouteUser()
-	third := postFormWithCSRF(t, srv, routes, paths.ChangePassword, changePasswordForm, "session-token", "")
+	third := postForm(t, srv, routes, paths.ChangePassword, changePasswordForm, "session-token", "")
 	if third.Code != http.StatusTooManyRequests {
 		t.Fatalf("third status = %d, want %d for original user", third.Code, http.StatusTooManyRequests)
 	}
@@ -552,26 +552,24 @@ func postLoginFromIP(t *testing.T, srv *Server, routes http.Handler, email, remo
 	t.Helper()
 
 	form := url.Values{
-		"email":       []string{email},
-		"password":    []string{"password"},
-		csrfFieldName: []string{"csrf"},
+		"email":    []string{email},
+		"password": []string{"password"},
 	}
 	req := httptest.NewRequest(http.MethodPost, paths.Login, strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.RemoteAddr = remoteAddr
-	addCSRFCookieAndHeader(t, srv, req)
+	setSameOriginFetch(req)
 	rec := httptest.NewRecorder()
 	routes.ServeHTTP(rec, req)
 	return rec
 }
 
-func postFormWithCSRF(t *testing.T, srv *Server, routes http.Handler, path string, form url.Values, sessionToken, resetToken string) *httptest.ResponseRecorder {
+func postForm(t *testing.T, srv *Server, routes http.Handler, path string, form url.Values, sessionToken, resetToken string) *httptest.ResponseRecorder {
 	t.Helper()
 
 	if form == nil {
 		form = url.Values{}
 	}
-	form.Set(csrfFieldName, "csrf")
 
 	req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -581,7 +579,7 @@ func postFormWithCSRF(t *testing.T, srv *Server, routes http.Handler, path strin
 	if resetToken != "" {
 		req.AddCookie(&http.Cookie{Name: resetCookieName, Value: resetToken})
 	}
-	addCSRFCookieAndHeader(t, srv, req)
+	setSameOriginFetch(req)
 	rec := httptest.NewRecorder()
 	routes.ServeHTTP(rec, req)
 	return rec
