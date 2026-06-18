@@ -26,10 +26,14 @@ type RateLimitPolicyConfig struct {
 
 type RateLimitPoliciesConfig struct {
 	Login                     RateLimitPolicyConfig
+	LoginPerIP                RateLimitPolicyConfig
 	Register                  RateLimitPolicyConfig
+	RegisterPerIP             RateLimitPolicyConfig
 	ForgotPassword            RateLimitPolicyConfig
+	ForgotPasswordPerIP       RateLimitPolicyConfig
 	ResetPassword             RateLimitPolicyConfig
 	PublicResendVerification  RateLimitPolicyConfig
+	PublicResendVerifyPerIP   RateLimitPolicyConfig
 	AccountResendVerification RateLimitPolicyConfig
 	ChangePassword            RateLimitPolicyConfig
 	ChangeEmail               RateLimitPolicyConfig
@@ -487,11 +491,23 @@ func rateLimitPoliciesFromEnv() (RateLimitPoliciesConfig, error) {
 	if err != nil {
 		return RateLimitPoliciesConfig{}, err
 	}
+	loginPerIP, err := rateLimitPolicyFromEnv("RATE_LIMIT_LOGIN_PER_IP")
+	if err != nil {
+		return RateLimitPoliciesConfig{}, err
+	}
 	register, err := rateLimitPolicyFromEnv("RATE_LIMIT_REGISTER")
 	if err != nil {
 		return RateLimitPoliciesConfig{}, err
 	}
+	registerPerIP, err := rateLimitPolicyFromEnv("RATE_LIMIT_REGISTER_PER_IP")
+	if err != nil {
+		return RateLimitPoliciesConfig{}, err
+	}
 	forgotPassword, err := rateLimitPolicyFromEnv("RATE_LIMIT_FORGOT_PASSWORD")
+	if err != nil {
+		return RateLimitPoliciesConfig{}, err
+	}
+	forgotPasswordPerIP, err := rateLimitPolicyFromEnv("RATE_LIMIT_FORGOT_PASSWORD_PER_IP")
 	if err != nil {
 		return RateLimitPoliciesConfig{}, err
 	}
@@ -500,6 +516,10 @@ func rateLimitPoliciesFromEnv() (RateLimitPoliciesConfig, error) {
 		return RateLimitPoliciesConfig{}, err
 	}
 	publicResendVerification, err := rateLimitPolicyFromEnv("RATE_LIMIT_PUBLIC_RESEND_VERIFICATION")
+	if err != nil {
+		return RateLimitPoliciesConfig{}, err
+	}
+	publicResendVerifyPerIP, err := rateLimitPolicyFromEnv("RATE_LIMIT_PUBLIC_RESEND_VERIFICATION_PER_IP")
 	if err != nil {
 		return RateLimitPoliciesConfig{}, err
 	}
@@ -558,10 +578,14 @@ func rateLimitPoliciesFromEnv() (RateLimitPoliciesConfig, error) {
 
 	return RateLimitPoliciesConfig{
 		Login:                     login,
+		LoginPerIP:                loginPerIP,
 		Register:                  register,
+		RegisterPerIP:             registerPerIP,
 		ForgotPassword:            forgotPassword,
+		ForgotPasswordPerIP:       forgotPasswordPerIP,
 		ResetPassword:             resetPassword,
 		PublicResendVerification:  publicResendVerification,
+		PublicResendVerifyPerIP:   publicResendVerifyPerIP,
 		AccountResendVerification: accountResendVerification,
 		ChangePassword:            changePassword,
 		ChangeEmail:               changeEmail,

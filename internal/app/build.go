@@ -282,13 +282,25 @@ func toServerRateLimitPolicies(cfg config.RateLimitPoliciesConfig) server.RateLi
 			MaxRequests: cfg.Login.MaxRequests,
 			Window:      cfg.Login.Window,
 		},
+		LoginPerIP: server.RateLimitPolicy{
+			MaxRequests: cfg.LoginPerIP.MaxRequests,
+			Window:      cfg.LoginPerIP.Window,
+		},
 		Register: server.RateLimitPolicy{
 			MaxRequests: cfg.Register.MaxRequests,
 			Window:      cfg.Register.Window,
 		},
+		RegisterPerIP: server.RateLimitPolicy{
+			MaxRequests: cfg.RegisterPerIP.MaxRequests,
+			Window:      cfg.RegisterPerIP.Window,
+		},
 		ForgotPassword: server.RateLimitPolicy{
 			MaxRequests: cfg.ForgotPassword.MaxRequests,
 			Window:      cfg.ForgotPassword.Window,
+		},
+		ForgotPasswordPerIP: server.RateLimitPolicy{
+			MaxRequests: cfg.ForgotPasswordPerIP.MaxRequests,
+			Window:      cfg.ForgotPasswordPerIP.Window,
 		},
 		ResetPassword: server.RateLimitPolicy{
 			MaxRequests: cfg.ResetPassword.MaxRequests,
@@ -297,6 +309,10 @@ func toServerRateLimitPolicies(cfg config.RateLimitPoliciesConfig) server.RateLi
 		PublicResendVerification: server.RateLimitPolicy{
 			MaxRequests: cfg.PublicResendVerification.MaxRequests,
 			Window:      cfg.PublicResendVerification.Window,
+		},
+		PublicResendVerifyPerIP: server.RateLimitPolicy{
+			MaxRequests: cfg.PublicResendVerifyPerIP.MaxRequests,
+			Window:      cfg.PublicResendVerifyPerIP.Window,
 		},
 		AccountResendVerification: server.RateLimitPolicy{
 			MaxRequests: cfg.AccountResendVerification.MaxRequests,

@@ -9,4 +9,4 @@
 
 ## Auth hardening (from auth audit)
 
-- Add a coarse per-IP login rate limit to slow credential stuffing. `rateLimitKeyByIPAndEmail` in `internal/server/rate_limit.go` keys the login bucket on `ip|email`, so a single IP gets a fresh allowance per distinct email and can spread one password across many accounts. Layer an additional per-IP limiter alongside the existing per-email one (mind shared NAT egress when picking the threshold).
+- Add a per-account login limiter to slow distributed brute force. The per-email login limiter in `internal/server/rate_limit.go` keys on `ip|email` (`rateLimitKeyByIPAndEmail`), so each IP gets a fresh allowance against the same account — many IPs can still guess one target account's password. Layer a limiter keyed on email alone (no IP) alongside the existing per-IP and per-`ip|email` ones (mind that an attacker could weaponise this to lock a victim out; pair with account lockout/backoff thinking, and keep the threshold high).

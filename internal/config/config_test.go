@@ -230,6 +230,8 @@ func TestFromEnvUsesEnvironment(t *testing.T) {
 	t.Setenv("JOBS_CLEANUP_FAILED_EMAIL_RETENTION", "360h")
 	t.Setenv("RATE_LIMIT_LOGIN_MAX_REQUESTS", "7")
 	t.Setenv("RATE_LIMIT_LOGIN_WINDOW", "2m")
+	t.Setenv("RATE_LIMIT_LOGIN_PER_IP_MAX_REQUESTS", "40")
+	t.Setenv("RATE_LIMIT_LOGIN_PER_IP_WINDOW", "10m")
 	t.Setenv("RATE_LIMIT_RESET_PASSWORD_MAX_REQUESTS", "8")
 	t.Setenv("RATE_LIMIT_RESET_PASSWORD_WINDOW", "30m")
 	t.Setenv("RATE_LIMIT_CHANGE_PASSWORD_MAX_REQUESTS", "4")
@@ -308,6 +310,12 @@ func TestFromEnvUsesEnvironment(t *testing.T) {
 	}
 	if cfg.RateLimitPolicies.Login.Window != 2*time.Minute {
 		t.Fatalf("RateLimitPolicies.Login.Window = %v, want %v", cfg.RateLimitPolicies.Login.Window, 2*time.Minute)
+	}
+	if cfg.RateLimitPolicies.LoginPerIP.MaxRequests != 40 {
+		t.Fatalf("RateLimitPolicies.LoginPerIP.MaxRequests = %d, want %d", cfg.RateLimitPolicies.LoginPerIP.MaxRequests, 40)
+	}
+	if cfg.RateLimitPolicies.LoginPerIP.Window != 10*time.Minute {
+		t.Fatalf("RateLimitPolicies.LoginPerIP.Window = %v, want %v", cfg.RateLimitPolicies.LoginPerIP.Window, 10*time.Minute)
 	}
 	if cfg.RateLimitPolicies.ResetPassword.MaxRequests != 8 {
 		t.Fatalf("RateLimitPolicies.ResetPassword.MaxRequests = %d, want %d", cfg.RateLimitPolicies.ResetPassword.MaxRequests, 8)
