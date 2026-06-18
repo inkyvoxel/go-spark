@@ -379,6 +379,10 @@ func TestAuthServiceRegisterValidatesInput(t *testing.T) {
 	if _, err := service.Register(context.Background(), "user@example.com", "short"); !errors.Is(err, ErrInvalidPassword) {
 		t.Fatalf("Register() error = %v, want %v", err, ErrInvalidPassword)
 	}
+	tooLong := strings.Repeat("a", PasswordMaxLength+1)
+	if _, err := service.Register(context.Background(), "user@example.com", tooLong); !errors.Is(err, ErrPasswordTooLong) {
+		t.Fatalf("Register() error = %v, want %v", err, ErrPasswordTooLong)
+	}
 }
 
 func TestAuthServiceRegisterDuplicateEmailIsNeutral(t *testing.T) {

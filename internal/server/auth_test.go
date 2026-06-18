@@ -613,3 +613,22 @@ func newAuthMiddlewareTestServer(auth authService) *Server {
 		cookieSigningKey: []byte("test-cookie-signing-key"),
 	}
 }
+
+func TestValidatePasswordPairLengthBounds(t *testing.T) {
+	srv := &Server{passwordMinLength: 12}
+
+	short := srv.validatePasswordPair("short", "short", "password", "confirm_password")
+	if msg := short["password"]; !strings.Contains(msg, "at least 12") {
+		t.Fatalf("short password error = %q, want min-length message", msg)
+	}
+
+	tooLong := strings.Repeat("a", services.PasswordMaxLength+1)
+	long := srv.validatePasswordPair(tooLong, tooLong, "password", "confirm_password")
+	if msg := long["password"]; !strings.Contains(msg, "at most") {
+		t.Fatalf("long password error = %q, want max-length message", msg)
+	}
+
+	if errs := srv.validatePasswordPair("a-good-password", "a-good-password", "password", "confirm_password"); len(errs) != 0 {
+		t.Fatalf("valid password pair produced errors: %v", errs)
+	}
+}

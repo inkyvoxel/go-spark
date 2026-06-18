@@ -18,7 +18,13 @@ import (
 )
 
 const (
-	DefaultPasswordMinLength             = 12
+	DefaultPasswordMinLength = 12
+	// PasswordMaxLength caps password length so a single request cannot feed an
+	// unbounded value into Argon2id. With a pepper configured the input is
+	// HMAC-pre-hashed to 32 bytes, but this guard keeps the bound even if the
+	// pepper is removed. OWASP recommends allowing at least 64 characters, so
+	// 4096 sits well above any real passphrase.
+	PasswordMaxLength                    = 4096
 	DefaultEmailVerificationTokenTimeout = 24 * time.Hour
 	DefaultPasswordResetTokenTimeout     = time.Hour
 )
@@ -29,6 +35,7 @@ var (
 	ErrInvalidCredentials         = errors.New("invalid credentials")
 	ErrInvalidEmail               = errors.New("invalid email")
 	ErrInvalidPassword            = errors.New("invalid password")
+	ErrPasswordTooLong            = errors.New("password too long")
 	ErrEmailUnchanged             = errors.New("email unchanged")
 	ErrPasswordUnchanged          = errors.New("password unchanged")
 	ErrInvalidPasswordResetToken  = errors.New("invalid password reset token")
@@ -311,8 +318,8 @@ func (s *AuthService) Register(ctx context.Context, emailAddress, password strin
 	if !isValidEmail(emailAddress) {
 		return User{}, ErrInvalidEmail
 	}
-	if utf8.RuneCountInString(password) < s.passwordMinLen {
-		return User{}, ErrInvalidPassword
+	if err := s.validatePassword(password); err != nil {
+		return User{}, err
 	}
 
 	// Treat an already-registered address as a neutral success: the caller
@@ -708,8 +715,12 @@ func (s *AuthService) ResetPasswordWithToken(ctx context.Context, token, newPass
 }
 
 func (s *AuthService) validatePassword(password string) error {
-	if utf8.RuneCountInString(password) < s.passwordMinLen {
+	length := utf8.RuneCountInString(password)
+	if length < s.passwordMinLen {
 		return ErrInvalidPassword
+	}
+	if length > PasswordMaxLength {
+		return ErrPasswordTooLong
 	}
 
 	return nil

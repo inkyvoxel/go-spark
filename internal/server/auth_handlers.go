@@ -510,6 +510,10 @@ func (s *Server) changePassword(w http.ResponseWriter, r *http.Request) {
 			data.FieldErrors = map[string]string{"new_password": fmt.Sprintf("Use at least %d characters.", data.PasswordMinLength)}
 			s.renderStatus(w, http.StatusUnprocessableEntity, templateChangePassword, data)
 			return
+		case errors.Is(err, services.ErrPasswordTooLong):
+			data.FieldErrors = map[string]string{"new_password": fmt.Sprintf("Use at most %d characters.", services.PasswordMaxLength)}
+			s.renderStatus(w, http.StatusUnprocessableEntity, templateChangePassword, data)
+			return
 		case errors.Is(err, services.ErrPasswordUnchanged):
 			data.FieldErrors = map[string]string{"new_password": "Choose a different password."}
 			s.renderStatus(w, http.StatusUnprocessableEntity, templateChangePassword, data)
@@ -616,6 +620,10 @@ func (s *Server) resetPassword(w http.ResponseWriter, r *http.Request) {
 			data.FieldErrors = map[string]string{"new_password": fmt.Sprintf("Use at least %d characters.", data.PasswordMinLength)}
 			s.renderStatus(w, http.StatusUnprocessableEntity, templateResetPassword, data)
 			return
+		case errors.Is(err, services.ErrPasswordTooLong):
+			data.FieldErrors = map[string]string{"new_password": fmt.Sprintf("Use at most %d characters.", services.PasswordMaxLength)}
+			s.renderStatus(w, http.StatusUnprocessableEntity, templateResetPassword, data)
+			return
 		default:
 			s.loggerForRequest(r).Error("reset password", "err", err)
 			s.internalServerError(w, r)
@@ -715,6 +723,12 @@ func (s *Server) handleAuthFormError(w http.ResponseWriter, r *http.Request, tem
 		s.renderStatus(w, http.StatusUnprocessableEntity, templateName, data)
 		return
 	}
+	if errors.Is(err, services.ErrPasswordTooLong) {
+		data.Error = "Check your details and try again."
+		data.FieldErrors = map[string]string{"password": fmt.Sprintf("Use at most %d characters.", services.PasswordMaxLength)}
+		s.renderStatus(w, http.StatusUnprocessableEntity, templateName, data)
+		return
+	}
 	if errors.Is(err, services.ErrInvalidCredentials) {
 		data.Error = "Email or password is not correct."
 		s.renderStatus(w, http.StatusUnprocessableEntity, templateName, data)
@@ -778,8 +792,10 @@ func (s *Server) validatePasswordPair(password, confirmPassword, passwordField, 
 	fieldErrors := make(map[string]string)
 	if password == "" {
 		fieldErrors[passwordField] = "Enter a password."
-	} else if utf8.RuneCountInString(password) < passwordMinLength {
+	} else if length := utf8.RuneCountInString(password); length < passwordMinLength {
 		fieldErrors[passwordField] = fmt.Sprintf("Use at least %d characters.", passwordMinLength)
+	} else if length > services.PasswordMaxLength {
+		fieldErrors[passwordField] = fmt.Sprintf("Use at most %d characters.", services.PasswordMaxLength)
 	}
 	if confirmPassword == "" {
 		fieldErrors[confirmPasswordField] = "Confirm your password."
