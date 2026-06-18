@@ -112,6 +112,23 @@ overrides `RATE_LIMIT_ARCHIVE_MAX_REQUESTS` and `RATE_LIMIT_ARCHIVE_WINDOW`
 (uppercased name, see `EnvPrefix`) work automatically — no changes to
 `config.go` or `build.go`. Document the new vars in `.env.example`.
 
+### Why there is no email-only login limiter
+
+Login is guarded by a per-IP ceiling and a per-`ip|email` limiter, but
+deliberately *not* by a limiter keyed on email alone. An email-only bucket is
+shared across every IP, so it would slow a distributed (many-IP) brute force —
+but it is also trivially weaponisable: an attacker can flood that one bucket to
+lock the real account holder out. There is no way around this with a plain
+counter. A rate limiter only helps by short-circuiting the request *before* the
+password is checked; once the shared bucket is exhausted, the legitimate user's
+correct password is rejected too.
+
+The realistic single-source attack is already covered by the per-IP and
+`ip|email` limiters. If your threat model includes genuine distributed brute
+force, reach for **step-up auth** instead of a hard block — e.g. require a
+CAPTCHA or an emailed challenge after N failed attempts on an account. The real
+user can pass it; a bot army mostly cannot, and nobody gets locked out.
+
 ## 3. Add Templates
 
 Add page templates under `templates/`:
