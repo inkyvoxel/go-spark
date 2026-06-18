@@ -83,18 +83,12 @@ var defaultRateLimitPolicies = RateLimitPolicies{
 
 type rateLimitKeyFunc func(*http.Request) (key string, keyType string)
 
-// rateLimitStore is the extension point for rate limiting. The default
-// implementation is an in-memory fixed-window counter, which is correct for
-// single-server deployments. If you scale the web process across multiple
-// servers, implement this interface backed by a shared store (e.g. Redis) and
-// pass it to Server via Options. Note: if you need multi-server rate limiting
-// you will also need to replace SQLite with a network-accessible database, as
-// both share the same single-server boundary.
-type rateLimitStore interface {
-	Allow(bucketKey string, policy RateLimitPolicy, now time.Time) (bool, time.Duration)
-}
-
-// fixedWindowRateLimiter is a simple in-memory fixed-window counter.
+// fixedWindowRateLimiter is a simple in-memory fixed-window counter, which is
+// correct for single-server deployments. To scale the web process across
+// multiple servers, swap s.rateLimiter for a shared-store implementation (e.g.
+// Redis) exposing the same Allow method. Note: multi-server rate limiting also
+// requires replacing SQLite with a network-accessible database, as both share
+// the same single-server boundary.
 // Each bucket tracks a count and a reset time. When the window expires, the
 // count resets. Note the boundary burst: a caller can make MaxRequests calls
 // just before reset and MaxRequests calls just after, for a short burst of

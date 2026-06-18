@@ -175,7 +175,7 @@ func buildJobs(cfg config.Config, logger *slog.Logger, db *sql.DB) ([]jobs.Job, 
 	emailProcessor := email.NewProcessor(database.NewEmailOutboxStore(db), emailSender, email.ProcessorOptions{
 		Logger: logger,
 	})
-	configured = append(configured, jobs.NewEmailJob(emailProcessor, jobs.DefaultEmailInterval))
+	configured = append(configured, jobs.NewEmailJob(emailProcessor.ProcessPending, jobs.DefaultEmailInterval))
 
 	cleanupJob, err := jobs.NewCleanupJob(database.NewCleanupStore(db), jobs.CleanupOptions{
 		Logger:               logger,

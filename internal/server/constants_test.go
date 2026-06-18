@@ -49,21 +49,21 @@ func TestTemplateRoutesUseCanonicalPaths(t *testing.T) {
 		got  string
 		want string
 	}{
-		{name: "home", got: paths.TemplateRoutes.Home, want: paths.Home},
-		{name: "static favicon svg", got: paths.TemplateRoutes.StaticFaviconSVG, want: paths.StaticFaviconSVG},
-		{name: "static pico css", got: paths.TemplateRoutes.StaticPicoCSS, want: paths.StaticPicoCSS},
-		{name: "static styles", got: paths.TemplateRoutes.StaticStyles, want: paths.StaticStyles},
-		{name: "account", got: paths.TemplateRoutes.Account, want: paths.Account},
-		{name: "login", got: paths.TemplateRoutes.Login, want: paths.Login},
-		{name: "register", got: paths.TemplateRoutes.Register, want: paths.Register},
-		{name: "logout", got: paths.TemplateRoutes.Logout, want: paths.Logout},
-		{name: "forgot-password", got: paths.TemplateRoutes.ForgotPassword, want: paths.ForgotPassword},
-		{name: "reset-password", got: paths.TemplateRoutes.ResetPassword, want: paths.ResetPassword},
-		{name: "resend-verification", got: paths.TemplateRoutes.ResendVerification, want: paths.ResendVerification},
-		{name: "verify-email-resend", got: paths.TemplateRoutes.VerifyEmailResend, want: paths.VerifyEmailResend},
-		{name: "change-password", got: paths.TemplateRoutes.ChangePassword, want: paths.ChangePassword},
-		{name: "change-email", got: paths.TemplateRoutes.ChangeEmail, want: paths.ChangeEmail},
-		{name: "confirm-email-change", got: paths.TemplateRoutes.ConfirmEmailChange, want: paths.ConfirmEmailChange},
+		{name: "home", got: paths.TemplateRoutes["Home"], want: paths.Home},
+		{name: "static favicon svg", got: paths.TemplateRoutes["StaticFaviconSVG"], want: paths.StaticFaviconSVG},
+		{name: "static pico css", got: paths.TemplateRoutes["StaticPicoCSS"], want: paths.StaticPicoCSS},
+		{name: "static styles", got: paths.TemplateRoutes["StaticStyles"], want: paths.StaticStyles},
+		{name: "account", got: paths.TemplateRoutes["Account"], want: paths.Account},
+		{name: "login", got: paths.TemplateRoutes["Login"], want: paths.Login},
+		{name: "register", got: paths.TemplateRoutes["Register"], want: paths.Register},
+		{name: "logout", got: paths.TemplateRoutes["Logout"], want: paths.Logout},
+		{name: "forgot-password", got: paths.TemplateRoutes["ForgotPassword"], want: paths.ForgotPassword},
+		{name: "reset-password", got: paths.TemplateRoutes["ResetPassword"], want: paths.ResetPassword},
+		{name: "resend-verification", got: paths.TemplateRoutes["ResendVerification"], want: paths.ResendVerification},
+		{name: "verify-email-resend", got: paths.TemplateRoutes["VerifyEmailResend"], want: paths.VerifyEmailResend},
+		{name: "change-password", got: paths.TemplateRoutes["ChangePassword"], want: paths.ChangePassword},
+		{name: "change-email", got: paths.TemplateRoutes["ChangeEmail"], want: paths.ChangeEmail},
+		{name: "confirm-email-change", got: paths.TemplateRoutes["ConfirmEmailChange"], want: paths.ConfirmEmailChange},
 	}
 
 	for _, tt := range tests {

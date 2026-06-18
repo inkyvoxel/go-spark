@@ -23,7 +23,7 @@ type templateData struct {
 	Title             string
 	RequestID         string
 	CSRFToken         string
-	Routes            paths.TemplateRouteSet
+	Routes            map[string]string
 	Breadcrumbs       []breadcrumbItem
 	Flash             *flashMessage
 	Error             string

@@ -26,11 +26,6 @@ const (
 
 var errInvalidPasswordHash = errors.New("invalid password hash")
 
-type passwordHasher interface {
-	Hash(password string) (string, error)
-	Verify(encodedHash, password string) (bool, error)
-}
-
 type argon2idHasher struct {
 	memoryKiB  uint32
 	iterations uint32

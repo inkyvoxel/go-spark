@@ -36,7 +36,7 @@ type Server struct {
 	passwordMinLength int
 	csrfKey           []byte
 	flashKey          []byte
-	rateLimiter       rateLimitStore
+	rateLimiter       *fixedWindowRateLimiter
 	rateLimitPolicies RateLimitPolicies
 	trustedProxies    []net.IPNet
 	postOnlyPaths     map[string]struct{}

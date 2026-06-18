@@ -43,76 +43,41 @@ const (
 	AccountPasskeysDelete           = AccountPasskeys + "/delete"
 )
 
-type TemplateRouteSet struct {
-	Home                            string
-	StaticFaviconSVG                string
-	StaticPicoCSS                   string
-	StaticStyles                    string
-	StaticQRCodeJS                  string
-	StaticTOTPSetupJS               string
-	StaticPasskeyJS                 string
-	Account                         string
-	Login                           string
-	LoginPasskeyBegin               string
-	LoginPasskeyFinish              string
-	Register                        string
-	Logout                          string
-	ForgotPassword                  string
-	ResetPassword                   string
-	ResendVerification              string
-	VerifyEmailResend               string
-	ChangePassword                  string
-	ChangeEmail                     string
-	ConfirmEmailChange              string
-	AccountSessionsRevoke           string
-	AccountSessionsRevokeOthers     string
-	AccountDelete                   string
-	AccountTwoFactor                string
-	AccountTwoFactorSetup           string
-	AccountTwoFactorConfirm         string
-	AccountTwoFactorDisable         string
-	AccountTwoFactorChallenge       string
-	AccountTwoFactorRegenerateCodes string
-	AccountPasskeys                 string
-	AccountPasskeysRegisterBegin    string
-	AccountPasskeysRegisterFinish   string
-	AccountPasskeysRename           string
-	AccountPasskeysDelete           string
-}
-
-var TemplateRoutes = TemplateRouteSet{
-	Home:                            Home,
-	StaticFaviconSVG:                StaticFaviconSVG,
-	StaticPicoCSS:                   StaticPicoCSS,
-	StaticStyles:                    StaticStyles,
-	StaticQRCodeJS:                  StaticQRCodeJS,
-	StaticTOTPSetupJS:               StaticTOTPSetupJS,
-	StaticPasskeyJS:                 StaticPasskeyJS,
-	Account:                         Account,
-	Login:                           Login,
-	LoginPasskeyBegin:               LoginPasskeyBegin,
-	LoginPasskeyFinish:              LoginPasskeyFinish,
-	Register:                        Register,
-	Logout:                          Logout,
-	ForgotPassword:                  ForgotPassword,
-	ResetPassword:                   ResetPassword,
-	ResendVerification:              ResendVerification,
-	VerifyEmailResend:               VerifyEmailResend,
-	ChangePassword:                  ChangePassword,
-	ChangeEmail:                     ChangeEmail,
-	ConfirmEmailChange:              ConfirmEmailChange,
-	AccountSessionsRevoke:           AccountSessionsRevoke,
-	AccountSessionsRevokeOthers:     AccountSessionsRevokeOthers,
-	AccountDelete:                   AccountDelete,
-	AccountTwoFactor:                AccountTwoFactor,
-	AccountTwoFactorSetup:           AccountTwoFactorSetup,
-	AccountTwoFactorConfirm:         AccountTwoFactorConfirm,
-	AccountTwoFactorDisable:         AccountTwoFactorDisable,
-	AccountTwoFactorChallenge:       AccountTwoFactorChallenge,
-	AccountTwoFactorRegenerateCodes: AccountTwoFactorRegenerateCodes,
-	AccountPasskeys:                 AccountPasskeys,
-	AccountPasskeysRegisterBegin:    AccountPasskeysRegisterBegin,
-	AccountPasskeysRegisterFinish:   AccountPasskeysRegisterFinish,
-	AccountPasskeysRename:           AccountPasskeysRename,
-	AccountPasskeysDelete:           AccountPasskeysDelete,
+// TemplateRoutes exposes routes to HTML templates. Templates reach a map's
+// entries with the same dot syntax used for struct fields ({{ .Routes.Home }}).
+var TemplateRoutes = map[string]string{
+	"Home":                            Home,
+	"StaticFaviconSVG":                StaticFaviconSVG,
+	"StaticPicoCSS":                   StaticPicoCSS,
+	"StaticStyles":                    StaticStyles,
+	"StaticQRCodeJS":                  StaticQRCodeJS,
+	"StaticTOTPSetupJS":               StaticTOTPSetupJS,
+	"StaticPasskeyJS":                 StaticPasskeyJS,
+	"Account":                         Account,
+	"Login":                           Login,
+	"LoginPasskeyBegin":               LoginPasskeyBegin,
+	"LoginPasskeyFinish":              LoginPasskeyFinish,
+	"Register":                        Register,
+	"Logout":                          Logout,
+	"ForgotPassword":                  ForgotPassword,
+	"ResetPassword":                   ResetPassword,
+	"ResendVerification":              ResendVerification,
+	"VerifyEmailResend":               VerifyEmailResend,
+	"ChangePassword":                  ChangePassword,
+	"ChangeEmail":                     ChangeEmail,
+	"ConfirmEmailChange":              ConfirmEmailChange,
+	"AccountSessionsRevoke":           AccountSessionsRevoke,
+	"AccountSessionsRevokeOthers":     AccountSessionsRevokeOthers,
+	"AccountDelete":                   AccountDelete,
+	"AccountTwoFactor":                AccountTwoFactor,
+	"AccountTwoFactorSetup":           AccountTwoFactorSetup,
+	"AccountTwoFactorConfirm":         AccountTwoFactorConfirm,
+	"AccountTwoFactorDisable":         AccountTwoFactorDisable,
+	"AccountTwoFactorChallenge":       AccountTwoFactorChallenge,
+	"AccountTwoFactorRegenerateCodes": AccountTwoFactorRegenerateCodes,
+	"AccountPasskeys":                 AccountPasskeys,
+	"AccountPasskeysRegisterBegin":    AccountPasskeysRegisterBegin,
+	"AccountPasskeysRegisterFinish":   AccountPasskeysRegisterFinish,
+	"AccountPasskeysRename":           AccountPasskeysRename,
+	"AccountPasskeysDelete":           AccountPasskeysDelete,
 }

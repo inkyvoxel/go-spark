@@ -225,7 +225,7 @@ This template is designed for single-server deployment. SQLite is the database, 
 | Database | SQLite (file on disk) | Postgres or similar |
 | Rate limiting | In-memory (per process) | Shared store (e.g. Redis) |
 
-**Rate limiter.** The `rateLimitStore` interface in `internal/server` is the intended extension point. Swap in a shared-store implementation via `Options.RateLimiter` if you need limits that hold across instances.
+**Rate limiter.** `internal/server` uses an in-memory `fixedWindowRateLimiter` (`rate_limit.go`), correct for single-server deployments. To hold limits across instances, replace it with a shared-store implementation (e.g. Redis) exposing the same `Allow` method and assign it to `Server.rateLimiter`.
 
 **Database.** Migrating away from SQLite means replacing `internal/platform/sqlite`, the migration setup in `cmd/app/main.go`, and regenerating queries with a different sqlc driver. That is a deliberate rearchitecture step, not a config change.
 

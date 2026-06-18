@@ -55,9 +55,9 @@ const (
 )
 ```
 
-If templates need the route, add it to `TemplateRouteSet` and `TemplateRoutes`
-in the same file. Templates should use `.Routes.NewProject`, not hard-coded
-URLs.
+If templates need the route, add an entry to the `TemplateRoutes` map in the
+same file (e.g. `"NewProject": NewProject`). Templates should use
+`.Routes.NewProject`, not hard-coded URLs.
 
 ## 2. Register Routes
 

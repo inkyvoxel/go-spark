@@ -55,7 +55,7 @@ type AuthService struct {
 	passwordResetTokenDuration     time.Duration
 	confirmationEmail              email.AccountConfirmationOptions
 	passwordResetEmail             email.PasswordResetOptions
-	passwordHasher                 passwordHasher
+	passwordHasher                 *argon2idHasher
 	dummyPasswordHash              string
 	tokenBytes                     int
 	passwordMinLen                 int
