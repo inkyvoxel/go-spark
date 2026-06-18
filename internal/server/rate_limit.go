@@ -12,6 +12,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/inkyvoxel/go-spark/internal/ratelimit"
 )
 
 const (
@@ -19,67 +21,12 @@ const (
 	maxRateLimitEntries         = 50_000
 )
 
-type RateLimitPolicy struct {
-	MaxRequests int
-	Window      time.Duration
-}
+// RateLimitPolicy and RateLimitPolicies are the shared ratelimit types; the
+// vocabulary (action names, defaults) lives in the ratelimit package so the
+// config loader and this server agree without copying parallel structs.
+type RateLimitPolicy = ratelimit.Policy
 
-type RateLimitPolicies struct {
-	Login                     RateLimitPolicy
-	LoginPerIP                RateLimitPolicy
-	Register                  RateLimitPolicy
-	RegisterPerIP             RateLimitPolicy
-	ForgotPassword            RateLimitPolicy
-	ForgotPasswordPerIP       RateLimitPolicy
-	ResetPassword             RateLimitPolicy
-	PublicResendVerification  RateLimitPolicy
-	PublicResendVerifyPerIP   RateLimitPolicy
-	AccountResendVerification RateLimitPolicy
-	ChangePassword            RateLimitPolicy
-	ChangeEmail               RateLimitPolicy
-	RevokeSession             RateLimitPolicy
-	RevokeOtherSessions       RateLimitPolicy
-	DeleteAccount             RateLimitPolicy
-	TOTPChallenge             RateLimitPolicy
-	TOTPDisable               RateLimitPolicy
-	TOTPConfirm               RateLimitPolicy
-	TOTPRegenerateCodes       RateLimitPolicy
-	PasskeyRegister           RateLimitPolicy
-	PasskeyLogin              RateLimitPolicy
-	PasskeyManage             RateLimitPolicy
-}
-
-// The *PerIP policies are coarse per-IP ceilings layered on top of the
-// fine-grained per-email limiters below. The per-email limiter keys on
-// ip|email, so a single IP gets a fresh allowance per distinct email and can
-// spread one password across many accounts (credential stuffing) or mass-mail
-// many addresses. The per-IP ceiling caps total attempts from one IP across
-// all emails. Thresholds are deliberately generous to tolerate shared NAT
-// egress (offices, mobile gateways) where many legitimate users share one IP.
-var defaultRateLimitPolicies = RateLimitPolicies{
-	Login:                     RateLimitPolicy{MaxRequests: 5, Window: time.Minute},
-	LoginPerIP:                RateLimitPolicy{MaxRequests: 50, Window: 15 * time.Minute},
-	Register:                  RateLimitPolicy{MaxRequests: 3, Window: 10 * time.Minute},
-	RegisterPerIP:             RateLimitPolicy{MaxRequests: 10, Window: 15 * time.Minute},
-	ForgotPassword:            RateLimitPolicy{MaxRequests: 3, Window: 15 * time.Minute},
-	ForgotPasswordPerIP:       RateLimitPolicy{MaxRequests: 20, Window: 15 * time.Minute},
-	ResetPassword:             RateLimitPolicy{MaxRequests: 5, Window: 15 * time.Minute},
-	PublicResendVerification:  RateLimitPolicy{MaxRequests: 3, Window: 15 * time.Minute},
-	PublicResendVerifyPerIP:   RateLimitPolicy{MaxRequests: 20, Window: 15 * time.Minute},
-	AccountResendVerification: RateLimitPolicy{MaxRequests: 5, Window: 15 * time.Minute},
-	ChangePassword:            RateLimitPolicy{MaxRequests: 5, Window: 15 * time.Minute},
-	ChangeEmail:               RateLimitPolicy{MaxRequests: 5, Window: 15 * time.Minute},
-	RevokeSession:             RateLimitPolicy{MaxRequests: 20, Window: 15 * time.Minute},
-	RevokeOtherSessions:       RateLimitPolicy{MaxRequests: 10, Window: 15 * time.Minute},
-	DeleteAccount:             RateLimitPolicy{MaxRequests: 3, Window: 15 * time.Minute},
-	TOTPChallenge:             RateLimitPolicy{MaxRequests: 5, Window: time.Minute},
-	TOTPDisable:               RateLimitPolicy{MaxRequests: 5, Window: 15 * time.Minute},
-	TOTPConfirm:               RateLimitPolicy{MaxRequests: 10, Window: 15 * time.Minute},
-	TOTPRegenerateCodes:       RateLimitPolicy{MaxRequests: 5, Window: 15 * time.Minute},
-	PasskeyRegister:           RateLimitPolicy{MaxRequests: 10, Window: 15 * time.Minute},
-	PasskeyLogin:              RateLimitPolicy{MaxRequests: 10, Window: time.Minute},
-	PasskeyManage:             RateLimitPolicy{MaxRequests: 20, Window: 15 * time.Minute},
-}
+type RateLimitPolicies = ratelimit.Policies
 
 type rateLimitKeyFunc func(*http.Request) (key string, keyType string)
 
@@ -158,49 +105,11 @@ func (l *fixedWindowRateLimiter) cleanupExpired(now time.Time) {
 	}
 }
 
-func rateLimitPoliciesWithDefaults(policies RateLimitPolicies) RateLimitPolicies {
-	return RateLimitPolicies{
-		Login:                     mergeRateLimitPolicy(defaultRateLimitPolicies.Login, policies.Login),
-		LoginPerIP:                mergeRateLimitPolicy(defaultRateLimitPolicies.LoginPerIP, policies.LoginPerIP),
-		Register:                  mergeRateLimitPolicy(defaultRateLimitPolicies.Register, policies.Register),
-		RegisterPerIP:             mergeRateLimitPolicy(defaultRateLimitPolicies.RegisterPerIP, policies.RegisterPerIP),
-		ForgotPassword:            mergeRateLimitPolicy(defaultRateLimitPolicies.ForgotPassword, policies.ForgotPassword),
-		ForgotPasswordPerIP:       mergeRateLimitPolicy(defaultRateLimitPolicies.ForgotPasswordPerIP, policies.ForgotPasswordPerIP),
-		ResetPassword:             mergeRateLimitPolicy(defaultRateLimitPolicies.ResetPassword, policies.ResetPassword),
-		PublicResendVerification:  mergeRateLimitPolicy(defaultRateLimitPolicies.PublicResendVerification, policies.PublicResendVerification),
-		PublicResendVerifyPerIP:   mergeRateLimitPolicy(defaultRateLimitPolicies.PublicResendVerifyPerIP, policies.PublicResendVerifyPerIP),
-		AccountResendVerification: mergeRateLimitPolicy(defaultRateLimitPolicies.AccountResendVerification, policies.AccountResendVerification),
-		ChangePassword:            mergeRateLimitPolicy(defaultRateLimitPolicies.ChangePassword, policies.ChangePassword),
-		ChangeEmail:               mergeRateLimitPolicy(defaultRateLimitPolicies.ChangeEmail, policies.ChangeEmail),
-		RevokeSession:             mergeRateLimitPolicy(defaultRateLimitPolicies.RevokeSession, policies.RevokeSession),
-		RevokeOtherSessions:       mergeRateLimitPolicy(defaultRateLimitPolicies.RevokeOtherSessions, policies.RevokeOtherSessions),
-		DeleteAccount:             mergeRateLimitPolicy(defaultRateLimitPolicies.DeleteAccount, policies.DeleteAccount),
-		TOTPChallenge:             mergeRateLimitPolicy(defaultRateLimitPolicies.TOTPChallenge, policies.TOTPChallenge),
-		TOTPDisable:               mergeRateLimitPolicy(defaultRateLimitPolicies.TOTPDisable, policies.TOTPDisable),
-		TOTPConfirm:               mergeRateLimitPolicy(defaultRateLimitPolicies.TOTPConfirm, policies.TOTPConfirm),
-		TOTPRegenerateCodes:       mergeRateLimitPolicy(defaultRateLimitPolicies.TOTPRegenerateCodes, policies.TOTPRegenerateCodes),
-		PasskeyRegister:           mergeRateLimitPolicy(defaultRateLimitPolicies.PasskeyRegister, policies.PasskeyRegister),
-		PasskeyLogin:              mergeRateLimitPolicy(defaultRateLimitPolicies.PasskeyLogin, policies.PasskeyLogin),
-		PasskeyManage:             mergeRateLimitPolicy(defaultRateLimitPolicies.PasskeyManage, policies.PasskeyManage),
-	}
-}
-
-func mergeRateLimitPolicy(defaultPolicy, override RateLimitPolicy) RateLimitPolicy {
-	policy := defaultPolicy
-	if override.MaxRequests > 0 {
-		policy.MaxRequests = override.MaxRequests
-	}
-	if override.Window > 0 {
-		policy.Window = override.Window
-	}
-	return policy
-}
-
 func (s *Server) ensureRateLimiting() {
 	if s.rateLimiter == nil {
 		s.rateLimiter = newFixedWindowRateLimiter()
 	}
-	s.rateLimitPolicies = rateLimitPoliciesWithDefaults(s.rateLimitPolicies)
+	s.rateLimitPolicies = ratelimit.Resolve(s.rateLimitPolicies)
 }
 
 // rateLimitSpec pairs a named policy with the key function that buckets

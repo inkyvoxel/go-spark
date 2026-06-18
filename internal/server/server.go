@@ -14,6 +14,7 @@ import (
 
 	appassets "github.com/inkyvoxel/go-spark"
 	"github.com/inkyvoxel/go-spark/internal/paths"
+	"github.com/inkyvoxel/go-spark/internal/ratelimit"
 	"github.com/inkyvoxel/go-spark/internal/services"
 )
 
@@ -68,8 +69,8 @@ func New(opts Options) (*Server, error) {
 		passwordMinLength = services.DefaultPasswordMinLength
 	}
 	secretKeyBase := []byte(strings.TrimSpace(opts.SecretKeyBase))
-	csrfKey := deriveKey(secretKeyBase, "csrf")
-	flashKey := deriveKey(secretKeyBase, "flash")
+	csrfKey := services.DeriveKey(secretKeyBase, "csrf")
+	flashKey := services.DeriveKey(secretKeyBase, "flash")
 	crossOrigin, err := newCrossOriginProtection(normalizeOrigin(opts.AppBaseURL))
 	if err != nil {
 		return nil, fmt.Errorf("configure cross-origin protection: %w", err)
@@ -96,7 +97,7 @@ func New(opts Options) (*Server, error) {
 		csrfKey:           csrfKey,
 		flashKey:          flashKey,
 		rateLimiter:       newFixedWindowRateLimiter(),
-		rateLimitPolicies: rateLimitPoliciesWithDefaults(opts.RateLimitPolicies),
+		rateLimitPolicies: ratelimit.Resolve(opts.RateLimitPolicies),
 		trustedProxies:    trustedProxies,
 		postOnlyPaths:     make(map[string]struct{}),
 	}, nil
@@ -224,8 +225,8 @@ func (s *Server) registerAuthRoutes(dynamic *http.ServeMux) {
 		route(http.MethodPost, paths.Register),
 		s.requireAnonymous(
 			s.withRateLimits(http.HandlerFunc(s.register),
-				rateLimit("register-ip", s.rateLimitPolicies.RegisterPerIP, s.rateLimitKeyByIP()),
-				rateLimit("register", s.rateLimitPolicies.Register, s.rateLimitKeyByIPAndEmail("email")),
+				rateLimit("register-ip", s.rateLimitPolicies[ratelimit.RegisterPerIP], s.rateLimitKeyByIP()),
+				rateLimit("register", s.rateLimitPolicies[ratelimit.Register], s.rateLimitKeyByIPAndEmail("email")),
 			),
 		),
 	)
@@ -234,8 +235,8 @@ func (s *Server) registerAuthRoutes(dynamic *http.ServeMux) {
 		route(http.MethodPost, paths.Login),
 		s.requireAnonymous(
 			s.withRateLimits(http.HandlerFunc(s.login),
-				rateLimit("login-ip", s.rateLimitPolicies.LoginPerIP, s.rateLimitKeyByIP()),
-				rateLimit("login", s.rateLimitPolicies.Login, s.rateLimitKeyByIPAndEmail("email")),
+				rateLimit("login-ip", s.rateLimitPolicies[ratelimit.LoginPerIP], s.rateLimitKeyByIP()),
+				rateLimit("login", s.rateLimitPolicies[ratelimit.Login], s.rateLimitKeyByIPAndEmail("email")),
 			),
 		),
 	)
@@ -245,17 +246,17 @@ func (s *Server) registerAuthRoutes(dynamic *http.ServeMux) {
 	dynamic.Handle(
 		route(http.MethodPost, paths.ChangePassword),
 		s.requireVerifiedAuth(
-			s.withRateLimits(http.HandlerFunc(s.changePassword), rateLimit("change-password", s.rateLimitPolicies.ChangePassword, s.rateLimitKeyByIPAndUser())),
+			s.withRateLimits(http.HandlerFunc(s.changePassword), rateLimit("change-password", s.rateLimitPolicies[ratelimit.ChangePassword], s.rateLimitKeyByIPAndUser())),
 		),
 	)
 	s.postOnly(dynamic, paths.AccountSessionsRevoke,
 		s.requireVerifiedAuth(
-			s.withRateLimits(http.HandlerFunc(s.revokeSession), rateLimit("revoke-session", s.rateLimitPolicies.RevokeSession, s.rateLimitKeyByIPAndUser())),
+			s.withRateLimits(http.HandlerFunc(s.revokeSession), rateLimit("revoke-session", s.rateLimitPolicies[ratelimit.RevokeSession], s.rateLimitKeyByIPAndUser())),
 		),
 	)
 	s.postOnly(dynamic, paths.AccountSessionsRevokeOthers,
 		s.requireVerifiedAuth(
-			s.withRateLimits(http.HandlerFunc(s.revokeOtherSessions), rateLimit("revoke-other-sessions", s.rateLimitPolicies.RevokeOtherSessions, s.rateLimitKeyByIPAndUser())),
+			s.withRateLimits(http.HandlerFunc(s.revokeOtherSessions), rateLimit("revoke-other-sessions", s.rateLimitPolicies[ratelimit.RevokeOtherSessions], s.rateLimitKeyByIPAndUser())),
 		),
 	)
 	dynamic.Handle(route(http.MethodGet, paths.ForgotPassword), s.requireAnonymous(http.HandlerFunc(s.forgotPasswordForm)))
@@ -263,8 +264,8 @@ func (s *Server) registerAuthRoutes(dynamic *http.ServeMux) {
 		route(http.MethodPost, paths.ForgotPassword),
 		s.requireAnonymous(
 			s.withRateLimits(http.HandlerFunc(s.forgotPassword),
-				rateLimit("forgot-password-ip", s.rateLimitPolicies.ForgotPasswordPerIP, s.rateLimitKeyByIP()),
-				rateLimit("forgot-password", s.rateLimitPolicies.ForgotPassword, s.rateLimitKeyByIPAndEmail("email")),
+				rateLimit("forgot-password-ip", s.rateLimitPolicies[ratelimit.ForgotPasswordPerIP], s.rateLimitKeyByIP()),
+				rateLimit("forgot-password", s.rateLimitPolicies[ratelimit.ForgotPassword], s.rateLimitKeyByIPAndEmail("email")),
 			),
 		),
 	)
@@ -272,7 +273,7 @@ func (s *Server) registerAuthRoutes(dynamic *http.ServeMux) {
 	dynamic.Handle(
 		route(http.MethodPost, paths.ResetPassword),
 		s.requireAnonymous(
-			s.withRateLimits(http.HandlerFunc(s.resetPassword), rateLimit("reset-password", s.rateLimitPolicies.ResetPassword, s.rateLimitKeyByIPAndResetTokenCookie())),
+			s.withRateLimits(http.HandlerFunc(s.resetPassword), rateLimit("reset-password", s.rateLimitPolicies[ratelimit.ResetPassword], s.rateLimitKeyByIPAndResetTokenCookie())),
 		),
 	)
 	dynamic.HandleFunc(route(http.MethodGet, paths.ConfirmEmail), s.confirmEmail)
@@ -281,15 +282,15 @@ func (s *Server) registerAuthRoutes(dynamic *http.ServeMux) {
 		route(http.MethodPost, paths.ResendVerification),
 		s.requireAnonymous(
 			s.withRateLimits(http.HandlerFunc(s.resendVerificationPublic),
-				rateLimit("resend-verification-public-ip", s.rateLimitPolicies.PublicResendVerifyPerIP, s.rateLimitKeyByIP()),
-				rateLimit("resend-verification-public", s.rateLimitPolicies.PublicResendVerification, s.rateLimitKeyByIPAndEmail("email")),
+				rateLimit("resend-verification-public-ip", s.rateLimitPolicies[ratelimit.PublicResendVerifyPerIP], s.rateLimitKeyByIP()),
+				rateLimit("resend-verification-public", s.rateLimitPolicies[ratelimit.PublicResendVerification], s.rateLimitKeyByIPAndEmail("email")),
 			),
 		),
 	)
 	dynamic.Handle(route(http.MethodGet, paths.VerifyEmail), s.requireAuth(http.HandlerFunc(s.verifyEmail)))
 	s.postOnly(dynamic, paths.VerifyEmailResend,
 		s.requireAuth(
-			s.withRateLimits(http.HandlerFunc(s.resendVerification), rateLimit("resend-verification-account", s.rateLimitPolicies.AccountResendVerification, s.rateLimitKeyByIPAndUser())),
+			s.withRateLimits(http.HandlerFunc(s.resendVerification), rateLimit("resend-verification-account", s.rateLimitPolicies[ratelimit.AccountResendVerification], s.rateLimitKeyByIPAndUser())),
 		),
 	)
 	dynamic.HandleFunc(route(http.MethodGet, paths.ConfirmEmailChange), s.confirmEmailChange)
@@ -297,14 +298,14 @@ func (s *Server) registerAuthRoutes(dynamic *http.ServeMux) {
 	dynamic.Handle(
 		route(http.MethodPost, paths.ChangeEmail),
 		s.requireVerifiedAuth(
-			s.withRateLimits(http.HandlerFunc(s.changeEmail), rateLimit("change-email", s.rateLimitPolicies.ChangeEmail, s.rateLimitKeyByIPAndUser())),
+			s.withRateLimits(http.HandlerFunc(s.changeEmail), rateLimit("change-email", s.rateLimitPolicies[ratelimit.ChangeEmail], s.rateLimitKeyByIPAndUser())),
 		),
 	)
 	dynamic.Handle(route(http.MethodGet, paths.AccountDelete), s.requireVerifiedAuth(http.HandlerFunc(s.deleteAccountForm)))
 	dynamic.Handle(
 		route(http.MethodPost, paths.AccountDelete),
 		s.requireVerifiedAuth(
-			s.withRateLimits(http.HandlerFunc(s.deleteAccount), rateLimit("delete-account", s.rateLimitPolicies.DeleteAccount, s.rateLimitKeyByIPAndUser())),
+			s.withRateLimits(http.HandlerFunc(s.deleteAccount), rateLimit("delete-account", s.rateLimitPolicies[ratelimit.DeleteAccount], s.rateLimitKeyByIPAndUser())),
 		),
 	)
 	dynamic.Handle(route(http.MethodGet, paths.AccountTwoFactor), s.requireVerifiedAuth(http.HandlerFunc(s.twoFactorPage)))
@@ -313,55 +314,55 @@ func (s *Server) registerAuthRoutes(dynamic *http.ServeMux) {
 	)
 	s.postOnly(dynamic, paths.AccountTwoFactorConfirm,
 		s.requireVerifiedAuth(
-			s.withRateLimits(http.HandlerFunc(s.twoFactorConfirm), rateLimit("totp-confirm", s.rateLimitPolicies.TOTPConfirm, s.rateLimitKeyByIPAndUser())),
+			s.withRateLimits(http.HandlerFunc(s.twoFactorConfirm), rateLimit("totp-confirm", s.rateLimitPolicies[ratelimit.TOTPConfirm], s.rateLimitKeyByIPAndUser())),
 		),
 	)
 	s.postOnly(dynamic, paths.AccountTwoFactorDisable,
 		s.requireVerifiedAuth(
-			s.withRateLimits(http.HandlerFunc(s.twoFactorDisable), rateLimit("totp-disable", s.rateLimitPolicies.TOTPDisable, s.rateLimitKeyByIPAndUser())),
+			s.withRateLimits(http.HandlerFunc(s.twoFactorDisable), rateLimit("totp-disable", s.rateLimitPolicies[ratelimit.TOTPDisable], s.rateLimitKeyByIPAndUser())),
 		),
 	)
 	s.postOnly(dynamic, paths.AccountTwoFactorRegenerateCodes,
 		s.requireVerifiedAuth(
-			s.withRateLimits(http.HandlerFunc(s.twoFactorRegenerateCodes), rateLimit("totp-regenerate-codes", s.rateLimitPolicies.TOTPRegenerateCodes, s.rateLimitKeyByIPAndUser())),
+			s.withRateLimits(http.HandlerFunc(s.twoFactorRegenerateCodes), rateLimit("totp-regenerate-codes", s.rateLimitPolicies[ratelimit.TOTPRegenerateCodes], s.rateLimitKeyByIPAndUser())),
 		),
 	)
 	dynamic.Handle(route(http.MethodGet, paths.AccountTwoFactorChallenge), s.requireAnonymous(http.HandlerFunc(s.twoFactorChallengeForm)))
 	dynamic.Handle(
 		route(http.MethodPost, paths.AccountTwoFactorChallenge),
 		s.requireAnonymous(
-			s.withRateLimits(http.HandlerFunc(s.twoFactorChallenge), rateLimit("totp-challenge", s.rateLimitPolicies.TOTPChallenge, s.rateLimitKeyByIP())),
+			s.withRateLimits(http.HandlerFunc(s.twoFactorChallenge), rateLimit("totp-challenge", s.rateLimitPolicies[ratelimit.TOTPChallenge], s.rateLimitKeyByIP())),
 		),
 	)
 	dynamic.Handle(route(http.MethodGet, paths.AccountPasskeys), s.requireVerifiedAuth(http.HandlerFunc(s.passkeysPage)))
 	s.postOnly(dynamic, paths.AccountPasskeysRegisterBegin,
 		s.requireVerifiedAuth(
-			s.withRateLimits(http.HandlerFunc(s.passkeyRegisterBegin), rateLimit("passkey-register-begin", s.rateLimitPolicies.PasskeyRegister, s.rateLimitKeyByIPAndUser())),
+			s.withRateLimits(http.HandlerFunc(s.passkeyRegisterBegin), rateLimit("passkey-register-begin", s.rateLimitPolicies[ratelimit.PasskeyRegister], s.rateLimitKeyByIPAndUser())),
 		),
 	)
 	s.postOnly(dynamic, paths.AccountPasskeysRegisterFinish,
 		s.requireVerifiedAuth(
-			s.withRateLimits(http.HandlerFunc(s.passkeyRegisterFinish), rateLimit("passkey-register-finish", s.rateLimitPolicies.PasskeyRegister, s.rateLimitKeyByIPAndUser())),
+			s.withRateLimits(http.HandlerFunc(s.passkeyRegisterFinish), rateLimit("passkey-register-finish", s.rateLimitPolicies[ratelimit.PasskeyRegister], s.rateLimitKeyByIPAndUser())),
 		),
 	)
 	s.postOnly(dynamic, paths.AccountPasskeysRename,
 		s.requireVerifiedAuth(
-			s.withRateLimits(http.HandlerFunc(s.passkeyRename), rateLimit("passkey-rename", s.rateLimitPolicies.PasskeyManage, s.rateLimitKeyByIPAndUser())),
+			s.withRateLimits(http.HandlerFunc(s.passkeyRename), rateLimit("passkey-rename", s.rateLimitPolicies[ratelimit.PasskeyManage], s.rateLimitKeyByIPAndUser())),
 		),
 	)
 	s.postOnly(dynamic, paths.AccountPasskeysDelete,
 		s.requireVerifiedAuth(
-			s.withRateLimits(http.HandlerFunc(s.passkeyDelete), rateLimit("passkey-delete", s.rateLimitPolicies.PasskeyManage, s.rateLimitKeyByIPAndUser())),
+			s.withRateLimits(http.HandlerFunc(s.passkeyDelete), rateLimit("passkey-delete", s.rateLimitPolicies[ratelimit.PasskeyManage], s.rateLimitKeyByIPAndUser())),
 		),
 	)
 	s.postOnly(dynamic, paths.LoginPasskeyBegin,
 		s.requireAnonymous(
-			s.withRateLimits(http.HandlerFunc(s.passkeyLoginBegin), rateLimit("passkey-login-begin", s.rateLimitPolicies.PasskeyLogin, s.rateLimitKeyByIP())),
+			s.withRateLimits(http.HandlerFunc(s.passkeyLoginBegin), rateLimit("passkey-login-begin", s.rateLimitPolicies[ratelimit.PasskeyLogin], s.rateLimitKeyByIP())),
 		),
 	)
 	s.postOnly(dynamic, paths.LoginPasskeyFinish,
 		s.requireAnonymous(
-			s.withRateLimits(http.HandlerFunc(s.passkeyLoginFinish), rateLimit("passkey-login-finish", s.rateLimitPolicies.PasskeyLogin, s.rateLimitKeyByIP())),
+			s.withRateLimits(http.HandlerFunc(s.passkeyLoginFinish), rateLimit("passkey-login-finish", s.rateLimitPolicies[ratelimit.PasskeyLogin], s.rateLimitKeyByIP())),
 		),
 	)
 }

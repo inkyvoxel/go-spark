@@ -9,6 +9,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/inkyvoxel/go-spark/internal/ratelimit"
 )
 
 const (
@@ -18,36 +20,6 @@ const (
 	EmailProviderLog  = "log"
 	EmailProviderSMTP = "smtp"
 )
-
-type RateLimitPolicyConfig struct {
-	MaxRequests int
-	Window      time.Duration
-}
-
-type RateLimitPoliciesConfig struct {
-	Login                     RateLimitPolicyConfig
-	LoginPerIP                RateLimitPolicyConfig
-	Register                  RateLimitPolicyConfig
-	RegisterPerIP             RateLimitPolicyConfig
-	ForgotPassword            RateLimitPolicyConfig
-	ForgotPasswordPerIP       RateLimitPolicyConfig
-	ResetPassword             RateLimitPolicyConfig
-	PublicResendVerification  RateLimitPolicyConfig
-	PublicResendVerifyPerIP   RateLimitPolicyConfig
-	AccountResendVerification RateLimitPolicyConfig
-	ChangePassword            RateLimitPolicyConfig
-	ChangeEmail               RateLimitPolicyConfig
-	RevokeSession             RateLimitPolicyConfig
-	RevokeOtherSessions       RateLimitPolicyConfig
-	DeleteAccount             RateLimitPolicyConfig
-	TOTPChallenge             RateLimitPolicyConfig
-	TOTPDisable               RateLimitPolicyConfig
-	TOTPConfirm               RateLimitPolicyConfig
-	TOTPRegenerateCodes       RateLimitPolicyConfig
-	PasskeyRegister           RateLimitPolicyConfig
-	PasskeyLogin              RateLimitPolicyConfig
-	PasskeyManage             RateLimitPolicyConfig
-}
 
 type Config struct {
 	Addr                        string
@@ -73,7 +45,7 @@ type Config struct {
 	CleanupTokenRetention       time.Duration
 	CleanupSentEmailRetention   time.Duration
 	CleanupFailedEmailRetention time.Duration
-	RateLimitPolicies           RateLimitPoliciesConfig
+	RateLimitPolicies           ratelimit.Policies
 	TrustedProxies              []string
 	TOTPIssuer                  string
 	PasskeyRPID                 string
@@ -486,120 +458,16 @@ func IsProcess(process string) bool {
 	}
 }
 
-func rateLimitPoliciesFromEnv() (RateLimitPoliciesConfig, error) {
-	login, err := rateLimitPolicyFromEnv("RATE_LIMIT_LOGIN")
-	if err != nil {
-		return RateLimitPoliciesConfig{}, err
+func rateLimitPoliciesFromEnv() (ratelimit.Policies, error) {
+	policies := make(ratelimit.Policies, len(ratelimit.Names))
+	for _, name := range ratelimit.Names {
+		policy, err := rateLimitPolicyFromEnv(ratelimit.EnvPrefix(name))
+		if err != nil {
+			return nil, err
+		}
+		policies[name] = policy
 	}
-	loginPerIP, err := rateLimitPolicyFromEnv("RATE_LIMIT_LOGIN_PER_IP")
-	if err != nil {
-		return RateLimitPoliciesConfig{}, err
-	}
-	register, err := rateLimitPolicyFromEnv("RATE_LIMIT_REGISTER")
-	if err != nil {
-		return RateLimitPoliciesConfig{}, err
-	}
-	registerPerIP, err := rateLimitPolicyFromEnv("RATE_LIMIT_REGISTER_PER_IP")
-	if err != nil {
-		return RateLimitPoliciesConfig{}, err
-	}
-	forgotPassword, err := rateLimitPolicyFromEnv("RATE_LIMIT_FORGOT_PASSWORD")
-	if err != nil {
-		return RateLimitPoliciesConfig{}, err
-	}
-	forgotPasswordPerIP, err := rateLimitPolicyFromEnv("RATE_LIMIT_FORGOT_PASSWORD_PER_IP")
-	if err != nil {
-		return RateLimitPoliciesConfig{}, err
-	}
-	resetPassword, err := rateLimitPolicyFromEnv("RATE_LIMIT_RESET_PASSWORD")
-	if err != nil {
-		return RateLimitPoliciesConfig{}, err
-	}
-	publicResendVerification, err := rateLimitPolicyFromEnv("RATE_LIMIT_PUBLIC_RESEND_VERIFICATION")
-	if err != nil {
-		return RateLimitPoliciesConfig{}, err
-	}
-	publicResendVerifyPerIP, err := rateLimitPolicyFromEnv("RATE_LIMIT_PUBLIC_RESEND_VERIFICATION_PER_IP")
-	if err != nil {
-		return RateLimitPoliciesConfig{}, err
-	}
-	accountResendVerification, err := rateLimitPolicyFromEnv("RATE_LIMIT_ACCOUNT_RESEND_VERIFICATION")
-	if err != nil {
-		return RateLimitPoliciesConfig{}, err
-	}
-	changePassword, err := rateLimitPolicyFromEnv("RATE_LIMIT_CHANGE_PASSWORD")
-	if err != nil {
-		return RateLimitPoliciesConfig{}, err
-	}
-	changeEmail, err := rateLimitPolicyFromEnv("RATE_LIMIT_CHANGE_EMAIL")
-	if err != nil {
-		return RateLimitPoliciesConfig{}, err
-	}
-	revokeSession, err := rateLimitPolicyFromEnv("RATE_LIMIT_REVOKE_SESSION")
-	if err != nil {
-		return RateLimitPoliciesConfig{}, err
-	}
-	revokeOtherSessions, err := rateLimitPolicyFromEnv("RATE_LIMIT_REVOKE_OTHER_SESSIONS")
-	if err != nil {
-		return RateLimitPoliciesConfig{}, err
-	}
-	deleteAccount, err := rateLimitPolicyFromEnv("RATE_LIMIT_DELETE_ACCOUNT")
-	if err != nil {
-		return RateLimitPoliciesConfig{}, err
-	}
-	totpChallenge, err := rateLimitPolicyFromEnv("RATE_LIMIT_TOTP_CHALLENGE")
-	if err != nil {
-		return RateLimitPoliciesConfig{}, err
-	}
-	totpDisable, err := rateLimitPolicyFromEnv("RATE_LIMIT_TOTP_DISABLE")
-	if err != nil {
-		return RateLimitPoliciesConfig{}, err
-	}
-	totpConfirm, err := rateLimitPolicyFromEnv("RATE_LIMIT_TOTP_CONFIRM")
-	if err != nil {
-		return RateLimitPoliciesConfig{}, err
-	}
-	totpRegenerateCodes, err := rateLimitPolicyFromEnv("RATE_LIMIT_TOTP_REGENERATE_CODES")
-	if err != nil {
-		return RateLimitPoliciesConfig{}, err
-	}
-	passkeyRegister, err := rateLimitPolicyFromEnv("RATE_LIMIT_PASSKEY_REGISTER")
-	if err != nil {
-		return RateLimitPoliciesConfig{}, err
-	}
-	passkeyLogin, err := rateLimitPolicyFromEnv("RATE_LIMIT_PASSKEY_LOGIN")
-	if err != nil {
-		return RateLimitPoliciesConfig{}, err
-	}
-	passkeyManage, err := rateLimitPolicyFromEnv("RATE_LIMIT_PASSKEY_MANAGE")
-	if err != nil {
-		return RateLimitPoliciesConfig{}, err
-	}
-
-	return RateLimitPoliciesConfig{
-		Login:                     login,
-		LoginPerIP:                loginPerIP,
-		Register:                  register,
-		RegisterPerIP:             registerPerIP,
-		ForgotPassword:            forgotPassword,
-		ForgotPasswordPerIP:       forgotPasswordPerIP,
-		ResetPassword:             resetPassword,
-		PublicResendVerification:  publicResendVerification,
-		PublicResendVerifyPerIP:   publicResendVerifyPerIP,
-		AccountResendVerification: accountResendVerification,
-		ChangePassword:            changePassword,
-		ChangeEmail:               changeEmail,
-		RevokeSession:             revokeSession,
-		RevokeOtherSessions:       revokeOtherSessions,
-		DeleteAccount:             deleteAccount,
-		TOTPChallenge:             totpChallenge,
-		TOTPDisable:               totpDisable,
-		TOTPConfirm:               totpConfirm,
-		TOTPRegenerateCodes:       totpRegenerateCodes,
-		PasskeyRegister:           passkeyRegister,
-		PasskeyLogin:              passkeyLogin,
-		PasskeyManage:             passkeyManage,
-	}, nil
+	return policies, nil
 }
 
 func envTrustedProxies(key string) ([]string, error) {
@@ -627,17 +495,17 @@ func envTrustedProxies(key string) ([]string, error) {
 	return result, nil
 }
 
-func rateLimitPolicyFromEnv(prefix string) (RateLimitPolicyConfig, error) {
+func rateLimitPolicyFromEnv(prefix string) (ratelimit.Policy, error) {
 	maxRequests, err := envIntOptionalPositive(prefix + "_MAX_REQUESTS")
 	if err != nil {
-		return RateLimitPolicyConfig{}, err
+		return ratelimit.Policy{}, err
 	}
 	window, err := envDurationOptionalPositive(prefix + "_WINDOW")
 	if err != nil {
-		return RateLimitPolicyConfig{}, err
+		return ratelimit.Policy{}, err
 	}
 
-	return RateLimitPolicyConfig{
+	return ratelimit.Policy{
 		MaxRequests: maxRequests,
 		Window:      window,
 	}, nil

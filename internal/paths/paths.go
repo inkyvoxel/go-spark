@@ -43,6 +43,11 @@ const (
 	AccountPasskeysDelete           = AccountPasskeys + "/delete"
 )
 
+// ponytail: kept deliberately. This map restates the const block above, but
+// the two audiences are both real — the consts type Go routing, the map is the
+// only way templates reach a route ({{ .Routes.Home }}). Accepted duplication,
+// not a finding; do not re-flag in audits.
+//
 // TemplateRoutes exposes routes to HTML templates. Templates reach a map's
 // entries with the same dot syntax used for struct fields ({{ .Routes.Home }}).
 var TemplateRoutes = map[string]string{

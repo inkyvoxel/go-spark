@@ -12,7 +12,6 @@ import (
 	"net/url"
 	"path"
 	"strings"
-	"sync"
 	texttemplate "text/template"
 
 	"github.com/inkyvoxel/go-spark/internal/paths"
@@ -92,11 +91,6 @@ type EmailChangeNoticeOptions struct {
 
 //go:embed templates/*
 var emailTemplateFS embed.FS
-
-var (
-	emailTemplateCacheMu sync.RWMutex
-	emailTemplateCache   = map[string]compiledEmailTemplates{}
-)
 
 type compiledEmailTemplates struct {
 	subject *texttemplate.Template
@@ -275,9 +269,9 @@ func tokenURL(appBaseURL, path, token, tokenLabel string) (string, error) {
 }
 
 func renderEmailTemplates(templateName string, data any) (string, string, string, error) {
-	templates, err := loadEmailTemplates(templateName)
-	if err != nil {
-		return "", "", "", err
+	templates, ok := emailTemplates[templateName]
+	if !ok {
+		return "", "", "", fmt.Errorf("unknown email template %q", templateName)
 	}
 
 	subjectOut, err := renderTextTemplate(templates.subject, data)
@@ -312,14 +306,30 @@ func renderHTMLTemplate(tpl *template.Template, data any) (string, error) {
 	return rendered.String(), nil
 }
 
-func loadEmailTemplates(templateName string) (compiledEmailTemplates, error) {
-	emailTemplateCacheMu.RLock()
-	cached, ok := emailTemplateCache[templateName]
-	emailTemplateCacheMu.RUnlock()
-	if ok {
-		return cached, nil
+// emailTemplates are parsed once at startup from the embedded files, keyed by
+// template name (e.g. "password_reset"). The files are compiled in, so a parse
+// failure is an asset bug we want surfaced at boot, not deferred to a send.
+var emailTemplates = mustParseEmailTemplates()
+
+func mustParseEmailTemplates() map[string]compiledEmailTemplates {
+	subjects, err := fs.Glob(emailTemplateFS, "templates/*.subject.txt")
+	if err != nil {
+		panic(fmt.Sprintf("glob email templates: %v", err))
 	}
 
+	compiled := make(map[string]compiledEmailTemplates, len(subjects))
+	for _, subjectPath := range subjects {
+		name := strings.TrimSuffix(path.Base(subjectPath), ".subject.txt")
+		templates, err := parseEmailTemplateSet(name)
+		if err != nil {
+			panic(fmt.Sprintf("parse email templates: %v", err))
+		}
+		compiled[name] = templates
+	}
+	return compiled
+}
+
+func parseEmailTemplateSet(templateName string) (compiledEmailTemplates, error) {
 	subject, err := parseTextTemplate(path.Join("templates", templateName+".subject.txt"), templateName+"-subject")
 	if err != nil {
 		return compiledEmailTemplates{}, fmt.Errorf("parse %s subject template: %w", templateName, err)
@@ -333,17 +343,11 @@ func loadEmailTemplates(templateName string) (compiledEmailTemplates, error) {
 		return compiledEmailTemplates{}, fmt.Errorf("parse %s html template: %w", templateName, err)
 	}
 
-	compiled := compiledEmailTemplates{
+	return compiledEmailTemplates{
 		subject: subject,
 		text:    textBody,
 		html:    htmlBody,
-	}
-
-	emailTemplateCacheMu.Lock()
-	emailTemplateCache[templateName] = compiled
-	emailTemplateCacheMu.Unlock()
-
-	return compiled, nil
+	}, nil
 }
 
 func parseTextTemplate(filePath, name string) (*texttemplate.Template, error) {

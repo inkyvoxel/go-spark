@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/inkyvoxel/go-spark/internal/services"
 )
 
 const flashCookieName = "flash"
@@ -97,14 +99,5 @@ func (s *Server) flashSigningKey() []byte {
 	if len(s.flashKey) != 0 {
 		return s.flashKey
 	}
-	return deriveKey([]byte(defaultTestCSRFSigningKey), "flash")
-}
-
-// deriveKey produces a purpose-scoped key from a root secret using HMAC-SHA256.
-// All signing keys in this application are derived from SecretKeyBase via this
-// function, matching the single-root-secret pattern (cf. Rails secret_key_base).
-func deriveKey(base []byte, purpose string) []byte {
-	h := hmac.New(sha256.New, base)
-	h.Write([]byte(purpose))
-	return h.Sum(nil)
+	return services.DeriveKey([]byte(defaultTestCSRFSigningKey), "flash")
 }

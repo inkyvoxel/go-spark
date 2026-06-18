@@ -1,8 +1,6 @@
 package app
 
 import (
-	"crypto/hmac"
-	"crypto/sha256"
 	"database/sql"
 	"fmt"
 	"log/slog"
@@ -23,14 +21,6 @@ import (
 const defaultStarterEmailFrom = `"Go Spark" <hello@example.com>`
 
 const emailJobInterval = 5 * time.Second
-
-// deriveKey produces a purpose-scoped key from a root secret using HMAC-SHA256,
-// following the single-root-secret pattern used throughout this application.
-func deriveKey(base []byte, purpose string) []byte {
-	h := hmac.New(sha256.New, base)
-	h.Write([]byte(purpose))
-	return h.Sum(nil)
-}
 
 type Runtime struct {
 	DB         *sql.DB
@@ -74,7 +64,7 @@ func buildRuntime(cfg config.Config, logger *slog.Logger, db *sql.DB, secretKeyB
 	// factor. Rotating AUTH_TOTP_KEY, by contrast, forces 2FA re-enrolment.
 	totpKey := []byte(strings.TrimSpace(cfg.TOTPKey))
 
-	authStore, err := database.NewAuthStore(db, deriveKey(totpKey, "totp_secret"))
+	authStore, err := database.NewAuthStore(db, services.DeriveKey(totpKey, "totp_secret"))
 	if err != nil {
 		return Runtime{}, fmt.Errorf("configure auth store: %w", err)
 	}
@@ -83,7 +73,7 @@ func buildRuntime(cfg config.Config, logger *slog.Logger, db *sql.DB, secretKeyB
 		PasswordMinLen:           cfg.PasswordMinLength,
 		PasswordPepper:           cfg.PasswordPepper,
 		TOTPIssuer:               cfg.TOTPIssuer,
-		TOTPBackupCodeKey:        deriveKey(totpKey, "totp_backup_code"),
+		TOTPBackupCodeKey:        services.DeriveKey(totpKey, "totp_backup_code"),
 		EmailChangeNoticeEnabled: boolPtr(cfg.EmailChangeNoticeEnabled),
 		WebAuthnRPID:             passkeyRPID(cfg),
 		WebAuthnRPDisplayName:    passkeyRPDisplayName(cfg),
@@ -118,7 +108,7 @@ func buildRuntime(cfg config.Config, logger *slog.Logger, db *sql.DB, secretKeyB
 		AppBaseURL:        cfg.AppBaseURL,
 		SecretKeyBase:     secretKeyBase,
 		PasswordMinLength: cfg.PasswordMinLength,
-		RateLimitPolicies: toServerRateLimitPolicies(cfg.RateLimitPolicies),
+		RateLimitPolicies: cfg.RateLimitPolicies,
 		TrustedProxies:    cfg.TrustedProxies,
 	})
 	if err != nil {
@@ -281,97 +271,4 @@ func isHTTPSURL(raw string) bool {
 
 func isDefaultStarterEmailFrom(value string) bool {
 	return strings.TrimSpace(value) == defaultStarterEmailFrom
-}
-
-func toServerRateLimitPolicies(cfg config.RateLimitPoliciesConfig) server.RateLimitPolicies {
-	return server.RateLimitPolicies{
-		Login: server.RateLimitPolicy{
-			MaxRequests: cfg.Login.MaxRequests,
-			Window:      cfg.Login.Window,
-		},
-		LoginPerIP: server.RateLimitPolicy{
-			MaxRequests: cfg.LoginPerIP.MaxRequests,
-			Window:      cfg.LoginPerIP.Window,
-		},
-		Register: server.RateLimitPolicy{
-			MaxRequests: cfg.Register.MaxRequests,
-			Window:      cfg.Register.Window,
-		},
-		RegisterPerIP: server.RateLimitPolicy{
-			MaxRequests: cfg.RegisterPerIP.MaxRequests,
-			Window:      cfg.RegisterPerIP.Window,
-		},
-		ForgotPassword: server.RateLimitPolicy{
-			MaxRequests: cfg.ForgotPassword.MaxRequests,
-			Window:      cfg.ForgotPassword.Window,
-		},
-		ForgotPasswordPerIP: server.RateLimitPolicy{
-			MaxRequests: cfg.ForgotPasswordPerIP.MaxRequests,
-			Window:      cfg.ForgotPasswordPerIP.Window,
-		},
-		ResetPassword: server.RateLimitPolicy{
-			MaxRequests: cfg.ResetPassword.MaxRequests,
-			Window:      cfg.ResetPassword.Window,
-		},
-		PublicResendVerification: server.RateLimitPolicy{
-			MaxRequests: cfg.PublicResendVerification.MaxRequests,
-			Window:      cfg.PublicResendVerification.Window,
-		},
-		PublicResendVerifyPerIP: server.RateLimitPolicy{
-			MaxRequests: cfg.PublicResendVerifyPerIP.MaxRequests,
-			Window:      cfg.PublicResendVerifyPerIP.Window,
-		},
-		AccountResendVerification: server.RateLimitPolicy{
-			MaxRequests: cfg.AccountResendVerification.MaxRequests,
-			Window:      cfg.AccountResendVerification.Window,
-		},
-		ChangePassword: server.RateLimitPolicy{
-			MaxRequests: cfg.ChangePassword.MaxRequests,
-			Window:      cfg.ChangePassword.Window,
-		},
-		ChangeEmail: server.RateLimitPolicy{
-			MaxRequests: cfg.ChangeEmail.MaxRequests,
-			Window:      cfg.ChangeEmail.Window,
-		},
-		RevokeSession: server.RateLimitPolicy{
-			MaxRequests: cfg.RevokeSession.MaxRequests,
-			Window:      cfg.RevokeSession.Window,
-		},
-		RevokeOtherSessions: server.RateLimitPolicy{
-			MaxRequests: cfg.RevokeOtherSessions.MaxRequests,
-			Window:      cfg.RevokeOtherSessions.Window,
-		},
-		DeleteAccount: server.RateLimitPolicy{
-			MaxRequests: cfg.DeleteAccount.MaxRequests,
-			Window:      cfg.DeleteAccount.Window,
-		},
-		TOTPChallenge: server.RateLimitPolicy{
-			MaxRequests: cfg.TOTPChallenge.MaxRequests,
-			Window:      cfg.TOTPChallenge.Window,
-		},
-		TOTPDisable: server.RateLimitPolicy{
-			MaxRequests: cfg.TOTPDisable.MaxRequests,
-			Window:      cfg.TOTPDisable.Window,
-		},
-		TOTPConfirm: server.RateLimitPolicy{
-			MaxRequests: cfg.TOTPConfirm.MaxRequests,
-			Window:      cfg.TOTPConfirm.Window,
-		},
-		TOTPRegenerateCodes: server.RateLimitPolicy{
-			MaxRequests: cfg.TOTPRegenerateCodes.MaxRequests,
-			Window:      cfg.TOTPRegenerateCodes.Window,
-		},
-		PasskeyRegister: server.RateLimitPolicy{
-			MaxRequests: cfg.PasskeyRegister.MaxRequests,
-			Window:      cfg.PasskeyRegister.Window,
-		},
-		PasskeyLogin: server.RateLimitPolicy{
-			MaxRequests: cfg.PasskeyLogin.MaxRequests,
-			Window:      cfg.PasskeyLogin.Window,
-		},
-		PasskeyManage: server.RateLimitPolicy{
-			MaxRequests: cfg.PasskeyManage.MaxRequests,
-			Window:      cfg.PasskeyManage.Window,
-		},
-	}
 }

@@ -21,6 +21,7 @@ The short version:
 * SQL lives in `internal/db/queries`
 * migrations live in `migrations`
 * URL constants live in `internal/paths`
+* rate-limit policies live in `internal/ratelimit`
 * HTML templates live in `templates`
 
 ## Common Feature Checklist
@@ -37,6 +38,7 @@ internal/database/project_store.go   SQLite store
 internal/db/queries/projects.sql     sqlc queries
 migrations/00002_projects_schema.sql schema changes
 internal/app/build.go                service/store wiring
+internal/ratelimit/ratelimit.go      rate-limit policy (only for limited routes)
 ```
 
 Not every feature needs every layer. A static public page only needs a path,
@@ -91,14 +93,24 @@ narrower per-email or per-user bucket:
 
 ```go
 s.withRateLimits(http.HandlerFunc(s.archiveProject),
-    rateLimit("archive-ip", s.rateLimitPolicies.ArchivePerIP, s.rateLimitKeyByIP()),
-    rateLimit("archive", s.rateLimitPolicies.Archive, s.rateLimitKeyByIPAndUser()),
+    rateLimit("archive-ip", s.rateLimitPolicies[ratelimit.ArchivePerIP], s.rateLimitKeyByIP()),
+    rateLimit("archive", s.rateLimitPolicies[ratelimit.Archive], s.rateLimitKeyByIPAndUser()),
 )
 ```
 
-Add the policy fields and defaults in `internal/server/rate_limit.go`, the
-config plumbing in `internal/config/config.go` and `internal/app/build.go`, and
-the env vars in `.env` / `.env.example`.
+A policy lives in one place — `internal/ratelimit/ratelimit.go`. Add a `Name`
+constant, append it to `Names`, and give it a `Defaults` entry:
+
+```go
+const Archive Name = "archive"           // + ArchivePerIP, etc.
+// add to Names, then:
+Archive: {MaxRequests: 5, Window: 15 * time.Minute},
+```
+
+That is all the wiring needed. The config loader iterates `Names`, so the env
+overrides `RATE_LIMIT_ARCHIVE_MAX_REQUESTS` and `RATE_LIMIT_ARCHIVE_WINDOW`
+(uppercased name, see `EnvPrefix`) work automatically — no changes to
+`config.go` or `build.go`. Document the new vars in `.env.example`.
 
 ## 3. Add Templates
 
@@ -233,8 +245,10 @@ successful POST.
 For a new transactional email:
 
 1. add `name.subject.txt`, `name.text.txt`, and `name.html.tmpl` in
-   `internal/email/templates`
-2. add a message builder in `internal/email/email.go`
+   `internal/email/templates` — the three files are parsed at startup and keyed
+   by their shared `name` prefix, with no registration step
+2. add a message builder in `internal/email/email.go` that calls
+   `renderEmailTemplates("name", data)` with that same prefix
 3. let the service decide when to send it
 4. enqueue the message into `email_outbox` through a store
 

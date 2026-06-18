@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/inkyvoxel/go-spark/internal/paths"
+	"github.com/inkyvoxel/go-spark/internal/ratelimit"
 )
 
 func TestInMemoryRateLimiterAllowWithinLimitThenDeny(t *testing.T) {
@@ -310,16 +311,16 @@ func TestRouteRateLimitProtectedPostRoutesReturn429AfterThreshold(t *testing.T) 
 	}
 	srv := newAuthRouteTestServer(t, auth)
 	srv.rateLimitPolicies = RateLimitPolicies{
-		Login:                     RateLimitPolicy{MaxRequests: 1, Window: time.Hour},
-		Register:                  RateLimitPolicy{MaxRequests: 1, Window: time.Hour},
-		ForgotPassword:            RateLimitPolicy{MaxRequests: 1, Window: time.Hour},
-		ResetPassword:             RateLimitPolicy{MaxRequests: 1, Window: time.Hour},
-		PublicResendVerification:  RateLimitPolicy{MaxRequests: 1, Window: time.Hour},
-		AccountResendVerification: RateLimitPolicy{MaxRequests: 1, Window: time.Hour},
-		ChangePassword:            RateLimitPolicy{MaxRequests: 1, Window: time.Hour},
-		ChangeEmail:               RateLimitPolicy{MaxRequests: 1, Window: time.Hour},
-		RevokeSession:             RateLimitPolicy{MaxRequests: 1, Window: time.Hour},
-		RevokeOtherSessions:       RateLimitPolicy{MaxRequests: 1, Window: time.Hour},
+		ratelimit.Login:                     RateLimitPolicy{MaxRequests: 1, Window: time.Hour},
+		ratelimit.Register:                  RateLimitPolicy{MaxRequests: 1, Window: time.Hour},
+		ratelimit.ForgotPassword:            RateLimitPolicy{MaxRequests: 1, Window: time.Hour},
+		ratelimit.ResetPassword:             RateLimitPolicy{MaxRequests: 1, Window: time.Hour},
+		ratelimit.PublicResendVerification:  RateLimitPolicy{MaxRequests: 1, Window: time.Hour},
+		ratelimit.AccountResendVerification: RateLimitPolicy{MaxRequests: 1, Window: time.Hour},
+		ratelimit.ChangePassword:            RateLimitPolicy{MaxRequests: 1, Window: time.Hour},
+		ratelimit.ChangeEmail:               RateLimitPolicy{MaxRequests: 1, Window: time.Hour},
+		ratelimit.RevokeSession:             RateLimitPolicy{MaxRequests: 1, Window: time.Hour},
+		ratelimit.RevokeOtherSessions:       RateLimitPolicy{MaxRequests: 1, Window: time.Hour},
 	}
 	routes := srv.Routes()
 
@@ -422,7 +423,7 @@ func TestRouteRateLimitKeyingByIPAndEmail(t *testing.T) {
 	auth := &fakeAuthLookup{}
 	srv := newAuthRouteTestServer(t, auth)
 	srv.rateLimitPolicies = RateLimitPolicies{
-		ForgotPassword: RateLimitPolicy{MaxRequests: 1, Window: time.Hour},
+		ratelimit.ForgotPassword: RateLimitPolicy{MaxRequests: 1, Window: time.Hour},
 	}
 	routes := srv.Routes()
 
@@ -446,7 +447,7 @@ func TestRouteRateLimitKeyingByIPAndResetTokenCookie(t *testing.T) {
 	auth := &fakeAuthLookup{}
 	srv := newAuthRouteTestServer(t, auth)
 	srv.rateLimitPolicies = RateLimitPolicies{
-		ResetPassword: RateLimitPolicy{MaxRequests: 1, Window: time.Hour},
+		ratelimit.ResetPassword: RateLimitPolicy{MaxRequests: 1, Window: time.Hour},
 	}
 	routes := srv.Routes()
 
@@ -479,11 +480,11 @@ func TestRouteRateLimitKeyingByIPAndUser(t *testing.T) {
 	auth := &fakeAuthLookup{user: verifiedRouteUser()}
 	srv := newAuthRouteTestServer(t, auth)
 	srv.rateLimitPolicies = RateLimitPolicies{
-		AccountResendVerification: RateLimitPolicy{MaxRequests: 1, Window: time.Hour},
-		ChangePassword:            RateLimitPolicy{MaxRequests: 1, Window: time.Hour},
-		ChangeEmail:               RateLimitPolicy{MaxRequests: 1, Window: time.Hour},
-		RevokeSession:             RateLimitPolicy{MaxRequests: 1, Window: time.Hour},
-		RevokeOtherSessions:       RateLimitPolicy{MaxRequests: 1, Window: time.Hour},
+		ratelimit.AccountResendVerification: RateLimitPolicy{MaxRequests: 1, Window: time.Hour},
+		ratelimit.ChangePassword:            RateLimitPolicy{MaxRequests: 1, Window: time.Hour},
+		ratelimit.ChangeEmail:               RateLimitPolicy{MaxRequests: 1, Window: time.Hour},
+		ratelimit.RevokeSession:             RateLimitPolicy{MaxRequests: 1, Window: time.Hour},
+		ratelimit.RevokeOtherSessions:       RateLimitPolicy{MaxRequests: 1, Window: time.Hour},
 	}
 	routes := srv.Routes()
 
@@ -519,8 +520,8 @@ func TestRouteRateLimitLoginPerIPCeilingAcrossEmails(t *testing.T) {
 	// per-IP ceiling is what must cap total attempts from one IP spread across
 	// many distinct emails (credential stuffing).
 	srv.rateLimitPolicies = RateLimitPolicies{
-		Login:      RateLimitPolicy{MaxRequests: 100, Window: time.Hour},
-		LoginPerIP: RateLimitPolicy{MaxRequests: 2, Window: time.Hour},
+		ratelimit.Login:      RateLimitPolicy{MaxRequests: 100, Window: time.Hour},
+		ratelimit.LoginPerIP: RateLimitPolicy{MaxRequests: 2, Window: time.Hour},
 	}
 	routes := srv.Routes()
 

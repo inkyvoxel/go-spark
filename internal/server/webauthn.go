@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/go-webauthn/webauthn/webauthn"
+	"github.com/inkyvoxel/go-spark/internal/services"
 )
 
 const (
@@ -24,7 +25,7 @@ const (
 // passkeySessionKey derives the HMAC key used to sign the WebAuthn ceremony
 // cookie from the root CSRF key, matching the totp_pending cookie pattern.
 func (s *Server) passkeySessionKey() []byte {
-	return deriveKey(s.csrfKey, "passkey_session")
+	return services.DeriveKey(s.csrfKey, "passkey_session")
 }
 
 // setPasskeySessionCookie stores the WebAuthn SessionData in a short-lived,

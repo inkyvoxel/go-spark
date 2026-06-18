@@ -45,6 +45,7 @@ internal/email      email builders, senders, outbox processor
 internal/jobs       periodic background jobs runner
 internal/paths      canonical URL path constants
 internal/platform   engine-specific setup (SQLite pragmas, connection tuning)
+internal/ratelimit  rate-limit policy names and defaults, shared by config and server
 ```
 
 **Key boundary:** `internal/server` must not import `internal/db/generated`. Handlers work with service-owned types; generated persistence models stay inside stores.

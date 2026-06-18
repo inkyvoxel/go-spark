@@ -282,7 +282,7 @@ func safeRedirectPath(value string) string {
 }
 
 func (s *Server) totpPendingKey() []byte {
-	return deriveKey(s.csrfKey, "totp_pending")
+	return services.DeriveKey(s.csrfKey, "totp_pending")
 }
 
 // setTOTPPendingCookie stores a short-lived signed cookie carrying the userID

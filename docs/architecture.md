@@ -29,6 +29,7 @@ Go Spark prefers:
 /internal/jobs      jobs runner and periodic background jobs
 /internal/platform  engine-specific platform code such as SQLite setup
 /internal/paths     canonical public URL paths
+/internal/ratelimit rate-limit policy vocabulary (names, defaults) shared by config and server
 /internal/server    HTTP handlers, middleware, templates
 /internal/services  business logic
 ```

@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/inkyvoxel/go-spark/internal/ratelimit"
 	"github.com/inkyvoxel/go-spark/internal/services"
 )
 
@@ -305,47 +306,47 @@ func TestFromEnvUsesEnvironment(t *testing.T) {
 	if cfg.CleanupFailedEmailRetention != 360*time.Hour {
 		t.Fatalf("CleanupFailedEmailRetention = %v, want %v", cfg.CleanupFailedEmailRetention, 360*time.Hour)
 	}
-	if cfg.RateLimitPolicies.Login.MaxRequests != 7 {
-		t.Fatalf("RateLimitPolicies.Login.MaxRequests = %d, want %d", cfg.RateLimitPolicies.Login.MaxRequests, 7)
+	if cfg.RateLimitPolicies[ratelimit.Login].MaxRequests != 7 {
+		t.Fatalf("RateLimitPolicies.Login.MaxRequests = %d, want %d", cfg.RateLimitPolicies[ratelimit.Login].MaxRequests, 7)
 	}
-	if cfg.RateLimitPolicies.Login.Window != 2*time.Minute {
-		t.Fatalf("RateLimitPolicies.Login.Window = %v, want %v", cfg.RateLimitPolicies.Login.Window, 2*time.Minute)
+	if cfg.RateLimitPolicies[ratelimit.Login].Window != 2*time.Minute {
+		t.Fatalf("RateLimitPolicies.Login.Window = %v, want %v", cfg.RateLimitPolicies[ratelimit.Login].Window, 2*time.Minute)
 	}
-	if cfg.RateLimitPolicies.LoginPerIP.MaxRequests != 40 {
-		t.Fatalf("RateLimitPolicies.LoginPerIP.MaxRequests = %d, want %d", cfg.RateLimitPolicies.LoginPerIP.MaxRequests, 40)
+	if cfg.RateLimitPolicies[ratelimit.LoginPerIP].MaxRequests != 40 {
+		t.Fatalf("RateLimitPolicies.LoginPerIP.MaxRequests = %d, want %d", cfg.RateLimitPolicies[ratelimit.LoginPerIP].MaxRequests, 40)
 	}
-	if cfg.RateLimitPolicies.LoginPerIP.Window != 10*time.Minute {
-		t.Fatalf("RateLimitPolicies.LoginPerIP.Window = %v, want %v", cfg.RateLimitPolicies.LoginPerIP.Window, 10*time.Minute)
+	if cfg.RateLimitPolicies[ratelimit.LoginPerIP].Window != 10*time.Minute {
+		t.Fatalf("RateLimitPolicies.LoginPerIP.Window = %v, want %v", cfg.RateLimitPolicies[ratelimit.LoginPerIP].Window, 10*time.Minute)
 	}
-	if cfg.RateLimitPolicies.ResetPassword.MaxRequests != 8 {
-		t.Fatalf("RateLimitPolicies.ResetPassword.MaxRequests = %d, want %d", cfg.RateLimitPolicies.ResetPassword.MaxRequests, 8)
+	if cfg.RateLimitPolicies[ratelimit.ResetPassword].MaxRequests != 8 {
+		t.Fatalf("RateLimitPolicies.ResetPassword.MaxRequests = %d, want %d", cfg.RateLimitPolicies[ratelimit.ResetPassword].MaxRequests, 8)
 	}
-	if cfg.RateLimitPolicies.ResetPassword.Window != 30*time.Minute {
-		t.Fatalf("RateLimitPolicies.ResetPassword.Window = %v, want %v", cfg.RateLimitPolicies.ResetPassword.Window, 30*time.Minute)
+	if cfg.RateLimitPolicies[ratelimit.ResetPassword].Window != 30*time.Minute {
+		t.Fatalf("RateLimitPolicies.ResetPassword.Window = %v, want %v", cfg.RateLimitPolicies[ratelimit.ResetPassword].Window, 30*time.Minute)
 	}
-	if cfg.RateLimitPolicies.ChangePassword.MaxRequests != 4 {
-		t.Fatalf("RateLimitPolicies.ChangePassword.MaxRequests = %d, want %d", cfg.RateLimitPolicies.ChangePassword.MaxRequests, 4)
+	if cfg.RateLimitPolicies[ratelimit.ChangePassword].MaxRequests != 4 {
+		t.Fatalf("RateLimitPolicies.ChangePassword.MaxRequests = %d, want %d", cfg.RateLimitPolicies[ratelimit.ChangePassword].MaxRequests, 4)
 	}
-	if cfg.RateLimitPolicies.ChangePassword.Window != 20*time.Minute {
-		t.Fatalf("RateLimitPolicies.ChangePassword.Window = %v, want %v", cfg.RateLimitPolicies.ChangePassword.Window, 20*time.Minute)
+	if cfg.RateLimitPolicies[ratelimit.ChangePassword].Window != 20*time.Minute {
+		t.Fatalf("RateLimitPolicies.ChangePassword.Window = %v, want %v", cfg.RateLimitPolicies[ratelimit.ChangePassword].Window, 20*time.Minute)
 	}
-	if cfg.RateLimitPolicies.ChangeEmail.MaxRequests != 6 {
-		t.Fatalf("RateLimitPolicies.ChangeEmail.MaxRequests = %d, want %d", cfg.RateLimitPolicies.ChangeEmail.MaxRequests, 6)
+	if cfg.RateLimitPolicies[ratelimit.ChangeEmail].MaxRequests != 6 {
+		t.Fatalf("RateLimitPolicies.ChangeEmail.MaxRequests = %d, want %d", cfg.RateLimitPolicies[ratelimit.ChangeEmail].MaxRequests, 6)
 	}
-	if cfg.RateLimitPolicies.ChangeEmail.Window != 25*time.Minute {
-		t.Fatalf("RateLimitPolicies.ChangeEmail.Window = %v, want %v", cfg.RateLimitPolicies.ChangeEmail.Window, 25*time.Minute)
+	if cfg.RateLimitPolicies[ratelimit.ChangeEmail].Window != 25*time.Minute {
+		t.Fatalf("RateLimitPolicies.ChangeEmail.Window = %v, want %v", cfg.RateLimitPolicies[ratelimit.ChangeEmail].Window, 25*time.Minute)
 	}
-	if cfg.RateLimitPolicies.RevokeSession.MaxRequests != 9 {
-		t.Fatalf("RateLimitPolicies.RevokeSession.MaxRequests = %d, want %d", cfg.RateLimitPolicies.RevokeSession.MaxRequests, 9)
+	if cfg.RateLimitPolicies[ratelimit.RevokeSession].MaxRequests != 9 {
+		t.Fatalf("RateLimitPolicies.RevokeSession.MaxRequests = %d, want %d", cfg.RateLimitPolicies[ratelimit.RevokeSession].MaxRequests, 9)
 	}
-	if cfg.RateLimitPolicies.RevokeSession.Window != 5*time.Minute {
-		t.Fatalf("RateLimitPolicies.RevokeSession.Window = %v, want %v", cfg.RateLimitPolicies.RevokeSession.Window, 5*time.Minute)
+	if cfg.RateLimitPolicies[ratelimit.RevokeSession].Window != 5*time.Minute {
+		t.Fatalf("RateLimitPolicies.RevokeSession.Window = %v, want %v", cfg.RateLimitPolicies[ratelimit.RevokeSession].Window, 5*time.Minute)
 	}
-	if cfg.RateLimitPolicies.RevokeOtherSessions.MaxRequests != 3 {
-		t.Fatalf("RateLimitPolicies.RevokeOtherSessions.MaxRequests = %d, want %d", cfg.RateLimitPolicies.RevokeOtherSessions.MaxRequests, 3)
+	if cfg.RateLimitPolicies[ratelimit.RevokeOtherSessions].MaxRequests != 3 {
+		t.Fatalf("RateLimitPolicies.RevokeOtherSessions.MaxRequests = %d, want %d", cfg.RateLimitPolicies[ratelimit.RevokeOtherSessions].MaxRequests, 3)
 	}
-	if cfg.RateLimitPolicies.RevokeOtherSessions.Window != 7*time.Minute {
-		t.Fatalf("RateLimitPolicies.RevokeOtherSessions.Window = %v, want %v", cfg.RateLimitPolicies.RevokeOtherSessions.Window, 7*time.Minute)
+	if cfg.RateLimitPolicies[ratelimit.RevokeOtherSessions].Window != 7*time.Minute {
+		t.Fatalf("RateLimitPolicies.RevokeOtherSessions.Window = %v, want %v", cfg.RateLimitPolicies[ratelimit.RevokeOtherSessions].Window, 7*time.Minute)
 	}
 }
 

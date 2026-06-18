@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"math"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -25,8 +26,8 @@ func BuildURI(issuer, account, secret string) string {
 	q.Set("secret", secret)
 	q.Set("issuer", issuer)
 	q.Set("algorithm", "SHA1")
-	q.Set("digits", fmt.Sprintf("%d", digits))
-	q.Set("period", fmt.Sprintf("%d", period))
+	q.Set("digits", strconv.Itoa(digits))
+	q.Set("period", strconv.Itoa(period))
 	return "otpauth://totp/" + label + "?" + q.Encode()
 }
 
