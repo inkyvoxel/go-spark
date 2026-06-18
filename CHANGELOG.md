@@ -33,7 +33,7 @@ This project follows a simple, human-written changelog format.
 * README badges (CI, Go version, license) and "Use this template" instructions.
 * `make init` script for one-time project setup (module path and project name).
 * Rate limiting with configurable policies and trusted proxy support.
-* Two-factor authentication (TOTP) with QR code setup, code confirmation, backup codes (8 per user), disable flow, and mid-login challenge.
+* Two-factor authentication (TOTP) with QR code setup, code confirmation, backup codes (8 per user), disable flow, and mid-login challenge. Code generation and verification use the `github.com/pquerna/otp` library.
 * TOTP replay protection: each accepted code's time-step counter is recorded and codes are rejected once used, so a captured code cannot be replayed within its validity window.
 * Passkey (WebAuthn) support via `github.com/go-webauthn/webauthn`: passwordless, phishing-resistant sign-in that complements email/password and TOTP. A user-verified passkey login fully authenticates and skips the TOTP step, while password + TOTP remain as a fallback.
 * Discoverable (usernameless) passkey login with browser conditional-UI autofill plus an explicit "Sign in with a passkey" button.

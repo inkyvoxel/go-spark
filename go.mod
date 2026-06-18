@@ -4,6 +4,7 @@ go 1.26
 
 require (
 	github.com/go-webauthn/webauthn v0.17.4
+	github.com/pquerna/otp v1.5.0
 	github.com/pressly/goose/v3 v3.27.1
 	golang.org/x/crypto v0.53.0
 	modernc.org/sqlite v1.52.0
@@ -12,6 +13,7 @@ require (
 tool golang.org/x/vuln/cmd/govulncheck
 
 require (
+	github.com/boombuler/barcode v1.0.1-0.20190219062509-6c824513bacc // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/fxamacker/cbor/v2 v2.9.2 // indirect
 	github.com/go-viper/mapstructure/v2 v2.5.0 // indirect
