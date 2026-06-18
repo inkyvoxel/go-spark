@@ -512,6 +512,58 @@ func TestRouteRateLimitKeyingByIPAndUser(t *testing.T) {
 	}
 }
 
+func TestRouteRateLimitLoginPerIPCeilingAcrossEmails(t *testing.T) {
+	auth := &fakeAuthLookup{}
+	srv := newAuthRouteTestServer(t, auth)
+	// Per-email allowance is high so it is never the limiter here; the coarse
+	// per-IP ceiling is what must cap total attempts from one IP spread across
+	// many distinct emails (credential stuffing).
+	srv.rateLimitPolicies = RateLimitPolicies{
+		Login:      RateLimitPolicy{MaxRequests: 100, Window: time.Hour},
+		LoginPerIP: RateLimitPolicy{MaxRequests: 2, Window: time.Hour},
+	}
+	routes := srv.Routes()
+
+	for i, email := range []string{"a@example.com", "b@example.com"} {
+		rec := postLoginFromIP(t, srv, routes, email, "10.0.0.1:1111")
+		if rec.Code == http.StatusTooManyRequests {
+			t.Fatalf("attempt %d (%s) = 429, want allowed under per-IP ceiling", i+1, email)
+		}
+	}
+
+	blocked := postLoginFromIP(t, srv, routes, "c@example.com", "10.0.0.1:1111")
+	if blocked.Code != http.StatusTooManyRequests {
+		t.Fatalf("third distinct email from same IP = %d, want %d", blocked.Code, http.StatusTooManyRequests)
+	}
+	if blocked.Header().Get("Retry-After") == "" {
+		t.Fatal("Retry-After header missing on per-IP rejection")
+	}
+
+	// A different IP has its own bucket and is unaffected by the first IP's
+	// exhausted ceiling.
+	other := postLoginFromIP(t, srv, routes, "c@example.com", "10.0.0.2:2222")
+	if other.Code == http.StatusTooManyRequests {
+		t.Fatalf("different IP = 429, want allowed (separate per-IP bucket)")
+	}
+}
+
+func postLoginFromIP(t *testing.T, srv *Server, routes http.Handler, email, remoteAddr string) *httptest.ResponseRecorder {
+	t.Helper()
+
+	form := url.Values{
+		"email":       []string{email},
+		"password":    []string{"password"},
+		csrfFieldName: []string{"csrf"},
+	}
+	req := httptest.NewRequest(http.MethodPost, paths.Login, strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.RemoteAddr = remoteAddr
+	addCSRFCookieAndHeader(t, srv, req)
+	rec := httptest.NewRecorder()
+	routes.ServeHTTP(rec, req)
+	return rec
+}
+
 func postFormWithCSRF(t *testing.T, srv *Server, routes http.Handler, path string, form url.Values, sessionToken, resetToken string) *httptest.ResponseRecorder {
 	t.Helper()
 

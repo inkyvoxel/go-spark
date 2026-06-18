@@ -84,7 +84,21 @@ Use `s.postOnly` for POST routes that have no matching GET route:
 s.postOnly(dynamic, paths.ProjectArchive, s.requireVerifiedAuth(http.HandlerFunc(s.archiveProject)))
 ```
 
-Use rate limiting for public or sensitive POST routes.
+Use rate limiting for public or sensitive POST routes. Wrap the handler with
+`s.withRateLimits`, passing one or more limiters evaluated in order. Put a
+coarse per-IP ceiling first so an abusive IP is rejected before it consumes a
+narrower per-email or per-user bucket:
+
+```go
+s.withRateLimits(http.HandlerFunc(s.archiveProject),
+    rateLimit("archive-ip", s.rateLimitPolicies.ArchivePerIP, s.rateLimitKeyByIP()),
+    rateLimit("archive", s.rateLimitPolicies.Archive, s.rateLimitKeyByIPAndUser()),
+)
+```
+
+Add the policy fields and defaults in `internal/server/rate_limit.go`, the
+config plumbing in `internal/config/config.go` and `internal/app/build.go`, and
+the env vars in `.env` / `.env.example`.
 
 ## 3. Add Templates
 
