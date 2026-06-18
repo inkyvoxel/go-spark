@@ -6,6 +6,15 @@ Go Spark is a production-ready Go starter for server-rendered web applications. 
 
 ```sh
 cp .env.example .env
+
+# The app requires three secrets and refuses to start without them. Generate
+# one for each (these appended lines override the empty placeholders in .env).
+# When creating a brand-new project instead, run `make init`, which renames the
+# module and fills these in for you.
+for key in SECRET_KEY_BASE AUTH_TOTP_KEY AUTH_PASSWORD_PEPPER; do
+  echo "${key}=$(openssl rand -hex 32)" >> .env
+done
+
 make tools        # verify sqlc, goose, govulncheck are available
 make migrate-up   # apply database migrations
 make start        # run HTTP server + background worker
