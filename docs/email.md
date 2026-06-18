@@ -81,16 +81,17 @@ Reset confirmation:
 Change request:
 
 1. accepts the current password and new email address
-2. creates an email-change token for the new address
+2. creates an email-change token only when the new address is valid, different, and not already registered to another account (a taken address returns neutral success without creating a token or sending mail)
 3. enqueues a verification email to the new address
 
 Change confirmation:
 
 1. accepts the raw token
 2. validates the hashed token
-3. updates the user's email address
-4. consumes the token and clears other pending email-change tokens for that user
-5. optionally enqueues a notice to the old address, controlled by `AUTH_EMAIL_CHANGE_NOTICE_ENABLED`
+3. updates the user's email address and marks the new address verified
+4. consumes the token
+5. revokes all of the user's sessions
+6. optionally enqueues a notice to the old address, controlled by `AUTH_EMAIL_CHANGE_NOTICE_ENABLED`
 
 ## Local Development
 

@@ -22,6 +22,8 @@ import (
 
 const defaultStarterEmailFrom = `"Go Spark" <hello@example.com>`
 
+const emailJobInterval = 5 * time.Second
+
 // deriveKey produces a purpose-scoped key from a root secret using HMAC-SHA256,
 // following the single-root-secret pattern used throughout this application.
 func deriveKey(base []byte, purpose string) []byte {
@@ -175,7 +177,12 @@ func buildJobs(cfg config.Config, logger *slog.Logger, db *sql.DB) ([]jobs.Job, 
 	emailProcessor := email.NewProcessor(database.NewEmailOutboxStore(db), emailSender, email.ProcessorOptions{
 		Logger: logger,
 	})
-	configured = append(configured, jobs.NewEmailJob(emailProcessor.ProcessPending, jobs.DefaultEmailInterval))
+	configured = append(configured, jobs.Job{
+		Name:       "email-outbox",
+		Interval:   emailJobInterval,
+		RunAtStart: true,
+		Run:        emailProcessor.ProcessPending,
+	})
 
 	cleanupJob, err := jobs.NewCleanupJob(database.NewCleanupStore(db), jobs.CleanupOptions{
 		Logger:               logger,
