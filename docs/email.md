@@ -43,6 +43,14 @@ The outbox gives the starter a durable default:
 
 This is the preferred pattern for durable, delayed, retryable work in this project.
 
+The web and worker run as separate processes, so the worker polls the outbox on
+an interval (`emailJobInterval`, currently 5 seconds) rather than being notified
+the instant a row is enqueued. That means up to one interval of latency between a
+request enqueuing mail and the worker sending it, which is fine for auth mail. If
+you need it snappier, shorten the interval — SQLite in WAL mode with the
+`(status, available_at)` index makes frequent polling cheap. A cross-process
+notify is not worth building for this.
+
 ## Auth Email Flows
 
 ### Account confirmation
