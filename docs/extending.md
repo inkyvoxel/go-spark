@@ -242,10 +242,10 @@ func (s *ProjectService) Create(ctx context.Context, userID int64, name string) 
 }
 ```
 
-There is no separate store layer or persistence interface: with one committed
-database engine, the service talking to `sqlc` directly is simpler, and it is
-tested against a real in-memory database (see `internal/sqlitetest`). Handlers
-call the service, never generated queries.
+Keep the feature in one package and let the service call `sqlc` directly — no
+separate store layer or interface. Test it against a real in-memory database
+(see `internal/sqlitetest`), and have handlers call the service, never generated
+queries.
 
 ## 6. Wire the Feature
 

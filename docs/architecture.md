@@ -45,12 +45,9 @@ Rules of thumb:
 * templates render data, not business rules
 * `internal/server` must not import `internal/db/generated`; handlers work with the domain types feature packages expose (enforced by a test in `internal/server`)
 
-Earlier versions of the starter put a separate store layer behind an interface
-in front of each service. That seam was removed: with a single committed
-database engine (SQLite) the interface had one implementation and earned only
-ceremony, so each feature now talks to `sqlc` directly and is tested against a
-real in-memory database. The boundary that still matters — keeping SQL out of
-handlers and templates — is preserved by returning domain types.
+Each feature talks to `sqlc` directly and is tested against a real in-memory
+database. The boundary that matters — keeping SQL out of handlers and templates
+— is preserved by returning domain types.
 
 ## Request Flow
 
