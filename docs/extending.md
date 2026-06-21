@@ -171,7 +171,7 @@ CREATE TABLE projects (
     user_id INTEGER NOT NULL,
     name TEXT NOT NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES users(id)
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
 CREATE INDEX projects_user_id_idx ON projects(user_id);
@@ -180,6 +180,15 @@ CREATE INDEX projects_user_id_idx ON projects(user_id);
 DROP INDEX projects_user_id_idx;
 DROP TABLE projects;
 ```
+
+**Always add `ON DELETE CASCADE` to a user-owned table's `user_id` foreign
+key.** Account deletion (`AuthStore.DeleteAccount`) deletes only the `users`
+row and relies on the database to cascade the delete to every child table. If
+you omit `ON DELETE CASCADE`, the `users` delete fails with a foreign-key
+constraint error the moment a user who owns rows in your table tries to delete
+their account. `foreign_keys` is enabled on every connection (see
+`internal/platform/sqlite/open.go`), so the cascade is enforced — there is no
+per-table cleanup code to remember to update.
 
 Add explicit SQL in `internal/db/queries/projects.sql`:
 

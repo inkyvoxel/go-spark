@@ -8,7 +8,10 @@ CREATE TABLE projects (
     user_id INTEGER NOT NULL,
     name TEXT NOT NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES users(id)
+    -- ON DELETE CASCADE lets account deletion remove a user's rows
+    -- automatically. Every user-owned table should declare it; see
+    -- docs/extending.md ("Account deletion").
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
 CREATE INDEX projects_user_id_idx ON projects(user_id);

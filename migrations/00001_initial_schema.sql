@@ -17,7 +17,7 @@ CREATE TABLE sessions (
     token_hash TEXT NOT NULL UNIQUE,
     expires_at TIMESTAMP NOT NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES users(id)
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
 CREATE INDEX sessions_user_id_idx ON sessions(user_id);
@@ -31,7 +31,7 @@ CREATE TABLE email_verification_tokens (
     expires_at TIMESTAMP NOT NULL,
     consumed_at TIMESTAMP,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES users(id)
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
 CREATE INDEX email_verification_tokens_user_id_idx ON email_verification_tokens(user_id);
@@ -44,7 +44,7 @@ CREATE TABLE password_reset_tokens (
     expires_at TIMESTAMP NOT NULL,
     consumed_at TIMESTAMP,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES users(id)
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
 CREATE INDEX password_reset_tokens_user_id_idx ON password_reset_tokens(user_id);
@@ -58,7 +58,7 @@ CREATE TABLE email_change_tokens (
     expires_at TIMESTAMP NOT NULL,
     consumed_at TIMESTAMP,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES users(id)
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
 CREATE INDEX email_change_tokens_user_id_idx ON email_change_tokens(user_id);
@@ -95,7 +95,7 @@ CREATE TABLE user_totp (
     -- Most recent accepted TOTP time-step counter so a captured code cannot
     -- be replayed within its validity window (RFC 6238 section 5.2).
     last_used_counter INTEGER,
-    FOREIGN KEY (user_id) REFERENCES users(id)
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
 CREATE TABLE totp_backup_codes (
@@ -104,7 +104,7 @@ CREATE TABLE totp_backup_codes (
     code_hash TEXT NOT NULL UNIQUE,
     used_at TIMESTAMP,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES users(id)
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
 CREATE INDEX totp_backup_codes_user_id_idx ON totp_backup_codes(user_id);
@@ -132,7 +132,7 @@ CREATE TABLE webauthn_credentials (
     name TEXT NOT NULL DEFAULT '',
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     last_used_at TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES users(id)
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
 CREATE INDEX webauthn_credentials_user_id_idx ON webauthn_credentials(user_id);

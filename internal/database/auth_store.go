@@ -377,34 +377,16 @@ func (s *AuthStore) ResendEmailVerification(ctx context.Context, params services
 	})
 }
 
+// DeleteAccount removes the user. Every user-owned table declares
+// ON DELETE CASCADE (see migrations), so the database deletes the user's
+// sessions, tokens, TOTP, passkeys, and example "projects" rows automatically.
+// Add ON DELETE CASCADE to any new user-owned table you introduce and it will
+// be cleaned up here for free; see docs/extending.md ("Account deletion").
 func (s *AuthStore) DeleteAccount(ctx context.Context, userID int64) error {
-	return withTx(ctx, s.db, s.queries, "delete account", func(queries *db.Queries) error {
-		if err := queries.DeleteSessionsByUserID(ctx, userID); err != nil {
-			return fmt.Errorf("delete sessions: %w", err)
-		}
-		if err := queries.DeleteEmailVerificationTokensByUserID(ctx, userID); err != nil {
-			return fmt.Errorf("delete email verification tokens: %w", err)
-		}
-		if err := queries.DeletePasswordResetTokensByUserID(ctx, userID); err != nil {
-			return fmt.Errorf("delete password reset tokens: %w", err)
-		}
-		if err := queries.DeleteEmailChangeTokensByUserID(ctx, userID); err != nil {
-			return fmt.Errorf("delete email change tokens: %w", err)
-		}
-		if err := queries.DeleteTOTPBackupCodesByUserID(ctx, userID); err != nil {
-			return fmt.Errorf("delete TOTP backup codes: %w", err)
-		}
-		if err := queries.DeleteTOTPByUserID(ctx, userID); err != nil {
-			return fmt.Errorf("delete TOTP: %w", err)
-		}
-		if err := queries.DeleteWebAuthnCredentialsByUserID(ctx, userID); err != nil {
-			return fmt.Errorf("delete WebAuthn credentials: %w", err)
-		}
-		if err := queries.DeleteUserByID(ctx, userID); err != nil {
-			return fmt.Errorf("delete user: %w", err)
-		}
-		return nil
-	})
+	if err := s.queries.DeleteUserByID(ctx, userID); err != nil {
+		return fmt.Errorf("delete user: %w", err)
+	}
+	return nil
 }
 
 func (s *AuthStore) VerifyEmailByTokenHash(ctx context.Context, tokenHash string, verifiedAt time.Time) (services.User, error) {

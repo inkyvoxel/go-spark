@@ -87,16 +87,6 @@ func (q *Queries) DeleteWebAuthnCredentialByIDAndUserID(ctx context.Context, arg
 	return result.RowsAffected()
 }
 
-const deleteWebAuthnCredentialsByUserID = `-- name: DeleteWebAuthnCredentialsByUserID :exec
-DELETE FROM webauthn_credentials
-WHERE user_id = ?
-`
-
-func (q *Queries) DeleteWebAuthnCredentialsByUserID(ctx context.Context, userID int64) error {
-	_, err := q.db.ExecContext(ctx, deleteWebAuthnCredentialsByUserID, userID)
-	return err
-}
-
 const listWebAuthnCredentialsByUserID = `-- name: ListWebAuthnCredentialsByUserID :many
 SELECT id, user_id, credential_id, public_key, attestation_type, aaguid,
        sign_count, transports, backup_eligible, backup_state, name,

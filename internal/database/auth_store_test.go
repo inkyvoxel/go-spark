@@ -1098,3 +1098,62 @@ func newAuthStoreTestDB(t *testing.T) *sql.DB {
 
 	return conn
 }
+
+// TestDeleteAccountCascadesUserOwnedRows guards the contract that DeleteAccount
+// only deletes the users row and relies on ON DELETE CASCADE to remove
+// user-owned rows. It uses a connection with foreign_keys enabled (as in
+// production, see internal/platform/sqlite/open.go) and an example child table.
+// If a user-owned table is given a foreign key without ON DELETE CASCADE, this
+// fails the way account deletion failed in real use: FOREIGN KEY constraint.
+func TestDeleteAccountCascadesUserOwnedRows(t *testing.T) {
+	conn, err := sql.Open("sqlite", ":memory:?_pragma=foreign_keys(1)")
+	if err != nil {
+		t.Fatalf("sql.Open() error = %v", err)
+	}
+	t.Cleanup(func() { _ = conn.Close() })
+	// Keep the in-memory database on a single connection so the schema and the
+	// foreign_keys pragma are shared across all queries.
+	conn.SetMaxOpenConns(1)
+
+	const schema = `
+CREATE TABLE users (
+    id INTEGER PRIMARY KEY,
+    email TEXT NOT NULL UNIQUE,
+    password_hash TEXT NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    email_verified_at TIMESTAMP,
+    webauthn_user_handle BLOB NOT NULL UNIQUE
+);
+CREATE TABLE projects (
+    id INTEGER PRIMARY KEY,
+    user_id INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);`
+	if _, err := conn.Exec(schema); err != nil {
+		t.Fatalf("create schema: %v", err)
+	}
+
+	ctx := context.Background()
+	store := mustNewAuthStore(t, conn)
+
+	user, err := store.CreateUser(ctx, "owner@example.com", "hash")
+	if err != nil {
+		t.Fatalf("CreateUser() error = %v", err)
+	}
+	if _, err := conn.ExecContext(ctx, "INSERT INTO projects (user_id, name) VALUES (?, ?)", user.ID, "demo"); err != nil {
+		t.Fatalf("insert project: %v", err)
+	}
+
+	if err := store.DeleteAccount(ctx, user.ID); err != nil {
+		t.Fatalf("DeleteAccount() error = %v", err)
+	}
+
+	var projects int
+	if err := conn.QueryRowContext(ctx, "SELECT COUNT(*) FROM projects WHERE user_id = ?", user.ID).Scan(&projects); err != nil {
+		t.Fatalf("count projects: %v", err)
+	}
+	if projects != 0 {
+		t.Fatalf("projects after DeleteAccount = %d, want 0 (cascade did not run)", projects)
+	}
+}

@@ -40,10 +40,6 @@ DELETE FROM webauthn_credentials
 WHERE id = ?
   AND user_id = ?;
 
--- name: DeleteWebAuthnCredentialsByUserID :exec
-DELETE FROM webauthn_credentials
-WHERE user_id = ?;
-
 -- name: CountWebAuthnCredentialsByUserID :one
 SELECT COUNT(*) FROM webauthn_credentials
 WHERE user_id = ?;
