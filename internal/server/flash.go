@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/inkyvoxel/go-spark/internal/services"
+	"github.com/inkyvoxel/go-spark/internal/secret"
 )
 
 const flashCookieName = "flash"
@@ -78,5 +78,5 @@ func (s *Server) flashSigningKey() []byte {
 	if len(s.flashKey) != 0 {
 		return s.flashKey
 	}
-	return services.DeriveKey([]byte(defaultTestFlashSigningKey), "flash")
+	return secret.DeriveKey([]byte(defaultTestFlashSigningKey), "flash")
 }

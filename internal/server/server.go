@@ -13,9 +13,10 @@ import (
 	"strings"
 
 	appassets "github.com/inkyvoxel/go-spark"
+	"github.com/inkyvoxel/go-spark/internal/auth"
 	"github.com/inkyvoxel/go-spark/internal/paths"
 	"github.com/inkyvoxel/go-spark/internal/ratelimit"
-	"github.com/inkyvoxel/go-spark/internal/services"
+	"github.com/inkyvoxel/go-spark/internal/secret"
 )
 
 const (
@@ -68,11 +69,11 @@ func New(opts Options) (*Server, error) {
 
 	passwordMinLength := opts.PasswordMinLength
 	if passwordMinLength == 0 {
-		passwordMinLength = services.DefaultPasswordMinLength
+		passwordMinLength = auth.DefaultPasswordMinLength
 	}
 	secretKeyBase := []byte(strings.TrimSpace(opts.SecretKeyBase))
-	cookieSigningKey := services.DeriveKey(secretKeyBase, "cookie-signing")
-	flashKey := services.DeriveKey(secretKeyBase, "flash")
+	cookieSigningKey := secret.DeriveKey(secretKeyBase, "cookie-signing")
+	flashKey := secret.DeriveKey(secretKeyBase, "flash")
 	crossOrigin, err := newCrossOriginProtection(normalizeOrigin(opts.AppBaseURL))
 	if err != nil {
 		return nil, fmt.Errorf("configure cross-origin protection: %w", err)

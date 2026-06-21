@@ -1,4 +1,4 @@
-package services
+package auth
 
 import (
 	"context"
@@ -55,7 +55,7 @@ var (
 )
 
 type AuthService struct {
-	store                          AuthStore
+	store                          *authStore
 	emailChangeNoticeEnabled       bool
 	sessionDuration                time.Duration
 	emailVerificationTokenDuration time.Duration
@@ -129,52 +129,6 @@ type ManagedSession struct {
 	Current   bool
 }
 
-type AuthStore interface {
-	CreateUser(ctx context.Context, email, passwordHash string) (User, error)
-	CreateVerifiedUser(ctx context.Context, email, passwordHash string, verifiedAt time.Time) (User, error)
-	CreateUserWithEmailVerification(ctx context.Context, params CreateUserWithEmailVerificationParams) (User, error)
-	GetUserByEmail(ctx context.Context, email string) (UserRecord, error)
-	GetUserByID(ctx context.Context, userID int64) (UserRecord, error)
-	CreateSession(ctx context.Context, userID int64, tokenHash string, expiresAt time.Time) (SessionRecord, error)
-	GetUserBySessionTokenHash(ctx context.Context, tokenHash string) (UserRecord, error)
-	DeleteSessionByTokenHash(ctx context.Context, tokenHash string) error
-	DeleteSessionsByUserID(ctx context.Context, userID int64) error
-	ListActiveSessionsByUserID(ctx context.Context, userID int64) ([]SessionRecord, error)
-	DeleteOtherSessionsByUserIDAndTokenHash(ctx context.Context, userID int64, tokenHash string) (int64, error)
-	DeleteSessionByIDAndUserIDAndTokenHashNot(ctx context.Context, sessionID, userID int64, tokenHash string) (int64, error)
-	UpdateUserPasswordHash(ctx context.Context, userID int64, passwordHash string) error
-	SetPasswordAndRevokeSessions(ctx context.Context, userID int64, passwordHash string) error
-	CreatePasswordResetToken(ctx context.Context, userID int64, tokenHash string, expiresAt time.Time) (PasswordResetToken, error)
-	GetValidPasswordResetTokenByHash(ctx context.Context, tokenHash string, now time.Time) (PasswordResetToken, error)
-	ConsumePasswordResetToken(ctx context.Context, tokenHash string, consumedAt time.Time) (PasswordResetToken, error)
-	RequestPasswordReset(ctx context.Context, params RequestPasswordResetParams) error
-	RequestEmailChange(ctx context.Context, params RequestEmailChangeParams) error
-	ConfirmEmailChange(ctx context.Context, params ConfirmEmailChangeParams) (User, error)
-	CreateEmailVerificationToken(ctx context.Context, userID int64, tokenHash string, expiresAt time.Time) (EmailVerificationToken, error)
-	ResendEmailVerification(ctx context.Context, params ResendEmailVerificationParams) error
-	VerifyEmailByTokenHash(ctx context.Context, tokenHash string, verifiedAt time.Time) (User, error)
-	DeleteAccount(ctx context.Context, userID int64) error
-	// TOTP
-	GetTOTPByUserID(ctx context.Context, userID int64) (TOTPRecord, error)
-	GetEnabledTOTPByUserID(ctx context.Context, userID int64) (TOTPRecord, error)
-	UpsertPendingTOTP(ctx context.Context, userID int64, secret string) error
-	EnableTOTPWithBackupCodes(ctx context.Context, userID int64, enabledAt time.Time, codeHashes []string) error
-	DeleteTOTPAndBackupCodes(ctx context.Context, userID int64) error
-	ConsumeTOTPBackupCode(ctx context.Context, userID int64, codeHash string, usedAt time.Time) (bool, error)
-	ClaimTOTPCounter(ctx context.Context, userID, counter int64) (bool, error)
-	CountUnusedTOTPBackupCodes(ctx context.Context, userID int64) (int64, error)
-	ReplaceBackupCodes(ctx context.Context, userID int64, codeHashes []string) error
-	// WebAuthn / passkeys
-	GetWebAuthnHandleByUserID(ctx context.Context, userID int64) ([]byte, error)
-	GetUserByWebAuthnHandle(ctx context.Context, handle []byte) (User, error)
-	CreateWebAuthnCredential(ctx context.Context, params CreateWebAuthnCredentialParams) error
-	ListWebAuthnCredentialsByUserID(ctx context.Context, userID int64) ([]WebAuthnCredential, error)
-	UpdateWebAuthnCredentialOnLogin(ctx context.Context, params UpdateWebAuthnCredentialParams) error
-	RenameWebAuthnCredential(ctx context.Context, userID, credentialDBID int64, name string) (bool, error)
-	DeleteWebAuthnCredential(ctx context.Context, userID, credentialDBID int64) (bool, error)
-	CountWebAuthnCredentialsByUserID(ctx context.Context, userID int64) (int64, error)
-}
-
 type CreateUserWithEmailVerificationParams struct {
 	Email             string
 	PasswordHash      string
@@ -197,10 +151,13 @@ type AuthOptions struct {
 	EmailOptions                   email.MessageOptions
 	EmailChangeNoticeEnabled       *bool
 	TOTPIssuer                     string
-	TOTPBackupCodeKey              []byte
-	WebAuthnRPID                   string
-	WebAuthnRPDisplayName          string
-	WebAuthnRPOrigins              []string
+	// TOTPSecretKey encrypts TOTP shared secrets at rest (32 bytes, derived
+	// from AUTH_TOTP_KEY). TOTPBackupCodeKey signs backup codes.
+	TOTPSecretKey         []byte
+	TOTPBackupCodeKey     []byte
+	WebAuthnRPID          string
+	WebAuthnRPDisplayName string
+	WebAuthnRPOrigins     []string
 }
 
 type ResendEmailVerificationParams struct {
@@ -236,7 +193,12 @@ type ConfirmEmailChangeParams struct {
 	SendOldEmailNotice     bool
 }
 
-func NewAuthService(store AuthStore, opts AuthOptions) (*AuthService, error) {
+func NewAuthService(conn *sql.DB, opts AuthOptions) (*AuthService, error) {
+	store, err := newAuthStore(conn, opts.TOTPSecretKey)
+	if err != nil {
+		return nil, fmt.Errorf("configure auth store: %w", err)
+	}
+
 	sessionDuration := opts.SessionDuration
 	if sessionDuration == 0 {
 		sessionDuration = 7 * 24 * time.Hour

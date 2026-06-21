@@ -7,8 +7,7 @@ package server
 //
 // To remove the example, delete these files:
 //   - internal/server/project_handlers.go        (this file) + _test.go
-//   - internal/services/projects.go               + _test.go
-//   - internal/database/project_store.go          + _test.go
+//   - internal/project/                           (the whole package)
 //   - internal/db/queries/projects.sql            (then run `make sqlc`)
 //   - migrations/00002_projects_schema.sql
 //   - templates/projects/index.html
@@ -29,14 +28,14 @@ import (
 	"strings"
 
 	"github.com/inkyvoxel/go-spark/internal/paths"
-	"github.com/inkyvoxel/go-spark/internal/services"
+	"github.com/inkyvoxel/go-spark/internal/project"
 )
 
 // projectService is the slice of the projects service the handlers need. Keeping
 // it as a local interface keeps handlers away from database details.
 type projectService interface {
-	Create(ctx context.Context, userID int64, name string) (services.Project, error)
-	List(ctx context.Context, userID int64) ([]services.Project, error)
+	Create(ctx context.Context, userID int64, name string) (project.Project, error)
+	List(ctx context.Context, userID int64) ([]project.Project, error)
 	Delete(ctx context.Context, projectID, userID int64) error
 }
 
@@ -71,9 +70,9 @@ func (s *Server) createProject(w http.ResponseWriter, r *http.Request) {
 	if _, err := s.projects.Create(r.Context(), user.ID, r.FormValue("name")); err != nil {
 		var fieldError string
 		switch {
-		case errors.Is(err, services.ErrProjectNameRequired):
+		case errors.Is(err, project.ErrProjectNameRequired):
 			fieldError = "Enter a project name."
-		case errors.Is(err, services.ErrProjectNameTooLong):
+		case errors.Is(err, project.ErrProjectNameTooLong):
 			fieldError = "Use a shorter project name."
 		default:
 			s.loggerForRequest(r).Error("create project", "user_id", user.ID, "err", err)
@@ -117,7 +116,7 @@ func (s *Server) deleteProject(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := s.projects.Delete(r.Context(), projectID, user.ID); err != nil {
-		if errors.Is(err, services.ErrProjectNotFound) {
+		if errors.Is(err, project.ErrProjectNotFound) {
 			s.setFlash(w, r, flashError("That project is no longer available."))
 			http.Redirect(w, r, paths.Projects, http.StatusSeeOther)
 			return

@@ -7,10 +7,11 @@ import (
 	"time"
 
 	db "github.com/inkyvoxel/go-spark/internal/db/generated"
+	"github.com/inkyvoxel/go-spark/internal/sqlitetest"
 )
 
 func TestCleanupStorePrunesExpiredSessionsAndTokensAndOldEmails(t *testing.T) {
-	conn := newAuthStoreTestDB(t)
+	conn := sqlitetest.New(t)
 	store := NewCleanupStore(conn)
 	queries := db.New(conn)
 

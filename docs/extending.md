@@ -21,8 +21,7 @@ paths -> routes -> handlers -> services -> stores -> SQL
 The short version:
 
 * routes and handlers live in `internal/server`
-* business rules live in `internal/services`
-* database access lives in `internal/database`
+* each feature is its own package (e.g. `internal/auth`, `internal/project`) that owns its business rules *and* its SQL
 * SQL lives in `internal/db/queries`
 * migrations live in `migrations`
 * URL constants live in `internal/paths`
@@ -38,11 +37,10 @@ internal/paths/paths.go              URL constants and template routes
 internal/server/server.go            route registration
 internal/server/project_handlers.go  HTTP handlers
 templates/projects/*.html            pages and forms
-internal/services/projects.go        domain types and business rules
-internal/database/project_store.go   SQLite store
+internal/project/project.go          domain types, business rules, and SQL
 internal/db/queries/projects.sql     sqlc queries
 migrations/00002_projects_schema.sql schema changes
-internal/app/build.go                service/store wiring
+internal/app/build.go                service wiring
 internal/ratelimit/ratelimit.go      rate-limit policy (only for limited routes)
 ```
 
@@ -158,7 +156,7 @@ same-origin form `POST` is covered automatically — see
 [architecture.md](architecture.md#csrf-protection).
 
 If a page needs feature-specific data, add a small field to `templateData`,
-such as `Projects []services.Project`.
+such as `Projects []project.Project`.
 
 ## 4. Add Database Changes
 
@@ -182,7 +180,7 @@ DROP TABLE projects;
 ```
 
 **Always add `ON DELETE CASCADE` to a user-owned table's `user_id` foreign
-key.** Account deletion (`AuthStore.DeleteAccount`) deletes only the `users`
+key.** Account deletion (in `internal/auth`) deletes only the `users`
 row and relies on the database to cascade the delete to every child table. If
 you omit `ON DELETE CASCADE`, the `users` delete fails with a foreign-key
 constraint error the moment a user who owns rows in your table tries to delete
@@ -214,41 +212,57 @@ make migrate-up
 
 Do not edit `internal/db/generated/` by hand.
 
-## 5. Add Store and Service
+## 5. Add the Service
 
-Stores wrap generated SQL and map rows into service-owned types:
+A feature lives in its own package that owns its domain types, validation, and
+SQL. The service holds the generated `*db.Queries`, calls them directly, and
+maps rows into its own types so callers never see `db` rows:
 
 ```go
-func NewProjectStore(conn *sql.DB) *ProjectStore {
-	return &ProjectStore{queries: db.New(conn)}
+package project
+
+type ProjectService struct {
+	queries *db.Queries
 }
-```
 
-Services own validation and business rules:
+func NewProjectService(conn *sql.DB) *ProjectService {
+	return &ProjectService{queries: db.New(conn)}
+}
 
-```go
 func (s *ProjectService) Create(ctx context.Context, userID int64, name string) (Project, error) {
 	name = strings.TrimSpace(name)
 	if name == "" {
 		return Project{}, ErrProjectNameRequired
 	}
-	return s.store.Create(ctx, userID, name)
+	row, err := s.queries.CreateProject(ctx, db.CreateProjectParams{UserID: userID, Name: name})
+	if err != nil {
+		return Project{}, fmt.Errorf("create project: %w", err)
+	}
+	return toProject(row), nil
 }
 ```
 
-Handlers should call services, not generated database queries.
+Keep the feature in one package and let the service call `sqlc` directly — no
+separate store layer or interface. Test it against a real in-memory database
+(see `internal/sqlitetest`), and have handlers call the service, never generated
+queries.
 
 ## 6. Wire the Feature
 
-Create stores and services in `internal/app/build.go`, then pass services into
-`server.New` through `server.Options`.
+Create the service in `internal/app/build.go`, then pass it into `server.New`
+through `server.Options`:
+
+```go
+projectService := project.NewProjectService(db)
+```
 
 In the server package, define the smallest interface the handlers need:
 
 ```go
 type projectService interface {
-	Create(context.Context, int64, string) (services.Project, error)
-	ListByUserID(context.Context, int64) ([]services.Project, error)
+	Create(context.Context, int64, string) (project.Project, error)
+	List(context.Context, int64) ([]project.Project, error)
+	Delete(context.Context, int64, int64) error
 }
 ```
 
@@ -297,8 +311,7 @@ outbox is the example to copy.
 Add focused tests where the behavior lives:
 
 * server tests for routes, auth, redirects, and form errors
-* service tests for validation and business rules
-* store tests for SQL and transactions
+* service tests for validation, business rules, SQL, and transactions, run against a real in-memory database via `internal/sqlitetest`
 * email tests for rendered messages and links
 * job tests for background behavior
 
@@ -312,8 +325,7 @@ Delete these files:
 
 ```sh
 rm internal/server/project_handlers.go internal/server/project_handlers_test.go
-rm internal/services/projects.go internal/services/projects_test.go
-rm internal/database/project_store.go internal/database/project_store_test.go
+rm -r internal/project
 rm internal/db/queries/projects.sql
 rm migrations/00002_projects_schema.sql
 rm -r templates/projects
@@ -326,7 +338,7 @@ Then remove the small, comment-tagged wiring in each of these files (search for
 * `internal/server/template_constants.go` — the `templateProjects` constant
 * `internal/server/server.go` — the `parseTemplates` entry, the `Server` and `Options` `projects` fields, the `New` assignment, and the `registerProjectRoutes` call
 * `internal/server/auth_handlers.go` — the `Projects` field on `templateData`
-* `internal/app/build.go` — the project store/service wiring
+* `internal/app/build.go` — the project service wiring
 * `templates/layout.html` — the "Projects" nav link
 
 Finally, regenerate the SQL layer and verify:

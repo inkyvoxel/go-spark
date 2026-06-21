@@ -1,4 +1,4 @@
-package database
+package auth
 
 import (
 	"context"
@@ -10,37 +10,34 @@ import (
 
 	db "github.com/inkyvoxel/go-spark/internal/db/generated"
 	"github.com/inkyvoxel/go-spark/internal/email"
-	"github.com/inkyvoxel/go-spark/internal/services"
 	"modernc.org/sqlite"
 	sqlite3 "modernc.org/sqlite/lib"
 )
 
-type AuthStore struct {
+type authStore struct {
 	db          *sql.DB
 	queries     *db.Queries
 	totpSecrets *secretCipher
 }
 
-var _ services.AuthStore = (*AuthStore)(nil)
-
-// NewAuthStore builds the store. totpSecretKey is a 32-byte key (derived from
+// newAuthStore builds the store. totpSecretKey is a 32-byte key (derived from
 // SECRET_KEY_BASE) used to encrypt TOTP shared secrets at rest.
-func NewAuthStore(conn *sql.DB, totpSecretKey []byte) (*AuthStore, error) {
+func newAuthStore(conn *sql.DB, totpSecretKey []byte) (*authStore, error) {
 	totpSecrets, err := newSecretCipher(totpSecretKey)
 	if err != nil {
 		return nil, fmt.Errorf("configure TOTP secret cipher: %w", err)
 	}
-	return &AuthStore{
+	return &authStore{
 		db:          conn,
 		queries:     db.New(conn),
 		totpSecrets: totpSecrets,
 	}, nil
 }
 
-func (s *AuthStore) CreateUser(ctx context.Context, email, passwordHash string) (services.User, error) {
+func (s *authStore) CreateUser(ctx context.Context, email, passwordHash string) (User, error) {
 	handle, err := newWebAuthnUserHandle()
 	if err != nil {
-		return services.User{}, err
+		return User{}, err
 	}
 	user, err := s.queries.CreateUser(ctx, db.CreateUserParams{
 		Email:              email,
@@ -49,20 +46,20 @@ func (s *AuthStore) CreateUser(ctx context.Context, email, passwordHash string) 
 	})
 	if err != nil {
 		if isSQLiteUniqueConstraint(err) {
-			return services.User{}, services.ErrEmailAlreadyRegistered
+			return User{}, ErrEmailAlreadyRegistered
 		}
-		return services.User{}, fmt.Errorf("create user: %w", err)
+		return User{}, fmt.Errorf("create user: %w", err)
 	}
 
 	return userFromCreateUserRow(user), nil
 }
 
-func (s *AuthStore) CreateVerifiedUser(ctx context.Context, email, passwordHash string, verifiedAt time.Time) (services.User, error) {
+func (s *authStore) CreateVerifiedUser(ctx context.Context, email, passwordHash string, verifiedAt time.Time) (User, error) {
 	handle, err := newWebAuthnUserHandle()
 	if err != nil {
-		return services.User{}, err
+		return User{}, err
 	}
-	return withTxResult(ctx, s.db, s.queries, "create verified user", func(queries *db.Queries) (services.User, error) {
+	return withTxResult(ctx, s.db, s.queries, "create verified user", func(queries *db.Queries) (User, error) {
 		createdUser, err := queries.CreateUser(ctx, db.CreateUserParams{
 			Email:              email,
 			PasswordHash:       passwordHash,
@@ -70,9 +67,9 @@ func (s *AuthStore) CreateVerifiedUser(ctx context.Context, email, passwordHash 
 		})
 		if err != nil {
 			if isSQLiteUniqueConstraint(err) {
-				return services.User{}, services.ErrEmailAlreadyRegistered
+				return User{}, ErrEmailAlreadyRegistered
 			}
-			return services.User{}, fmt.Errorf("create user: %w", err)
+			return User{}, fmt.Errorf("create user: %w", err)
 		}
 
 		user, err := queries.MarkUserEmailVerified(ctx, db.MarkUserEmailVerifiedParams{
@@ -80,19 +77,19 @@ func (s *AuthStore) CreateVerifiedUser(ctx context.Context, email, passwordHash 
 			ID:              createdUser.ID,
 		})
 		if err != nil {
-			return services.User{}, fmt.Errorf("mark user email verified: %w", err)
+			return User{}, fmt.Errorf("mark user email verified: %w", err)
 		}
 
 		return userFromMarkUserEmailVerifiedRow(user), nil
 	})
 }
 
-func (s *AuthStore) CreateUserWithEmailVerification(ctx context.Context, params services.CreateUserWithEmailVerificationParams) (services.User, error) {
+func (s *authStore) CreateUserWithEmailVerification(ctx context.Context, params CreateUserWithEmailVerificationParams) (User, error) {
 	handle, err := newWebAuthnUserHandle()
 	if err != nil {
-		return services.User{}, err
+		return User{}, err
 	}
-	return withTxResult(ctx, s.db, s.queries, "register user", func(queries *db.Queries) (services.User, error) {
+	return withTxResult(ctx, s.db, s.queries, "register user", func(queries *db.Queries) (User, error) {
 		user, err := queries.CreateUser(ctx, db.CreateUserParams{
 			Email:              params.Email,
 			PasswordHash:       params.PasswordHash,
@@ -100,9 +97,9 @@ func (s *AuthStore) CreateUserWithEmailVerification(ctx context.Context, params 
 		})
 		if err != nil {
 			if isSQLiteUniqueConstraint(err) {
-				return services.User{}, services.ErrEmailAlreadyRegistered
+				return User{}, ErrEmailAlreadyRegistered
 			}
-			return services.User{}, fmt.Errorf("create user: %w", err)
+			return User{}, fmt.Errorf("create user: %w", err)
 		}
 
 		if _, err := queries.CreateEmailVerificationToken(ctx, db.CreateEmailVerificationTokenParams{
@@ -110,7 +107,7 @@ func (s *AuthStore) CreateUserWithEmailVerification(ctx context.Context, params 
 			TokenHash: params.TokenHash,
 			ExpiresAt: params.TokenExpiresAt,
 		}); err != nil {
-			return services.User{}, fmt.Errorf("create email verification token: %w", err)
+			return User{}, fmt.Errorf("create email verification token: %w", err)
 		}
 
 		if _, err := queries.EnqueueEmail(ctx, db.EnqueueEmailParams{
@@ -121,54 +118,54 @@ func (s *AuthStore) CreateUserWithEmailVerification(ctx context.Context, params 
 			HtmlBody:    params.ConfirmationEmail.HTMLBody,
 			AvailableAt: params.EmailAvailableAt,
 		}); err != nil {
-			return services.User{}, fmt.Errorf("enqueue confirmation email: %w", err)
+			return User{}, fmt.Errorf("enqueue confirmation email: %w", err)
 		}
 
 		return userFromCreateUserRow(user), nil
 	})
 }
 
-func (s *AuthStore) GetUserByEmail(ctx context.Context, email string) (services.UserRecord, error) {
+func (s *authStore) GetUserByEmail(ctx context.Context, email string) (UserRecord, error) {
 	user, err := s.queries.GetUserByEmail(ctx, email)
 	if err != nil {
-		return services.UserRecord{}, fmt.Errorf("get user by email: %w", err)
+		return UserRecord{}, fmt.Errorf("get user by email: %w", err)
 	}
 
 	return userRecordFromGetUserByEmailRow(user), nil
 }
 
-func (s *AuthStore) GetUserByID(ctx context.Context, userID int64) (services.UserRecord, error) {
+func (s *authStore) GetUserByID(ctx context.Context, userID int64) (UserRecord, error) {
 	user, err := s.queries.GetUserByID(ctx, userID)
 	if err != nil {
-		return services.UserRecord{}, fmt.Errorf("get user by ID: %w", err)
+		return UserRecord{}, fmt.Errorf("get user by ID: %w", err)
 	}
 
 	return userRecordFromGetUserByIDRow(user), nil
 }
 
-func (s *AuthStore) CreateSession(ctx context.Context, userID int64, tokenHash string, expiresAt time.Time) (services.SessionRecord, error) {
+func (s *authStore) CreateSession(ctx context.Context, userID int64, tokenHash string, expiresAt time.Time) (SessionRecord, error) {
 	session, err := s.queries.CreateSession(ctx, db.CreateSessionParams{
 		UserID:    userID,
 		TokenHash: tokenHash,
 		ExpiresAt: expiresAt,
 	})
 	if err != nil {
-		return services.SessionRecord{}, fmt.Errorf("create session: %w", err)
+		return SessionRecord{}, fmt.Errorf("create session: %w", err)
 	}
 
 	return sessionRecordFromSession(session), nil
 }
 
-func (s *AuthStore) GetUserBySessionTokenHash(ctx context.Context, tokenHash string) (services.UserRecord, error) {
+func (s *authStore) GetUserBySessionTokenHash(ctx context.Context, tokenHash string) (UserRecord, error) {
 	user, err := s.queries.GetUserBySessionTokenHash(ctx, tokenHash)
 	if err != nil {
-		return services.UserRecord{}, fmt.Errorf("get user by session token hash: %w", err)
+		return UserRecord{}, fmt.Errorf("get user by session token hash: %w", err)
 	}
 
 	return userRecordFromGetUserBySessionTokenHashRow(user), nil
 }
 
-func (s *AuthStore) DeleteSessionByTokenHash(ctx context.Context, tokenHash string) error {
+func (s *authStore) DeleteSessionByTokenHash(ctx context.Context, tokenHash string) error {
 	if err := s.queries.DeleteSessionByTokenHash(ctx, tokenHash); err != nil {
 		return fmt.Errorf("delete session by token hash: %w", err)
 	}
@@ -176,7 +173,7 @@ func (s *AuthStore) DeleteSessionByTokenHash(ctx context.Context, tokenHash stri
 	return nil
 }
 
-func (s *AuthStore) DeleteSessionsByUserID(ctx context.Context, userID int64) error {
+func (s *authStore) DeleteSessionsByUserID(ctx context.Context, userID int64) error {
 	if err := s.queries.DeleteSessionsByUserID(ctx, userID); err != nil {
 		return fmt.Errorf("delete sessions by user ID: %w", err)
 	}
@@ -184,20 +181,20 @@ func (s *AuthStore) DeleteSessionsByUserID(ctx context.Context, userID int64) er
 	return nil
 }
 
-func (s *AuthStore) ListActiveSessionsByUserID(ctx context.Context, userID int64) ([]services.SessionRecord, error) {
+func (s *authStore) ListActiveSessionsByUserID(ctx context.Context, userID int64) ([]SessionRecord, error) {
 	sessions, err := s.queries.ListActiveSessionsByUserID(ctx, userID)
 	if err != nil {
 		return nil, fmt.Errorf("list active sessions by user ID: %w", err)
 	}
 
-	records := make([]services.SessionRecord, 0, len(sessions))
+	records := make([]SessionRecord, 0, len(sessions))
 	for _, session := range sessions {
 		records = append(records, sessionRecordFromSession(session))
 	}
 	return records, nil
 }
 
-func (s *AuthStore) DeleteOtherSessionsByUserIDAndTokenHash(ctx context.Context, userID int64, tokenHash string) (int64, error) {
+func (s *authStore) DeleteOtherSessionsByUserIDAndTokenHash(ctx context.Context, userID int64, tokenHash string) (int64, error) {
 	rows, err := s.queries.DeleteOtherSessionsByUserIDAndTokenHash(ctx, db.DeleteOtherSessionsByUserIDAndTokenHashParams{
 		UserID:    userID,
 		TokenHash: tokenHash,
@@ -209,7 +206,7 @@ func (s *AuthStore) DeleteOtherSessionsByUserIDAndTokenHash(ctx context.Context,
 	return rows, nil
 }
 
-func (s *AuthStore) DeleteSessionByIDAndUserIDAndTokenHashNot(ctx context.Context, sessionID, userID int64, tokenHash string) (int64, error) {
+func (s *authStore) DeleteSessionByIDAndUserIDAndTokenHashNot(ctx context.Context, sessionID, userID int64, tokenHash string) (int64, error) {
 	rows, err := s.queries.DeleteSessionByIDAndUserIDAndTokenHashNot(ctx, db.DeleteSessionByIDAndUserIDAndTokenHashNotParams{
 		ID:        sessionID,
 		UserID:    userID,
@@ -222,7 +219,7 @@ func (s *AuthStore) DeleteSessionByIDAndUserIDAndTokenHashNot(ctx context.Contex
 	return rows, nil
 }
 
-func (s *AuthStore) UpdateUserPasswordHash(ctx context.Context, userID int64, passwordHash string) error {
+func (s *authStore) UpdateUserPasswordHash(ctx context.Context, userID int64, passwordHash string) error {
 	if err := s.queries.UpdateUserPasswordHash(ctx, db.UpdateUserPasswordHashParams{
 		PasswordHash: passwordHash,
 		ID:           userID,
@@ -233,7 +230,7 @@ func (s *AuthStore) UpdateUserPasswordHash(ctx context.Context, userID int64, pa
 	return nil
 }
 
-func (s *AuthStore) SetPasswordAndRevokeSessions(ctx context.Context, userID int64, passwordHash string) error {
+func (s *authStore) SetPasswordAndRevokeSessions(ctx context.Context, userID int64, passwordHash string) error {
 	return withTx(ctx, s.db, s.queries, "set password and revoke sessions", func(queries *db.Queries) error {
 		if err := queries.UpdateUserPasswordHash(ctx, db.UpdateUserPasswordHashParams{
 			PasswordHash: passwordHash,
@@ -250,45 +247,45 @@ func (s *AuthStore) SetPasswordAndRevokeSessions(ctx context.Context, userID int
 	})
 }
 
-func (s *AuthStore) CreatePasswordResetToken(ctx context.Context, userID int64, tokenHash string, expiresAt time.Time) (services.PasswordResetToken, error) {
+func (s *authStore) CreatePasswordResetToken(ctx context.Context, userID int64, tokenHash string, expiresAt time.Time) (PasswordResetToken, error) {
 	token, err := s.queries.CreatePasswordResetToken(ctx, db.CreatePasswordResetTokenParams{
 		UserID:    userID,
 		TokenHash: tokenHash,
 		ExpiresAt: expiresAt,
 	})
 	if err != nil {
-		return services.PasswordResetToken{}, fmt.Errorf("create password reset token: %w", err)
+		return PasswordResetToken{}, fmt.Errorf("create password reset token: %w", err)
 	}
 
 	return passwordResetTokenFromDB(token), nil
 }
 
-func (s *AuthStore) GetValidPasswordResetTokenByHash(ctx context.Context, tokenHash string, now time.Time) (services.PasswordResetToken, error) {
+func (s *authStore) GetValidPasswordResetTokenByHash(ctx context.Context, tokenHash string, now time.Time) (PasswordResetToken, error) {
 	token, err := s.queries.GetValidPasswordResetTokenByHash(ctx, db.GetValidPasswordResetTokenByHashParams{
 		TokenHash: tokenHash,
 		ExpiresAt: now,
 	})
 	if err != nil {
-		return services.PasswordResetToken{}, fmt.Errorf("get valid password reset token by hash: %w", err)
+		return PasswordResetToken{}, fmt.Errorf("get valid password reset token by hash: %w", err)
 	}
 
 	return passwordResetTokenFromDB(token), nil
 }
 
-func (s *AuthStore) ConsumePasswordResetToken(ctx context.Context, tokenHash string, consumedAt time.Time) (services.PasswordResetToken, error) {
+func (s *authStore) ConsumePasswordResetToken(ctx context.Context, tokenHash string, consumedAt time.Time) (PasswordResetToken, error) {
 	token, err := s.queries.ConsumePasswordResetToken(ctx, db.ConsumePasswordResetTokenParams{
 		ConsumedAt: sql.NullTime{Time: consumedAt, Valid: true},
 		TokenHash:  tokenHash,
 		ExpiresAt:  consumedAt,
 	})
 	if err != nil {
-		return services.PasswordResetToken{}, fmt.Errorf("consume password reset token: %w", err)
+		return PasswordResetToken{}, fmt.Errorf("consume password reset token: %w", err)
 	}
 
 	return passwordResetTokenFromDB(token), nil
 }
 
-func (s *AuthStore) RequestPasswordReset(ctx context.Context, params services.RequestPasswordResetParams) error {
+func (s *authStore) RequestPasswordReset(ctx context.Context, params RequestPasswordResetParams) error {
 	return withTx(ctx, s.db, s.queries, "password reset request", func(queries *db.Queries) error {
 		if _, err := queries.CreatePasswordResetToken(ctx, db.CreatePasswordResetTokenParams{
 			UserID:    params.UserID,
@@ -313,7 +310,7 @@ func (s *AuthStore) RequestPasswordReset(ctx context.Context, params services.Re
 	})
 }
 
-func (s *AuthStore) RequestEmailChange(ctx context.Context, params services.RequestEmailChangeParams) error {
+func (s *authStore) RequestEmailChange(ctx context.Context, params RequestEmailChangeParams) error {
 	return withTx(ctx, s.db, s.queries, "email change request", func(queries *db.Queries) error {
 		if _, err := queries.CreateEmailChangeToken(ctx, db.CreateEmailChangeTokenParams{
 			UserID:    params.UserID,
@@ -339,20 +336,20 @@ func (s *AuthStore) RequestEmailChange(ctx context.Context, params services.Requ
 	})
 }
 
-func (s *AuthStore) CreateEmailVerificationToken(ctx context.Context, userID int64, tokenHash string, expiresAt time.Time) (services.EmailVerificationToken, error) {
+func (s *authStore) CreateEmailVerificationToken(ctx context.Context, userID int64, tokenHash string, expiresAt time.Time) (EmailVerificationToken, error) {
 	token, err := s.queries.CreateEmailVerificationToken(ctx, db.CreateEmailVerificationTokenParams{
 		UserID:    userID,
 		TokenHash: tokenHash,
 		ExpiresAt: expiresAt,
 	})
 	if err != nil {
-		return services.EmailVerificationToken{}, fmt.Errorf("create email verification token: %w", err)
+		return EmailVerificationToken{}, fmt.Errorf("create email verification token: %w", err)
 	}
 
 	return emailVerificationTokenFromDB(token), nil
 }
 
-func (s *AuthStore) ResendEmailVerification(ctx context.Context, params services.ResendEmailVerificationParams) error {
+func (s *authStore) ResendEmailVerification(ctx context.Context, params ResendEmailVerificationParams) error {
 	return withTx(ctx, s.db, s.queries, "resend email verification", func(queries *db.Queries) error {
 		if _, err := queries.CreateEmailVerificationToken(ctx, db.CreateEmailVerificationTokenParams{
 			UserID:    params.UserID,
@@ -382,22 +379,22 @@ func (s *AuthStore) ResendEmailVerification(ctx context.Context, params services
 // sessions, tokens, TOTP, passkeys, and example "projects" rows automatically.
 // Add ON DELETE CASCADE to any new user-owned table you introduce and it will
 // be cleaned up here for free; see docs/extending.md ("Account deletion").
-func (s *AuthStore) DeleteAccount(ctx context.Context, userID int64) error {
+func (s *authStore) DeleteAccount(ctx context.Context, userID int64) error {
 	if err := s.queries.DeleteUserByID(ctx, userID); err != nil {
 		return fmt.Errorf("delete user: %w", err)
 	}
 	return nil
 }
 
-func (s *AuthStore) VerifyEmailByTokenHash(ctx context.Context, tokenHash string, verifiedAt time.Time) (services.User, error) {
-	return withTxResult(ctx, s.db, s.queries, "verify email", func(queries *db.Queries) (services.User, error) {
+func (s *authStore) VerifyEmailByTokenHash(ctx context.Context, tokenHash string, verifiedAt time.Time) (User, error) {
+	return withTxResult(ctx, s.db, s.queries, "verify email", func(queries *db.Queries) (User, error) {
 		token, err := queries.ConsumeEmailVerificationToken(ctx, db.ConsumeEmailVerificationTokenParams{
 			ConsumedAt: sql.NullTime{Time: verifiedAt, Valid: true},
 			TokenHash:  tokenHash,
 			ExpiresAt:  verifiedAt,
 		})
 		if err != nil {
-			return services.User{}, fmt.Errorf("consume email verification token: %w", err)
+			return User{}, fmt.Errorf("consume email verification token: %w", err)
 		}
 
 		user, err := queries.MarkUserEmailVerified(ctx, db.MarkUserEmailVerifiedParams{
@@ -405,15 +402,15 @@ func (s *AuthStore) VerifyEmailByTokenHash(ctx context.Context, tokenHash string
 			ID:              token.UserID,
 		})
 		if err != nil {
-			return services.User{}, fmt.Errorf("mark user email verified: %w", err)
+			return User{}, fmt.Errorf("mark user email verified: %w", err)
 		}
 
 		return userFromMarkUserEmailVerifiedRow(user), nil
 	})
 }
 
-func userFromCreateUserRow(row db.CreateUserRow) services.User {
-	return services.User{
+func userFromCreateUserRow(row db.CreateUserRow) User {
+	return User{
 		ID:              row.ID,
 		Email:           row.Email,
 		EmailVerifiedAt: row.EmailVerifiedAt,
@@ -421,9 +418,9 @@ func userFromCreateUserRow(row db.CreateUserRow) services.User {
 	}
 }
 
-func userRecordFromGetUserByEmailRow(row db.GetUserByEmailRow) services.UserRecord {
-	return services.UserRecord{
-		User: services.User{
+func userRecordFromGetUserByEmailRow(row db.GetUserByEmailRow) UserRecord {
+	return UserRecord{
+		User: User{
 			ID:              row.ID,
 			Email:           row.Email,
 			EmailVerifiedAt: row.EmailVerifiedAt,
@@ -433,9 +430,9 @@ func userRecordFromGetUserByEmailRow(row db.GetUserByEmailRow) services.UserReco
 	}
 }
 
-func userRecordFromGetUserBySessionTokenHashRow(row db.GetUserBySessionTokenHashRow) services.UserRecord {
-	return services.UserRecord{
-		User: services.User{
+func userRecordFromGetUserBySessionTokenHashRow(row db.GetUserBySessionTokenHashRow) UserRecord {
+	return UserRecord{
+		User: User{
 			ID:              row.ID,
 			Email:           row.Email,
 			EmailVerifiedAt: row.EmailVerifiedAt,
@@ -445,8 +442,8 @@ func userRecordFromGetUserBySessionTokenHashRow(row db.GetUserBySessionTokenHash
 	}
 }
 
-func userFromMarkUserEmailVerifiedRow(row db.MarkUserEmailVerifiedRow) services.User {
-	return services.User{
+func userFromMarkUserEmailVerifiedRow(row db.MarkUserEmailVerifiedRow) User {
+	return User{
 		ID:              row.ID,
 		Email:           row.Email,
 		EmailVerifiedAt: row.EmailVerifiedAt,
@@ -454,8 +451,8 @@ func userFromMarkUserEmailVerifiedRow(row db.MarkUserEmailVerifiedRow) services.
 	}
 }
 
-func userFromUpdateUserEmailRow(row db.UpdateUserEmailRow) services.User {
-	return services.User{
+func userFromUpdateUserEmailRow(row db.UpdateUserEmailRow) User {
+	return User{
 		ID:              row.ID,
 		Email:           row.Email,
 		EmailVerifiedAt: row.EmailVerifiedAt,
@@ -463,9 +460,9 @@ func userFromUpdateUserEmailRow(row db.UpdateUserEmailRow) services.User {
 	}
 }
 
-func userRecordFromGetUserByIDRow(row db.GetUserByIDRow) services.UserRecord {
-	return services.UserRecord{
-		User: services.User{
+func userRecordFromGetUserByIDRow(row db.GetUserByIDRow) UserRecord {
+	return UserRecord{
+		User: User{
 			ID:              row.ID,
 			Email:           row.Email,
 			EmailVerifiedAt: row.EmailVerifiedAt,
@@ -475,8 +472,8 @@ func userRecordFromGetUserByIDRow(row db.GetUserByIDRow) services.UserRecord {
 	}
 }
 
-func sessionRecordFromSession(row db.Session) services.SessionRecord {
-	return services.SessionRecord{
+func sessionRecordFromSession(row db.Session) SessionRecord {
+	return SessionRecord{
 		ID:        row.ID,
 		UserID:    row.UserID,
 		TokenHash: row.TokenHash,
@@ -485,8 +482,8 @@ func sessionRecordFromSession(row db.Session) services.SessionRecord {
 	}
 }
 
-func emailVerificationTokenFromDB(row db.EmailVerificationToken) services.EmailVerificationToken {
-	return services.EmailVerificationToken{
+func emailVerificationTokenFromDB(row db.EmailVerificationToken) EmailVerificationToken {
+	return EmailVerificationToken{
 		ID:         row.ID,
 		UserID:     row.UserID,
 		TokenHash:  row.TokenHash,
@@ -496,8 +493,8 @@ func emailVerificationTokenFromDB(row db.EmailVerificationToken) services.EmailV
 	}
 }
 
-func passwordResetTokenFromDB(row db.PasswordResetToken) services.PasswordResetToken {
-	return services.PasswordResetToken{
+func passwordResetTokenFromDB(row db.PasswordResetToken) PasswordResetToken {
+	return PasswordResetToken{
 		ID:         row.ID,
 		UserID:     row.UserID,
 		TokenHash:  row.TokenHash,
@@ -507,15 +504,15 @@ func passwordResetTokenFromDB(row db.PasswordResetToken) services.PasswordResetT
 	}
 }
 
-func (s *AuthStore) ConfirmEmailChange(ctx context.Context, params services.ConfirmEmailChangeParams) (services.User, error) {
-	return withTxResult(ctx, s.db, s.queries, "confirm email change", func(queries *db.Queries) (services.User, error) {
+func (s *authStore) ConfirmEmailChange(ctx context.Context, params ConfirmEmailChangeParams) (User, error) {
+	return withTxResult(ctx, s.db, s.queries, "confirm email change", func(queries *db.Queries) (User, error) {
 		token, err := queries.ConsumeEmailChangeToken(ctx, db.ConsumeEmailChangeTokenParams{
 			ConsumedAt: sql.NullTime{Time: params.ChangedAt, Valid: true},
 			TokenHash:  params.TokenHash,
 			ExpiresAt:  params.ChangedAt,
 		})
 		if err != nil {
-			return services.User{}, fmt.Errorf("consume email change token: %w", err)
+			return User{}, fmt.Errorf("consume email change token: %w", err)
 		}
 
 		return applyEmailChange(ctx, queries, applyEmailChangeParams{
@@ -538,10 +535,10 @@ type applyEmailChangeParams struct {
 	SendOldEmailNotice     bool
 }
 
-func applyEmailChange(ctx context.Context, queries *db.Queries, params applyEmailChangeParams) (services.User, error) {
+func applyEmailChange(ctx context.Context, queries *db.Queries, params applyEmailChangeParams) (User, error) {
 	oldUser, err := queries.GetUserByID(ctx, params.UserID)
 	if err != nil {
-		return services.User{}, fmt.Errorf("get user by ID: %w", err)
+		return User{}, fmt.Errorf("get user by ID: %w", err)
 	}
 
 	user, err := queries.UpdateUserEmail(ctx, db.UpdateUserEmailParams{
@@ -551,20 +548,20 @@ func applyEmailChange(ctx context.Context, queries *db.Queries, params applyEmai
 	})
 	if err != nil {
 		if isSQLiteUniqueConstraint(err) {
-			return services.User{}, services.ErrEmailAlreadyRegistered
+			return User{}, ErrEmailAlreadyRegistered
 		}
-		return services.User{}, fmt.Errorf("update user email: %w", err)
+		return User{}, fmt.Errorf("update user email: %w", err)
 	}
 
 	// / Email is a login identifier, so changing it revokes all sessions (same as password change)
 	if err := queries.DeleteSessionsByUserID(ctx, params.UserID); err != nil {
-		return services.User{}, fmt.Errorf("delete sessions by user ID: %w", err)
+		return User{}, fmt.Errorf("delete sessions by user ID: %w", err)
 	}
 
 	if params.SendOldEmailNotice {
 		notice, err := email.NewEmailChangeNoticeMessage(params.OldEmailNoticeOptions, oldUser.Email)
 		if err != nil {
-			return services.User{}, fmt.Errorf("build old email change notice: %w", err)
+			return User{}, fmt.Errorf("build old email change notice: %w", err)
 		}
 		if _, err := queries.EnqueueEmail(ctx, db.EnqueueEmailParams{
 			Sender:      notice.From,
@@ -574,7 +571,7 @@ func applyEmailChange(ctx context.Context, queries *db.Queries, params applyEmai
 			HtmlBody:    notice.HTMLBody,
 			AvailableAt: params.NoticeEmailAvailableAt,
 		}); err != nil {
-			return services.User{}, fmt.Errorf("enqueue old email change notice: %w", err)
+			return User{}, fmt.Errorf("enqueue old email change notice: %w", err)
 		}
 	}
 

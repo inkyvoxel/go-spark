@@ -1,15 +1,13 @@
-package database
+package auth
 
 import (
 	"bytes"
 	"context"
 	"testing"
-
-	"github.com/inkyvoxel/go-spark/internal/services"
 )
 
 func TestWebAuthnCredentialLifecycle(t *testing.T) {
-	store := newTestAuthStore(t)
+	store := newTestauthStore(t)
 	ctx := context.Background()
 
 	user, err := store.CreateUser(ctx, "user@example.com", "hash")
@@ -33,7 +31,7 @@ func TestWebAuthnCredentialLifecycle(t *testing.T) {
 		t.Fatalf("resolved user ID = %d, want %d", resolved.ID, user.ID)
 	}
 
-	params := services.CreateWebAuthnCredentialParams{
+	params := CreateWebAuthnCredentialParams{
 		UserID:          user.ID,
 		CredentialID:    []byte("credential-one"),
 		PublicKey:       []byte("public-key"),
@@ -67,7 +65,7 @@ func TestWebAuthnCredentialLifecycle(t *testing.T) {
 		t.Fatalf("backup flags = (%v,%v), want (true,true)", got.BackupEligible, got.BackupState)
 	}
 
-	if err := store.UpdateWebAuthnCredentialOnLogin(ctx, services.UpdateWebAuthnCredentialParams{
+	if err := store.UpdateWebAuthnCredentialOnLogin(ctx, UpdateWebAuthnCredentialParams{
 		CredentialID: params.CredentialID,
 		SignCount:    7,
 		BackupState:  false,
@@ -85,7 +83,7 @@ func TestWebAuthnCredentialLifecycle(t *testing.T) {
 }
 
 func TestWebAuthnCredentialUniqueByCredentialID(t *testing.T) {
-	store := newTestAuthStore(t)
+	store := newTestauthStore(t)
 	ctx := context.Background()
 
 	user, err := store.CreateUser(ctx, "user@example.com", "hash")
@@ -93,7 +91,7 @@ func TestWebAuthnCredentialUniqueByCredentialID(t *testing.T) {
 		t.Fatalf("CreateUser() error = %v", err)
 	}
 
-	params := services.CreateWebAuthnCredentialParams{
+	params := CreateWebAuthnCredentialParams{
 		UserID:       user.ID,
 		CredentialID: []byte("duplicate"),
 		PublicKey:    []byte("pk"),
@@ -108,13 +106,13 @@ func TestWebAuthnCredentialUniqueByCredentialID(t *testing.T) {
 }
 
 func TestWebAuthnCredentialRenameAndDeleteAreScopedToUser(t *testing.T) {
-	store := newTestAuthStore(t)
+	store := newTestauthStore(t)
 	ctx := context.Background()
 
 	owner, _ := store.CreateUser(ctx, "owner@example.com", "hash")
 	other, _ := store.CreateUser(ctx, "other@example.com", "hash")
 
-	if err := store.CreateWebAuthnCredential(ctx, services.CreateWebAuthnCredentialParams{
+	if err := store.CreateWebAuthnCredential(ctx, CreateWebAuthnCredentialParams{
 		UserID:       owner.ID,
 		CredentialID: []byte("owned"),
 		PublicKey:    []byte("pk"),

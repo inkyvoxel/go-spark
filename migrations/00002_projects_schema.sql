@@ -1,5 +1,5 @@
 -- +goose Up
--- Example feature. Demonstrates the migration -> sqlc -> store -> service ->
+-- Example feature. Demonstrates the migration -> sqlc -> service ->
 -- handler -> template path described in docs/extending.md. Safe to delete along
 -- with the rest of the "projects" example (see the header comment in
 -- internal/server/project_handlers.go for the full list of files to remove).

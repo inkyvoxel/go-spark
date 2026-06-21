@@ -14,12 +14,12 @@ import (
 
 	"github.com/go-webauthn/webauthn/protocol"
 	"github.com/go-webauthn/webauthn/webauthn"
+	"github.com/inkyvoxel/go-spark/internal/auth"
 	"github.com/inkyvoxel/go-spark/internal/paths"
-	"github.com/inkyvoxel/go-spark/internal/services"
 )
 
 func TestLoadSessionAddsCurrentUserToContext(t *testing.T) {
-	wantUser := services.User{ID: 42, Email: "user@example.com"}
+	wantUser := auth.User{ID: 42, Email: "user@example.com"}
 	auth := &fakeAuthLookup{
 		user: wantUser,
 	}
@@ -70,7 +70,7 @@ func TestLoadSessionAllowsMissingCookie(t *testing.T) {
 
 func TestLoadSessionAllowsInvalidSessionAsAnonymous(t *testing.T) {
 	srv := newAuthMiddlewareTestServer(&fakeAuthLookup{
-		err: services.ErrInvalidSession,
+		err: auth.ErrInvalidSession,
 	})
 
 	req := httptest.NewRequest(http.MethodGet, "/private", nil)
@@ -99,7 +99,7 @@ func TestSetSessionCookieDefaultsToBrowserSessionCookie(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/private", nil)
 	rec := httptest.NewRecorder()
 
-	srv.setSessionCookie(rec, req, services.AuthSession{
+	srv.setSessionCookie(rec, req, auth.AuthSession{
 		Token:     "session-token",
 		ExpiresAt: time.Now().UTC().Add(5 * time.Minute),
 	}, false)
@@ -119,7 +119,7 @@ func TestSetSessionCookieSetsPositiveMaxAgeWhenRemembered(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/private", nil)
 	rec := httptest.NewRecorder()
 
-	srv.setSessionCookie(rec, req, services.AuthSession{
+	srv.setSessionCookie(rec, req, auth.AuthSession{
 		Token:     "session-token",
 		ExpiresAt: time.Now().UTC().Add(5 * time.Minute),
 	}, true)
@@ -152,7 +152,7 @@ func TestRequireAuthAllowsCurrentUser(t *testing.T) {
 	srv := newAuthMiddlewareTestServer(&fakeAuthLookup{})
 
 	req := httptest.NewRequest(http.MethodGet, "/private", nil)
-	req = req.WithContext(contextWithUser(req.Context(), services.User{ID: 42, Email: "user@example.com"}))
+	req = req.WithContext(contextWithUser(req.Context(), auth.User{ID: 42, Email: "user@example.com"}))
 	rec := httptest.NewRecorder()
 
 	srv.requireAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -201,7 +201,7 @@ func TestRequireAnonymousRedirectsCurrentUserToAccount(t *testing.T) {
 	srv := newAuthMiddlewareTestServer(&fakeAuthLookup{})
 
 	req := httptest.NewRequest(http.MethodGet, paths.Login, nil)
-	req = req.WithContext(contextWithUser(req.Context(), services.User{
+	req = req.WithContext(contextWithUser(req.Context(), auth.User{
 		ID:    42,
 		Email: "user@example.com",
 		EmailVerifiedAt: sql.NullTime{
@@ -227,7 +227,7 @@ func TestRequireAnonymousRedirectsUnverifiedUserToVerifyEmail(t *testing.T) {
 	srv := newAuthMiddlewareTestServer(&fakeAuthLookup{})
 
 	req := httptest.NewRequest(http.MethodGet, paths.Login, nil)
-	req = req.WithContext(contextWithUser(req.Context(), services.User{ID: 42, Email: "user@example.com"}))
+	req = req.WithContext(contextWithUser(req.Context(), auth.User{ID: 42, Email: "user@example.com"}))
 	rec := httptest.NewRecorder()
 
 	srv.requireAnonymous(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -261,7 +261,7 @@ func TestRequireVerifiedAuthAllowsVerifiedUser(t *testing.T) {
 	srv := newAuthMiddlewareTestServer(&fakeAuthLookup{})
 
 	req := httptest.NewRequest(http.MethodPost, paths.ChangePassword, nil)
-	req = req.WithContext(contextWithUser(req.Context(), services.User{
+	req = req.WithContext(contextWithUser(req.Context(), auth.User{
 		ID:    42,
 		Email: "user@example.com",
 		EmailVerifiedAt: sql.NullTime{
@@ -284,7 +284,7 @@ func TestRequireVerifiedAuthRejectsUnverifiedUser(t *testing.T) {
 	srv := newAuthMiddlewareTestServer(&fakeAuthLookup{})
 
 	req := httptest.NewRequest(http.MethodPost, paths.ChangePassword, nil)
-	req = req.WithContext(contextWithUser(req.Context(), services.User{
+	req = req.WithContext(contextWithUser(req.Context(), auth.User{
 		ID:    42,
 		Email: "user@example.com",
 	}))
@@ -303,7 +303,7 @@ func TestRequireVerifiedAuthRedirectsUnverifiedGETToVerifyPage(t *testing.T) {
 	srv := newAuthMiddlewareTestServer(&fakeAuthLookup{})
 
 	req := httptest.NewRequest(http.MethodGet, "/private", nil)
-	req = req.WithContext(contextWithUser(req.Context(), services.User{
+	req = req.WithContext(contextWithUser(req.Context(), auth.User{
 		ID:    42,
 		Email: "user@example.com",
 	}))
@@ -368,12 +368,12 @@ func TestCurrentUserReturnsFalseWhenMissing(t *testing.T) {
 }
 
 type fakeAuthLookup struct {
-	user                 services.User
+	user                 auth.User
 	token                string
 	err                  error
 	passkeysEnabled      bool
-	passkeyLoginUser     services.User
-	passkeyLoginSession  services.AuthSession
+	passkeyLoginUser     auth.User
+	passkeyLoginSession  auth.AuthSession
 	passkeyLoginErr      error
 	registered           bool
 	registerEmail        string
@@ -381,11 +381,11 @@ type fakeAuthLookup struct {
 	registerErr          error
 	loginEmail           string
 	loginPass            string
-	loginSession         services.AuthSession
+	loginSession         auth.AuthSession
 	loginErr             error
 	totpLoginUserID      int64
 	totpLoginCode        string
-	totpLoginSession     services.AuthSession
+	totpLoginSession     auth.AuthSession
 	totpLoginErr         error
 	logoutToken          string
 	logoutErr            error
@@ -394,15 +394,15 @@ type fakeAuthLookup struct {
 	publicResendEmail    string
 	publicResendErr      error
 	publicResendCalls    int
-	resendUser           services.User
+	resendUser           auth.User
 	resendErr            error
 	resendCalled         bool
-	changePasswordUser   services.User
+	changePasswordUser   auth.User
 	changePasswordOld    string
 	changePasswordNew    string
 	changePasswordErr    error
 	changePasswordCalled bool
-	changeEmailUser      services.User
+	changeEmailUser      auth.User
 	changeEmailPassword  string
 	changeEmailNewEmail  string
 	changeEmailErr       error
@@ -416,7 +416,7 @@ type fakeAuthLookup struct {
 	resetToken           string
 	resetNewPassword     string
 	resetErr             error
-	managedSessions      []services.ManagedSession
+	managedSessions      []auth.ManagedSession
 	listSessionsErr      error
 	revokeSessionID      int64
 	revokeSessionErr     error
@@ -424,16 +424,16 @@ type fakeAuthLookup struct {
 	revokeOtherCalled    bool
 }
 
-func (f *fakeAuthLookup) UserBySessionToken(ctx context.Context, token string) (services.User, error) {
+func (f *fakeAuthLookup) UserBySessionToken(ctx context.Context, token string) (auth.User, error) {
 	f.token = token
 	return f.user, f.err
 }
 
-func (f *fakeAuthLookup) Login(ctx context.Context, email string, password string) (services.User, services.AuthSession, error) {
+func (f *fakeAuthLookup) Login(ctx context.Context, email string, password string) (auth.User, auth.AuthSession, error) {
 	f.loginEmail = email
 	f.loginPass = password
 	if f.loginErr != nil {
-		return f.user, services.AuthSession{}, f.loginErr
+		return f.user, auth.AuthSession{}, f.loginErr
 	}
 	return f.user, f.loginSession, nil
 }
@@ -443,17 +443,17 @@ func (f *fakeAuthLookup) Logout(ctx context.Context, token string) error {
 	return f.logoutErr
 }
 
-func (f *fakeAuthLookup) Register(ctx context.Context, email string, password string) (services.User, error) {
+func (f *fakeAuthLookup) Register(ctx context.Context, email string, password string) (auth.User, error) {
 	f.registered = true
 	f.registerEmail = email
 	f.registerPass = password
 	return f.user, f.registerErr
 }
 
-func (f *fakeAuthLookup) VerifyEmail(ctx context.Context, token string) (services.User, error) {
+func (f *fakeAuthLookup) VerifyEmail(ctx context.Context, token string) (auth.User, error) {
 	f.verifyToken = token
 	if f.verifyErr != nil {
-		return services.User{}, f.verifyErr
+		return auth.User{}, f.verifyErr
 	}
 	return f.user, nil
 }
@@ -466,13 +466,13 @@ func (f *fakeAuthLookup) ResendVerificationEmailByAddress(ctx context.Context, e
 
 func (f *fakeAuthLookup) ResendVerificationEmail(ctx context.Context, userID int64) error {
 	f.resendCalled = true
-	f.resendUser = services.User{ID: userID}
+	f.resendUser = auth.User{ID: userID}
 	return f.resendErr
 }
 
 func (f *fakeAuthLookup) ChangePassword(ctx context.Context, userID int64, currentPassword, newPassword string) error {
 	f.changePasswordCalled = true
-	f.changePasswordUser = services.User{ID: userID}
+	f.changePasswordUser = auth.User{ID: userID}
 	f.changePasswordOld = currentPassword
 	f.changePasswordNew = newPassword
 	return f.changePasswordErr
@@ -480,13 +480,13 @@ func (f *fakeAuthLookup) ChangePassword(ctx context.Context, userID int64, curre
 
 func (f *fakeAuthLookup) RequestEmailChange(ctx context.Context, userID int64, currentPassword, newEmail string) error {
 	f.changeEmailCalled = true
-	f.changeEmailUser = services.User{ID: userID}
+	f.changeEmailUser = auth.User{ID: userID}
 	f.changeEmailPassword = currentPassword
 	f.changeEmailNewEmail = newEmail
 	return f.changeEmailErr
 }
 
-func (f *fakeAuthLookup) ConfirmEmailChange(ctx context.Context, token string) (services.User, error) {
+func (f *fakeAuthLookup) ConfirmEmailChange(ctx context.Context, token string) (auth.User, error) {
 	f.confirmEmailToken = token
 	return f.user, f.confirmEmailErr
 }
@@ -499,7 +499,7 @@ func (f *fakeAuthLookup) RequestPasswordReset(ctx context.Context, email string)
 func (f *fakeAuthLookup) ValidatePasswordResetToken(ctx context.Context, token string) error {
 	f.validateResetToken = token
 	if strings.TrimSpace(token) == "" {
-		return services.ErrInvalidPasswordResetToken
+		return auth.ErrInvalidPasswordResetToken
 	}
 	return f.validateResetErr
 }
@@ -508,12 +508,12 @@ func (f *fakeAuthLookup) ResetPasswordWithToken(ctx context.Context, token, newP
 	f.resetToken = token
 	f.resetNewPassword = newPassword
 	if strings.TrimSpace(token) == "" {
-		return services.ErrInvalidPasswordResetToken
+		return auth.ErrInvalidPasswordResetToken
 	}
 	return f.resetErr
 }
 
-func (f *fakeAuthLookup) ListManagedSessions(ctx context.Context, userID int64, currentSessionToken string) ([]services.ManagedSession, error) {
+func (f *fakeAuthLookup) ListManagedSessions(ctx context.Context, userID int64, currentSessionToken string) ([]auth.ManagedSession, error) {
 	return f.managedSessions, f.listSessionsErr
 }
 
@@ -555,7 +555,7 @@ func (f *fakeAuthLookup) TOTPSetupState(ctx context.Context, userID int64) (bool
 	return false, false, nil
 }
 
-func (f *fakeAuthLookup) VerifyTOTPLogin(ctx context.Context, userID int64, code string) (services.AuthSession, error) {
+func (f *fakeAuthLookup) VerifyTOTPLogin(ctx context.Context, userID int64, code string) (auth.AuthSession, error) {
 	f.totpLoginUserID = userID
 	f.totpLoginCode = code
 	return f.totpLoginSession, f.totpLoginErr
@@ -581,11 +581,11 @@ func (f *fakeAuthLookup) BeginPasskeyLogin(ctx context.Context) (*protocol.Crede
 	return &protocol.CredentialAssertion{}, &webauthn.SessionData{Expires: time.Now().UTC().Add(time.Minute)}, nil
 }
 
-func (f *fakeAuthLookup) FinishPasskeyLogin(ctx context.Context, session webauthn.SessionData, response *protocol.ParsedCredentialAssertionData) (services.User, services.AuthSession, error) {
+func (f *fakeAuthLookup) FinishPasskeyLogin(ctx context.Context, session webauthn.SessionData, response *protocol.ParsedCredentialAssertionData) (auth.User, auth.AuthSession, error) {
 	return f.passkeyLoginUser, f.passkeyLoginSession, f.passkeyLoginErr
 }
 
-func (f *fakeAuthLookup) ListPasskeys(ctx context.Context, userID int64) ([]services.WebAuthnCredential, error) {
+func (f *fakeAuthLookup) ListPasskeys(ctx context.Context, userID int64) ([]auth.WebAuthnCredential, error) {
 	return nil, nil
 }
 
@@ -622,7 +622,7 @@ func TestValidatePasswordPairLengthBounds(t *testing.T) {
 		t.Fatalf("short password error = %q, want min-length message", msg)
 	}
 
-	tooLong := strings.Repeat("a", services.PasswordMaxLength+1)
+	tooLong := strings.Repeat("a", auth.PasswordMaxLength+1)
 	long := srv.validatePasswordPair(tooLong, tooLong, "password", "confirm_password")
 	if msg := long["password"]; !strings.Contains(msg, "at most") {
 		t.Fatalf("long password error = %q, want max-length message", msg)

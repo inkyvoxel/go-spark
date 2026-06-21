@@ -1,4 +1,4 @@
-package database
+package auth
 
 import (
 	"context"
@@ -10,7 +10,6 @@ import (
 
 	db "github.com/inkyvoxel/go-spark/internal/db/generated"
 	"github.com/inkyvoxel/go-spark/internal/email"
-	"github.com/inkyvoxel/go-spark/internal/services"
 )
 
 const authStoreTestSchema = `
@@ -129,20 +128,20 @@ CREATE TABLE user_totp (
 `
 
 func TestAuthStoreCreateUserTranslatesDuplicateEmail(t *testing.T) {
-	store := newTestAuthStore(t)
+	store := newTestauthStore(t)
 
 	if _, err := store.CreateUser(context.Background(), "user@example.com", "hash"); err != nil {
 		t.Fatalf("CreateUser() error = %v", err)
 	}
 
 	_, err := store.CreateUser(context.Background(), "user@example.com", "hash")
-	if !errors.Is(err, services.ErrEmailAlreadyRegistered) {
-		t.Fatalf("CreateUser() error = %v, want %v", err, services.ErrEmailAlreadyRegistered)
+	if !errors.Is(err, ErrEmailAlreadyRegistered) {
+		t.Fatalf("CreateUser() error = %v, want %v", err, ErrEmailAlreadyRegistered)
 	}
 }
 
 func TestAuthStoreUserAndSessionFlow(t *testing.T) {
-	store := newTestAuthStore(t)
+	store := newTestauthStore(t)
 
 	user, err := store.CreateUser(context.Background(), "user@example.com", "hash")
 	if err != nil {
@@ -194,7 +193,7 @@ func TestAuthStoreUserAndSessionFlow(t *testing.T) {
 }
 
 func TestAuthStoreUpdateUserPasswordHash(t *testing.T) {
-	store := newTestAuthStore(t)
+	store := newTestauthStore(t)
 
 	user, err := store.CreateUser(context.Background(), "user@example.com", "old-hash")
 	if err != nil {
@@ -215,7 +214,7 @@ func TestAuthStoreUpdateUserPasswordHash(t *testing.T) {
 }
 
 func TestAuthStoreDeleteSessionsByUserID(t *testing.T) {
-	store := newTestAuthStore(t)
+	store := newTestauthStore(t)
 
 	userOne, err := store.CreateUser(context.Background(), "user1@example.com", "hash")
 	if err != nil {
@@ -262,7 +261,7 @@ func TestAuthStoreDeleteSessionsByUserID(t *testing.T) {
 }
 
 func TestAuthStoreListActiveSessionsByUserID(t *testing.T) {
-	store := newTestAuthStore(t)
+	store := newTestauthStore(t)
 
 	user, err := store.CreateUser(context.Background(), "user@example.com", "hash")
 	if err != nil {
@@ -314,7 +313,7 @@ func TestAuthStoreListActiveSessionsByUserID(t *testing.T) {
 }
 
 func TestAuthStoreDeleteOtherSessionsByUserIDAndTokenHash(t *testing.T) {
-	store := newTestAuthStore(t)
+	store := newTestauthStore(t)
 
 	user, err := store.CreateUser(context.Background(), "user@example.com", "hash")
 	if err != nil {
@@ -370,7 +369,7 @@ func TestAuthStoreDeleteOtherSessionsByUserIDAndTokenHash(t *testing.T) {
 }
 
 func TestAuthStoreDeleteSessionByIDAndUserIDAndTokenHashNot(t *testing.T) {
-	store := newTestAuthStore(t)
+	store := newTestauthStore(t)
 
 	user, err := store.CreateUser(context.Background(), "user@example.com", "hash")
 	if err != nil {
@@ -424,7 +423,7 @@ func TestAuthStoreDeleteSessionByIDAndUserIDAndTokenHashNot(t *testing.T) {
 }
 
 func TestAuthStoreUnexpectedCreateUserErrorIsWrapped(t *testing.T) {
-	conn := newAuthStoreTestDB(t)
+	conn := newauthStoreTestDB(t)
 	store := mustNewAuthStore(t, conn)
 
 	if err := conn.Close(); err != nil {
@@ -435,7 +434,7 @@ func TestAuthStoreUnexpectedCreateUserErrorIsWrapped(t *testing.T) {
 	if err == nil {
 		t.Fatal("CreateUser() error = nil, want error")
 	}
-	if errors.Is(err, services.ErrEmailAlreadyRegistered) {
+	if errors.Is(err, ErrEmailAlreadyRegistered) {
 		t.Fatalf("CreateUser() error = %v, did not want duplicate email error", err)
 	}
 	if !strings.Contains(err.Error(), "create user") {
@@ -444,12 +443,12 @@ func TestAuthStoreUnexpectedCreateUserErrorIsWrapped(t *testing.T) {
 }
 
 func TestAuthStoreCreateUserWithEmailVerification(t *testing.T) {
-	store := newTestAuthStore(t)
+	store := newTestauthStore(t)
 	now := time.Now().UTC()
 
 	user, err := store.CreateUserWithEmailVerification(
 		context.Background(),
-		services.CreateUserWithEmailVerificationParams{
+		CreateUserWithEmailVerificationParams{
 			Email:          "user@example.com",
 			PasswordHash:   "hash",
 			TokenHash:      "token-hash",
@@ -498,7 +497,7 @@ func TestAuthStoreCreateUserWithEmailVerification(t *testing.T) {
 }
 
 func TestAuthStoreCreateUserWithEmailVerificationRollsBackOnOutboxError(t *testing.T) {
-	conn := newAuthStoreTestDB(t)
+	conn := newauthStoreTestDB(t)
 	store := mustNewAuthStore(t, conn)
 	if _, err := conn.Exec("DROP TABLE email_outbox"); err != nil {
 		t.Fatalf("drop email_outbox: %v", err)
@@ -507,7 +506,7 @@ func TestAuthStoreCreateUserWithEmailVerificationRollsBackOnOutboxError(t *testi
 
 	_, err := store.CreateUserWithEmailVerification(
 		context.Background(),
-		services.CreateUserWithEmailVerificationParams{
+		CreateUserWithEmailVerificationParams{
 			Email:             "user@example.com",
 			PasswordHash:      "hash",
 			TokenHash:         "token-hash",
@@ -527,7 +526,7 @@ func TestAuthStoreCreateUserWithEmailVerificationRollsBackOnOutboxError(t *testi
 }
 
 func TestAuthStoreEmailVerificationFlow(t *testing.T) {
-	store := newTestAuthStore(t)
+	store := newTestauthStore(t)
 
 	user, err := store.CreateUser(context.Background(), "user@example.com", "hash")
 	if err != nil {
@@ -565,7 +564,7 @@ func TestAuthStoreEmailVerificationFlow(t *testing.T) {
 }
 
 func TestAuthStoreEmailVerificationRejectsExpiredToken(t *testing.T) {
-	store := newTestAuthStore(t)
+	store := newTestauthStore(t)
 
 	user, err := store.CreateUser(context.Background(), "user@example.com", "hash")
 	if err != nil {
@@ -582,7 +581,7 @@ func TestAuthStoreEmailVerificationRejectsExpiredToken(t *testing.T) {
 }
 
 func TestAuthStorePasswordResetTokenFlow(t *testing.T) {
-	store := newTestAuthStore(t)
+	store := newTestauthStore(t)
 
 	user, err := store.CreateUser(context.Background(), "user@example.com", "hash")
 	if err != nil {
@@ -621,7 +620,7 @@ func TestAuthStorePasswordResetTokenFlow(t *testing.T) {
 }
 
 func TestAuthStorePasswordResetTokenRejectsExpiredToken(t *testing.T) {
-	store := newTestAuthStore(t)
+	store := newTestauthStore(t)
 
 	user, err := store.CreateUser(context.Background(), "user@example.com", "hash")
 	if err != nil {
@@ -642,7 +641,7 @@ func TestAuthStorePasswordResetTokenRejectsExpiredToken(t *testing.T) {
 }
 
 func TestAuthStoreRequestPasswordReset(t *testing.T) {
-	store := newTestAuthStore(t)
+	store := newTestauthStore(t)
 	now := time.Now().UTC()
 
 	user, err := store.CreateUser(context.Background(), "user@example.com", "hash")
@@ -650,7 +649,7 @@ func TestAuthStoreRequestPasswordReset(t *testing.T) {
 		t.Fatalf("CreateUser() error = %v", err)
 	}
 
-	err = store.RequestPasswordReset(context.Background(), services.RequestPasswordResetParams{
+	err = store.RequestPasswordReset(context.Background(), RequestPasswordResetParams{
 		UserID:         user.ID,
 		TokenHash:      "reset-token-hash",
 		TokenExpiresAt: now.Add(time.Hour),
@@ -697,7 +696,7 @@ func TestAuthStoreRequestPasswordReset(t *testing.T) {
 }
 
 func TestAuthStoreResendEmailVerification(t *testing.T) {
-	store := newTestAuthStore(t)
+	store := newTestauthStore(t)
 	now := time.Now().UTC()
 
 	user, err := store.CreateUser(context.Background(), "user@example.com", "hash")
@@ -705,7 +704,7 @@ func TestAuthStoreResendEmailVerification(t *testing.T) {
 		t.Fatalf("CreateUser() error = %v", err)
 	}
 
-	err = store.ResendEmailVerification(context.Background(), services.ResendEmailVerificationParams{
+	err = store.ResendEmailVerification(context.Background(), ResendEmailVerificationParams{
 		UserID:         user.ID,
 		TokenHash:      "resend-token-hash",
 		TokenExpiresAt: now.Add(time.Hour),
@@ -749,7 +748,7 @@ func TestAuthStoreResendEmailVerification(t *testing.T) {
 }
 
 func TestAuthStoreResendEmailVerificationRollsBackOnOutboxError(t *testing.T) {
-	conn := newAuthStoreTestDB(t)
+	conn := newauthStoreTestDB(t)
 	store := mustNewAuthStore(t, conn)
 	now := time.Now().UTC()
 
@@ -762,7 +761,7 @@ func TestAuthStoreResendEmailVerificationRollsBackOnOutboxError(t *testing.T) {
 		t.Fatalf("drop email_outbox: %v", err)
 	}
 
-	err = store.ResendEmailVerification(context.Background(), services.ResendEmailVerificationParams{
+	err = store.ResendEmailVerification(context.Background(), ResendEmailVerificationParams{
 		UserID:         user.ID,
 		TokenHash:      "resend-token-hash",
 		TokenExpiresAt: now.Add(time.Hour),
@@ -789,7 +788,7 @@ func TestAuthStoreResendEmailVerificationRollsBackOnOutboxError(t *testing.T) {
 }
 
 func TestAuthStoreRequestEmailChange(t *testing.T) {
-	store := newTestAuthStore(t)
+	store := newTestauthStore(t)
 	now := time.Now().UTC()
 
 	user, err := store.CreateUser(context.Background(), "user@example.com", "hash")
@@ -797,7 +796,7 @@ func TestAuthStoreRequestEmailChange(t *testing.T) {
 		t.Fatalf("CreateUser() error = %v", err)
 	}
 
-	err = store.RequestEmailChange(context.Background(), services.RequestEmailChangeParams{
+	err = store.RequestEmailChange(context.Background(), RequestEmailChangeParams{
 		UserID:         user.ID,
 		NewEmail:       "new@example.com",
 		TokenHash:      "email-change-token-hash",
@@ -841,14 +840,14 @@ func TestAuthStoreRequestEmailChange(t *testing.T) {
 }
 
 func TestAuthStoreConfirmEmailChangeSkipsOldEmailNoticeWhenDisabled(t *testing.T) {
-	store := newTestAuthStore(t)
+	store := newTestauthStore(t)
 	now := time.Now().UTC()
 
 	user, err := store.CreateUser(context.Background(), "user@example.com", "hash")
 	if err != nil {
 		t.Fatalf("CreateUser() error = %v", err)
 	}
-	if err := store.RequestEmailChange(context.Background(), services.RequestEmailChangeParams{
+	if err := store.RequestEmailChange(context.Background(), RequestEmailChangeParams{
 		UserID:         user.ID,
 		NewEmail:       "new@example.com",
 		TokenHash:      "email-change-token-hash",
@@ -864,7 +863,7 @@ func TestAuthStoreConfirmEmailChangeSkipsOldEmailNoticeWhenDisabled(t *testing.T
 		t.Fatalf("RequestEmailChange() error = %v", err)
 	}
 
-	if _, err := store.ConfirmEmailChange(context.Background(), services.ConfirmEmailChangeParams{
+	if _, err := store.ConfirmEmailChange(context.Background(), ConfirmEmailChangeParams{
 		TokenHash:              "email-change-token-hash",
 		ChangedAt:              now,
 		OldEmailNoticeOptions:  email.MessageOptions{From: "sender@example.com"},
@@ -893,7 +892,7 @@ func TestAuthStoreConfirmEmailChangeSkipsOldEmailNoticeWhenDisabled(t *testing.T
 }
 
 func TestAuthStoreConfirmEmailChange(t *testing.T) {
-	store := newTestAuthStore(t)
+	store := newTestauthStore(t)
 	now := time.Now().UTC()
 
 	user, err := store.CreateUser(context.Background(), "user@example.com", "hash")
@@ -904,7 +903,7 @@ func TestAuthStoreConfirmEmailChange(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateSession() error = %v", err)
 	}
-	if err := store.RequestEmailChange(context.Background(), services.RequestEmailChangeParams{
+	if err := store.RequestEmailChange(context.Background(), RequestEmailChangeParams{
 		UserID:         user.ID,
 		NewEmail:       "new@example.com",
 		TokenHash:      "email-change-token-hash",
@@ -920,7 +919,7 @@ func TestAuthStoreConfirmEmailChange(t *testing.T) {
 		t.Fatalf("RequestEmailChange() error = %v", err)
 	}
 
-	changed, err := store.ConfirmEmailChange(context.Background(), services.ConfirmEmailChangeParams{
+	changed, err := store.ConfirmEmailChange(context.Background(), ConfirmEmailChangeParams{
 		TokenHash:              "email-change-token-hash",
 		ChangedAt:              now,
 		OldEmailNoticeOptions:  email.MessageOptions{From: "sender@example.com"},
@@ -967,7 +966,7 @@ func TestAuthStoreConfirmEmailChange(t *testing.T) {
 		t.Fatalf("claimed emails = %#v, want old email notice", claimed)
 	}
 
-	_, err = store.ConfirmEmailChange(context.Background(), services.ConfirmEmailChangeParams{
+	_, err = store.ConfirmEmailChange(context.Background(), ConfirmEmailChangeParams{
 		TokenHash:              "email-change-token-hash",
 		ChangedAt:              now,
 		OldEmailNoticeOptions:  email.MessageOptions{From: "sender@example.com"},
@@ -980,14 +979,14 @@ func TestAuthStoreConfirmEmailChange(t *testing.T) {
 }
 
 func TestAuthStoreConfirmEmailChangeRejectsExpiredToken(t *testing.T) {
-	store := newTestAuthStore(t)
+	store := newTestauthStore(t)
 	now := time.Now().UTC()
 
 	user, err := store.CreateUser(context.Background(), "user@example.com", "hash")
 	if err != nil {
 		t.Fatalf("CreateUser() error = %v", err)
 	}
-	if err := store.RequestEmailChange(context.Background(), services.RequestEmailChangeParams{
+	if err := store.RequestEmailChange(context.Background(), RequestEmailChangeParams{
 		UserID:         user.ID,
 		NewEmail:       "new@example.com",
 		TokenHash:      "expired-token-hash",
@@ -1003,7 +1002,7 @@ func TestAuthStoreConfirmEmailChangeRejectsExpiredToken(t *testing.T) {
 		t.Fatalf("RequestEmailChange() error = %v", err)
 	}
 
-	_, err = store.ConfirmEmailChange(context.Background(), services.ConfirmEmailChangeParams{
+	_, err = store.ConfirmEmailChange(context.Background(), ConfirmEmailChangeParams{
 		TokenHash:              "expired-token-hash",
 		ChangedAt:              now,
 		OldEmailNoticeOptions:  email.MessageOptions{From: "sender@example.com"},
@@ -1016,14 +1015,14 @@ func TestAuthStoreConfirmEmailChangeRejectsExpiredToken(t *testing.T) {
 }
 
 func TestAuthStoreConfirmEmailChangeRejectsAlreadyOwnedEmail(t *testing.T) {
-	store := newTestAuthStore(t)
+	store := newTestauthStore(t)
 	now := time.Now().UTC()
 
 	user, err := store.CreateUser(context.Background(), "user@example.com", "hash")
 	if err != nil {
 		t.Fatalf("CreateUser() error = %v", err)
 	}
-	if err := store.RequestEmailChange(context.Background(), services.RequestEmailChangeParams{
+	if err := store.RequestEmailChange(context.Background(), RequestEmailChangeParams{
 		UserID:         user.ID,
 		NewEmail:       "new@example.com",
 		TokenHash:      "email-change-token-hash",
@@ -1042,15 +1041,15 @@ func TestAuthStoreConfirmEmailChangeRejectsAlreadyOwnedEmail(t *testing.T) {
 		t.Fatalf("CreateUser() competing email error = %v", err)
 	}
 
-	_, err = store.ConfirmEmailChange(context.Background(), services.ConfirmEmailChangeParams{
+	_, err = store.ConfirmEmailChange(context.Background(), ConfirmEmailChangeParams{
 		TokenHash:              "email-change-token-hash",
 		ChangedAt:              now,
 		OldEmailNoticeOptions:  email.MessageOptions{From: "sender@example.com"},
 		NoticeEmailAvailableAt: now,
 		SendOldEmailNotice:     true,
 	})
-	if !errors.Is(err, services.ErrEmailAlreadyRegistered) {
-		t.Fatalf("ConfirmEmailChange() error = %v, want %v", err, services.ErrEmailAlreadyRegistered)
+	if !errors.Is(err, ErrEmailAlreadyRegistered) {
+		t.Fatalf("ConfirmEmailChange() error = %v, want %v", err, ErrEmailAlreadyRegistered)
 	}
 
 	found, err := store.GetUserByEmail(context.Background(), "user@example.com")
@@ -1065,23 +1064,23 @@ func TestAuthStoreConfirmEmailChangeRejectsAlreadyOwnedEmail(t *testing.T) {
 // testTOTPSecretKey is a fixed 32-byte (AES-256) key for store tests.
 var testTOTPSecretKey = []byte("0123456789abcdef0123456789abcdef")
 
-func newTestAuthStore(t *testing.T) *AuthStore {
+func newTestauthStore(t *testing.T) *authStore {
 	t.Helper()
 
-	return mustNewAuthStore(t, newAuthStoreTestDB(t))
+	return mustNewAuthStore(t, newauthStoreTestDB(t))
 }
 
-func mustNewAuthStore(t *testing.T, conn *sql.DB) *AuthStore {
+func mustNewAuthStore(t *testing.T, conn *sql.DB) *authStore {
 	t.Helper()
 
-	store, err := NewAuthStore(conn, testTOTPSecretKey)
+	store, err := newAuthStore(conn, testTOTPSecretKey)
 	if err != nil {
-		t.Fatalf("NewAuthStore() error = %v", err)
+		t.Fatalf("newAuthStore() error = %v", err)
 	}
 	return store
 }
 
-func newAuthStoreTestDB(t *testing.T) *sql.DB {
+func newauthStoreTestDB(t *testing.T) *sql.DB {
 	t.Helper()
 
 	conn, err := sql.Open("sqlite", ":memory:")
