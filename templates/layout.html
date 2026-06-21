@@ -12,16 +12,16 @@
 </head>
 
 <body>
-  <header class="container">
+  <header>
     <nav>
       <ul>
-        <li><strong><a href="{{ .Routes.Home }}" class="contrast">Go Spark</a></strong></li>
+        <li><strong><a href="{{ .Routes.Home }}">Go Spark</a></strong></li>
       </ul>
       <ul>
         {{ if .Authenticated }}
         <li><a href="{{ .Routes.Projects }}">Projects</a></li>
         <li><a href="{{ .Routes.Account }}">Account</a></li>
-        <li><button form="logout-form" class="secondary">Sign out</button></li>
+        <li><button form="logout-form">Sign out</button></li>
         {{ else }}
         <li><a href="{{ .Routes.Login }}">Sign in</a></li>
         <li><a href="{{ .Routes.Register }}">Create account</a></li>
@@ -33,7 +33,7 @@
     </form>
     {{ end }}
   </header>
-  <main class="container">
+  <main>
     {{ template "flash" . }}
     {{ template "content" . }}
   </main>

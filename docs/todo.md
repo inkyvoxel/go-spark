@@ -3,11 +3,7 @@
 Working list toward a v1 feature-complete release. Tackle top to bottom.
 Each item notes the why and the main files to touch.
 
-## 1. PicoCSS / default CSS
-
-Make decision what to do for default CSS. Keep PicoCSS? Use classless so it's easier to replace? Write some minimal, custom CSS? Use something else?
-
-## 2. Email/jobs
+## Email/jobs
 
 Context: email sending already uses the transactional outbox pattern
 (enqueue inside the business txn, separate worker polls + sends with
@@ -27,7 +23,7 @@ retries. The list below is refinement, not a rewrite.
       durable work (PDF, webhook, upload) -> generalise the OUTBOX, not the
       ticker runner. (River is the Go reference but it's Postgres-only.)
 
-## 3. Write the CHANGELOG before tagging v1
+## Write the CHANGELOG before tagging v1
 
 `CHANGELOG.md` is still all "Unreleased / Initial scaffold". Fill in a real v1
 entry before shipping a forkable release.

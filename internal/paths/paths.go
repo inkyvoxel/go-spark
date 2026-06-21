@@ -7,7 +7,7 @@ const (
 	RobotsTxt                       = "/robots.txt"
 	StaticPrefix                    = "/static/"
 	StaticFaviconSVG                = StaticPrefix + "favicon.svg"
-	StaticPicoCSS                   = StaticPrefix + "vendor/pico/pico.min.css"
+	StaticPicoCSS                   = StaticPrefix + "vendor/pico/pico.classless.min.css"
 	StaticStyles                    = StaticPrefix + "styles.css"
 	StaticQRCodeJS                  = StaticPrefix + "vendor/qrcodejs/qrcode.js"
 	StaticTOTPSetupJS               = StaticPrefix + "js/totp-setup.js"

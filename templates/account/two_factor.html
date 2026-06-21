@@ -44,7 +44,7 @@
     <button type="submit">Confirm and enable</button>
   </form>
   <form method="post" action="{{ .Routes.AccountTwoFactorSetup }}">
-    <button type="submit" class="secondary outline">Generate a new code</button>
+    <button type="submit">Generate a new code</button>
   </form>
 </section>
 {{ end }}
@@ -65,7 +65,7 @@
         placeholder="000000 or XXXXXXXX-XXXXXXXX-XXXXXXXX-XXXXXXXX" {{ if .Error }}aria-invalid="true" {{ end }}
         required>
     </label>
-    <button type="submit" class="secondary outline">Regenerate backup codes</button>
+    <button type="submit">Regenerate backup codes</button>
   </form>
 
   <h2>Disable two-factor authentication</h2>
@@ -77,7 +77,7 @@
         placeholder="000000 or XXXXXXXX-XXXXXXXX-XXXXXXXX-XXXXXXXX" {{ if .Error }}aria-invalid="true" {{ end }}
         required>
     </label>
-    <button type="submit" class="secondary">Disable two-factor authentication</button>
+    <button type="submit">Disable two-factor authentication</button>
   </form>
 </section>
 {{ end }}

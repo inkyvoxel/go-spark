@@ -15,7 +15,7 @@
   {{ if .Next }}data-next="{{ .Next }}" {{ end }}>
   <p id="passkey-login-error" role="alert" hidden></p>
   <p data-passkey-unsupported hidden>This browser does not support passkeys.</p>
-  <button type="button" id="passkey-login-button" class="secondary" data-passkey-requires-support>Sign in with a
+  <button type="button" id="passkey-login-button" data-passkey-requires-support>Sign in with a
     passkey</button>
 </section>
 {{ end }}

@@ -81,6 +81,33 @@ Use `{{ template "breadcrumb" . }}` in the page template wherever the breadcrumb
 
 ---
 
+## Styling
+
+The template uses the **classless** build of [Pico CSS](https://picocss.com)
+(v2.1.1, MIT licensed) for its default look. It styles semantic HTML directly,
+so the templates carry **no CSS classes** — `<header>`, `<main>`, `<button>`,
+`<form>`, and friends are styled out of the box.
+
+It is the only frontend dependency, vendored at
+`static/vendor/pico/pico.classless.min.css` (cloned with the repo, no build
+step). The single `<link>` is in `templates/layout.html`, referenced via the
+`StaticPicoCSS` route in `internal/paths/paths.go`.
+
+### Replacing it
+
+Because nothing in the HTML depends on Pico's classes, swapping CSS frameworks
+(or going custom) is two steps:
+
+1. Delete `static/vendor/pico/pico.classless.min.css` and drop in your own.
+2. Update the `StaticPicoCSS` `<link>` in `templates/layout.html`.
+
+### Custom CSS
+
+`static/styles.css` is loaded after Pico (via the `StaticStyles` route) and is
+empty by default — put your own overrides and custom rules there.
+
+---
+
 ## Secret Key Derivation
 
 Keys are derived from two roots, split by **rotation profile** rather than by

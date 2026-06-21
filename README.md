@@ -10,6 +10,7 @@ A Go + SQLite web app starter template. Use it as a template, run `make init`, a
 
 * production-ready server-rendered web app foundation
 * standard library HTTP server and `html/template` rendering
+* classless [Pico CSS](https://picocss.com) for sensible default styling — vendored, no build step, and easy to swap out
 * SQLite persistence with `database/sql`, WAL mode, and practical connection defaults
 * SQL-first workflow with `sqlc` generated queries and `goose` migrations
 * complete email/password auth: registration, login, logout, email verification, password reset, and email change

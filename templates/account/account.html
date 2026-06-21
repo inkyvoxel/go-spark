@@ -19,7 +19,7 @@
   {{ if .Error }}<p role="alert">{{ .Error }}</p>{{ end }}
 
   <form method="post" action="{{ .Routes.AccountSessionsRevokeOthers }}">
-    <button type="submit" class="secondary">Sign out other sessions</button>
+    <button type="submit">Sign out other sessions</button>
   </form>
 
   <figure>
@@ -46,7 +46,7 @@
             {{ else }}
             <form method="post" action="{{ $.Routes.AccountSessionsRevoke }}">
               <input type="hidden" name="session_id" value="{{ .ID }}">
-              <button type="submit" class="secondary outline">Revoke</button>
+              <button type="submit">Revoke</button>
             </form>
             {{ end }}
           </td>
