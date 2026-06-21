@@ -1356,7 +1356,6 @@ type fakeAuthStore struct {
 	deleteSessionsByUserIDErr error
 	passwordResetRequestErr   error
 	emailChangeRequestErr     error
-	changeEmailImmediatelyErr error
 	confirmEmailChangeErr     error
 }
 
@@ -1645,40 +1644,6 @@ func (s *fakeAuthStore) RequestEmailChange(ctx context.Context, params RequestEm
 	s.emailChangeTokens[params.TokenHash] = token
 	s.outbox = append(s.outbox, params.EmailChangeVerifyEmail)
 	return nil
-}
-
-func (s *fakeAuthStore) ChangeEmailImmediately(ctx context.Context, params ChangeEmailImmediatelyParams) (User, error) {
-	if s.changeEmailImmediatelyErr != nil {
-		return User{}, s.changeEmailImmediatelyErr
-	}
-	existing, ok := s.usersByEmail[params.NewEmail]
-	if ok && existing.ID != params.UserID {
-		return User{}, ErrEmailAlreadyRegistered
-	}
-
-	user, ok := s.usersByID[params.UserID]
-	if !ok {
-		return User{}, sql.ErrNoRows
-	}
-
-	delete(s.usersByEmail, user.Email)
-	oldEmail := user.Email
-	user.Email = params.NewEmail
-	user.EmailVerifiedAt = sql.NullTime{Time: params.ChangedAt, Valid: true}
-	s.usersByID[user.ID] = user
-	s.usersByEmail[user.Email] = user
-
-	if err := s.DeleteSessionsByUserID(ctx, user.ID); err != nil {
-		return User{}, err
-	}
-	if params.SendOldEmailNotice {
-		notice, err := email.NewEmailChangeNoticeMessage(params.OldEmailNoticeOptions, oldEmail)
-		if err != nil {
-			return User{}, err
-		}
-		s.outbox = append(s.outbox, notice)
-	}
-	return userFromDB(user), nil
 }
 
 func (s *fakeAuthStore) ConfirmEmailChange(ctx context.Context, params ConfirmEmailChangeParams) (User, error) {

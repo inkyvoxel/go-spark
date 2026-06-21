@@ -339,19 +339,6 @@ func (s *AuthStore) RequestEmailChange(ctx context.Context, params services.Requ
 	})
 }
 
-func (s *AuthStore) ChangeEmailImmediately(ctx context.Context, params services.ChangeEmailImmediatelyParams) (services.User, error) {
-	return withTxResult(ctx, s.db, s.queries, "change email", func(queries *db.Queries) (services.User, error) {
-		return applyEmailChange(ctx, queries, applyEmailChangeParams{
-			UserID:                 params.UserID,
-			NewEmail:               params.NewEmail,
-			ChangedAt:              params.ChangedAt,
-			OldEmailNoticeOptions:  params.OldEmailNoticeOptions,
-			NoticeEmailAvailableAt: params.NoticeEmailAvailableAt,
-			SendOldEmailNotice:     params.SendOldEmailNotice,
-		})
-	})
-}
-
 func (s *AuthStore) CreateEmailVerificationToken(ctx context.Context, userID int64, tokenHash string, expiresAt time.Time) (services.EmailVerificationToken, error) {
 	token, err := s.queries.CreateEmailVerificationToken(ctx, db.CreateEmailVerificationTokenParams{
 		UserID:    userID,
@@ -587,6 +574,7 @@ func applyEmailChange(ctx context.Context, queries *db.Queries, params applyEmai
 		return services.User{}, fmt.Errorf("update user email: %w", err)
 	}
 
+	// / Email is a login identifier, so changing it revokes all sessions (same as password change)
 	if err := queries.DeleteSessionsByUserID(ctx, params.UserID); err != nil {
 		return services.User{}, fmt.Errorf("delete sessions by user ID: %w", err)
 	}

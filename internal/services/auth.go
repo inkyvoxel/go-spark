@@ -150,7 +150,6 @@ type AuthStore interface {
 	ConsumePasswordResetToken(ctx context.Context, tokenHash string, consumedAt time.Time) (PasswordResetToken, error)
 	RequestPasswordReset(ctx context.Context, params RequestPasswordResetParams) error
 	RequestEmailChange(ctx context.Context, params RequestEmailChangeParams) error
-	ChangeEmailImmediately(ctx context.Context, params ChangeEmailImmediatelyParams) (User, error)
 	ConfirmEmailChange(ctx context.Context, params ConfirmEmailChangeParams) (User, error)
 	CreateEmailVerificationToken(ctx context.Context, userID int64, tokenHash string, expiresAt time.Time) (EmailVerificationToken, error)
 	ResendEmailVerification(ctx context.Context, params ResendEmailVerificationParams) error
@@ -235,15 +234,6 @@ type RequestEmailChangeParams struct {
 
 type ConfirmEmailChangeParams struct {
 	TokenHash              string
-	ChangedAt              time.Time
-	OldEmailNoticeOptions  email.EmailChangeNoticeOptions
-	NoticeEmailAvailableAt time.Time
-	SendOldEmailNotice     bool
-}
-
-type ChangeEmailImmediatelyParams struct {
-	UserID                 int64
-	NewEmail               string
 	ChangedAt              time.Time
 	OldEmailNoticeOptions  email.EmailChangeNoticeOptions
 	NoticeEmailAvailableAt time.Time

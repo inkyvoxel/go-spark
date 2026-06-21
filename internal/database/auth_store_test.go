@@ -840,7 +840,7 @@ func TestAuthStoreRequestEmailChange(t *testing.T) {
 	}
 }
 
-func TestAuthStoreChangeEmailImmediately(t *testing.T) {
+func TestAuthStoreConfirmEmailChangeSkipsOldEmailNoticeWhenDisabled(t *testing.T) {
 	store := newTestAuthStore(t)
 	now := time.Now().UTC()
 
@@ -848,79 +848,30 @@ func TestAuthStoreChangeEmailImmediately(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateUser() error = %v", err)
 	}
-	session, err := store.CreateSession(context.Background(), user.ID, "session-token", now.Add(time.Hour))
-	if err != nil {
-		t.Fatalf("CreateSession() error = %v", err)
+	if err := store.RequestEmailChange(context.Background(), services.RequestEmailChangeParams{
+		UserID:         user.ID,
+		NewEmail:       "new@example.com",
+		TokenHash:      "email-change-token-hash",
+		TokenExpiresAt: now.Add(time.Hour),
+		EmailChangeVerifyEmail: email.Message{
+			From:     "sender@example.com",
+			To:       "new@example.com",
+			Subject:  "Verify your new email address",
+			TextBody: "Verify using this link.",
+		},
+		EmailAvailableAt: now,
+	}); err != nil {
+		t.Fatalf("RequestEmailChange() error = %v", err)
 	}
 
-	changed, err := store.ChangeEmailImmediately(context.Background(), services.ChangeEmailImmediatelyParams{
-		UserID:                 user.ID,
-		NewEmail:               "new@example.com",
-		ChangedAt:              now,
-		OldEmailNoticeOptions:  email.EmailChangeNoticeOptions{From: "sender@example.com"},
-		NoticeEmailAvailableAt: now,
-		SendOldEmailNotice:     true,
-	})
-	if err != nil {
-		t.Fatalf("ChangeEmailImmediately() error = %v", err)
-	}
-	if changed.Email != "new@example.com" {
-		t.Fatalf("changed email = %q, want %q", changed.Email, "new@example.com")
-	}
-	if !changed.EmailVerifiedAt.Valid {
-		t.Fatal("EmailVerifiedAt.Valid = false, want true")
-	}
-
-	_, err = store.GetUserByEmail(context.Background(), "user@example.com")
-	if !errors.Is(err, sql.ErrNoRows) {
-		t.Fatalf("old email lookup error = %v, want %v", err, sql.ErrNoRows)
-	}
-	if _, err := store.GetUserByEmail(context.Background(), "new@example.com"); err != nil {
-		t.Fatalf("new email lookup error = %v", err)
-	}
-	if _, err := store.GetUserBySessionTokenHash(context.Background(), session.TokenHash); !errors.Is(err, sql.ErrNoRows) {
-		t.Fatalf("old session lookup error = %v, want %v", err, sql.ErrNoRows)
-	}
-
-	claimed, err := store.queries.ClaimPendingEmails(context.Background(), db.ClaimPendingEmailsParams{
-		Now:            sql.NullTime{Time: now.Add(time.Second), Valid: true},
-		ClaimExpiresAt: sql.NullTime{Time: now.Add(3 * time.Minute), Valid: true},
-		ClaimToken:     "test-claim",
-		Limit:          10,
-	})
-	if err != nil {
-		t.Fatalf("ClaimPendingEmails() error = %v", err)
-	}
-	var noticeFound bool
-	for _, item := range claimed {
-		if item.Recipient == "<user@example.com>" && item.Subject == "Your email address was changed" {
-			noticeFound = true
-		}
-	}
-	if !noticeFound {
-		t.Fatalf("claimed emails = %#v, want old email notice", claimed)
-	}
-}
-
-func TestAuthStoreChangeEmailImmediatelySkipsOldEmailNoticeWhenDisabled(t *testing.T) {
-	store := newTestAuthStore(t)
-	now := time.Now().UTC()
-
-	user, err := store.CreateUser(context.Background(), "user@example.com", "hash")
-	if err != nil {
-		t.Fatalf("CreateUser() error = %v", err)
-	}
-
-	_, err = store.ChangeEmailImmediately(context.Background(), services.ChangeEmailImmediatelyParams{
-		UserID:                 user.ID,
-		NewEmail:               "new@example.com",
+	if _, err := store.ConfirmEmailChange(context.Background(), services.ConfirmEmailChangeParams{
+		TokenHash:              "email-change-token-hash",
 		ChangedAt:              now,
 		OldEmailNoticeOptions:  email.EmailChangeNoticeOptions{From: "sender@example.com"},
 		NoticeEmailAvailableAt: now,
 		SendOldEmailNotice:     false,
-	})
-	if err != nil {
-		t.Fatalf("ChangeEmailImmediately() error = %v", err)
+	}); err != nil {
+		t.Fatalf("ConfirmEmailChange() error = %v", err)
 	}
 
 	claimed, err := store.queries.ClaimPendingEmails(context.Background(), db.ClaimPendingEmailsParams{
@@ -932,8 +883,12 @@ func TestAuthStoreChangeEmailImmediatelySkipsOldEmailNoticeWhenDisabled(t *testi
 	if err != nil {
 		t.Fatalf("ClaimPendingEmails() error = %v", err)
 	}
-	if len(claimed) != 0 {
-		t.Fatalf("claimed emails = %#v, want none", claimed)
+	// The verification email to the new address is expected; the old-address
+	// change notice must be absent because SendOldEmailNotice was false.
+	for _, item := range claimed {
+		if item.Subject == "Your email address was changed" {
+			t.Fatalf("found old-email change notice but SendOldEmailNotice was false: %#v", item)
+		}
 	}
 }
 
