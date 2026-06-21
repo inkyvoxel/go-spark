@@ -97,7 +97,7 @@ func buildRuntime(cfg config.Config, logger *slog.Logger, db *sql.DB, secretKeyB
 	}
 
 	// Example feature wiring. Remove with the rest of the projects example.
-	projectService := services.NewProjectService(database.NewProjectStore(db))
+	projectService := services.NewProjectService(db)
 
 	webApp, err := server.New(server.Options{
 		Logger:            logger,

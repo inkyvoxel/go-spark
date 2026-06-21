@@ -2,15 +2,18 @@ package services
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"strings"
 	"time"
 	"unicode/utf8"
+
+	db "github.com/inkyvoxel/go-spark/internal/db/generated"
 )
 
-// The projects feature is an example, included to show the full
-// path -> route -> handler -> service -> store -> SQL layering described in
+// The projects feature is an example, included to show the
+// path -> route -> handler -> service -> SQL layering described in
 // docs/extending.md. Copy it as a starting point for your own features, or
 // delete it (see the header in internal/server/project_handlers.go for the
 // complete list of files to remove).
@@ -26,6 +29,7 @@ var (
 )
 
 // Project is the service-owned representation of a row in the projects table.
+// Handlers and templates see this type, never the generated db row.
 type Project struct {
 	ID        int64
 	UserID    int64
@@ -33,20 +37,14 @@ type Project struct {
 	CreatedAt time.Time
 }
 
-// ProjectStore is the persistence the service needs. internal/database
-// implements it; the service depends on this interface, not on generated code.
-type ProjectStore interface {
-	CreateProject(ctx context.Context, userID int64, name string) (Project, error)
-	ListProjectsByUserID(ctx context.Context, userID int64) ([]Project, error)
-	DeleteProject(ctx context.Context, projectID, userID int64) (bool, error)
-}
-
+// ProjectService owns both the business rules and the SQL for projects. It
+// calls the sqlc-generated queries directly; there is no separate store layer.
 type ProjectService struct {
-	store ProjectStore
+	queries *db.Queries
 }
 
-func NewProjectService(store ProjectStore) *ProjectService {
-	return &ProjectService{store: store}
+func NewProjectService(conn *sql.DB) *ProjectService {
+	return &ProjectService{queries: db.New(conn)}
 }
 
 // Create validates the name and stores a new project owned by the user.
@@ -59,18 +57,22 @@ func (s *ProjectService) Create(ctx context.Context, userID int64, name string) 
 		return Project{}, ErrProjectNameTooLong
 	}
 
-	project, err := s.store.CreateProject(ctx, userID, name)
+	row, err := s.queries.CreateProject(ctx, db.CreateProjectParams{UserID: userID, Name: name})
 	if err != nil {
 		return Project{}, fmt.Errorf("create project: %w", err)
 	}
-	return project, nil
+	return toProject(row), nil
 }
 
 // List returns the user's projects, newest first.
 func (s *ProjectService) List(ctx context.Context, userID int64) ([]Project, error) {
-	projects, err := s.store.ListProjectsByUserID(ctx, userID)
+	rows, err := s.queries.ListProjectsByUserID(ctx, userID)
 	if err != nil {
 		return nil, fmt.Errorf("list projects: %w", err)
+	}
+	projects := make([]Project, 0, len(rows))
+	for _, row := range rows {
+		projects = append(projects, toProject(row))
 	}
 	return projects, nil
 }
@@ -78,12 +80,24 @@ func (s *ProjectService) List(ctx context.Context, userID int64) ([]Project, err
 // Delete removes a project the user owns. The user ID scopes the delete so one
 // user cannot delete another's project; a miss returns ErrProjectNotFound.
 func (s *ProjectService) Delete(ctx context.Context, projectID, userID int64) error {
-	deleted, err := s.store.DeleteProject(ctx, projectID, userID)
+	affected, err := s.queries.DeleteProjectByIDAndUserID(ctx, db.DeleteProjectByIDAndUserIDParams{
+		ID:     projectID,
+		UserID: userID,
+	})
 	if err != nil {
 		return fmt.Errorf("delete project: %w", err)
 	}
-	if !deleted {
+	if affected == 0 {
 		return ErrProjectNotFound
 	}
 	return nil
+}
+
+func toProject(row db.Project) Project {
+	return Project{
+		ID:        row.ID,
+		UserID:    row.UserID,
+		Name:      row.Name,
+		CreatedAt: row.CreatedAt,
+	}
 }

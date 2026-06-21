@@ -8,7 +8,6 @@ package server
 // To remove the example, delete these files:
 //   - internal/server/project_handlers.go        (this file) + _test.go
 //   - internal/services/projects.go               + _test.go
-//   - internal/database/project_store.go          + _test.go
 //   - internal/db/queries/projects.sql            (then run `make sqlc`)
 //   - migrations/00002_projects_schema.sql
 //   - templates/projects/index.html

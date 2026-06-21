@@ -2,95 +2,139 @@ package services
 
 import (
 	"context"
+	"database/sql"
 	"errors"
+	"fmt"
 	"strings"
+	"sync/atomic"
 	"testing"
+
+	"github.com/inkyvoxel/go-spark/internal/sqlitetest"
 )
 
-type fakeProjectStore struct {
-	createdUserID int64
-	createdName   string
-	createErr     error
-	listReturn    []Project
-	deleteReturn  bool
-	deletedID     int64
-	deletedUserID int64
+func newProjectTestService(t *testing.T) (*ProjectService, *sql.DB) {
+	t.Helper()
+	db := sqlitetest.New(t)
+	return NewProjectService(db), db
 }
 
-func (f *fakeProjectStore) CreateProject(_ context.Context, userID int64, name string) (Project, error) {
-	f.createdUserID = userID
-	f.createdName = name
-	if f.createErr != nil {
-		return Project{}, f.createErr
+var testUserSeq atomic.Int64
+
+// createTestUser inserts a minimal valid user and returns its ID, so project
+// rows satisfy the projects.user_id foreign key the real schema enforces.
+func createTestUser(t *testing.T, db *sql.DB) int64 {
+	t.Helper()
+	n := testUserSeq.Add(1)
+	var id int64
+	err := db.QueryRow(
+		`INSERT INTO users (email, password_hash, webauthn_user_handle)
+		 VALUES (?, ?, ?) RETURNING id`,
+		fmt.Sprintf("user%d@example.com", n), "hash", []byte(fmt.Sprintf("handle-%d", n)),
+	).Scan(&id)
+	if err != nil {
+		t.Fatalf("create test user: %v", err)
 	}
-	return Project{ID: 1, UserID: userID, Name: name}, nil
-}
-
-func (f *fakeProjectStore) ListProjectsByUserID(_ context.Context, _ int64) ([]Project, error) {
-	return f.listReturn, nil
-}
-
-func (f *fakeProjectStore) DeleteProject(_ context.Context, projectID, userID int64) (bool, error) {
-	f.deletedID = projectID
-	f.deletedUserID = userID
-	return f.deleteReturn, nil
+	return id
 }
 
 func TestProjectServiceCreateTrimsAndStores(t *testing.T) {
-	store := &fakeProjectStore{}
-	svc := NewProjectService(store)
+	svc, db := newProjectTestService(t)
+	ctx := context.Background()
+	userID := createTestUser(t, db)
 
-	project, err := svc.Create(context.Background(), 7, "  My Project  ")
+	project, err := svc.Create(ctx, userID, "  My Project  ")
 	if err != nil {
 		t.Fatalf("Create() error = %v", err)
 	}
-	if store.createdName != "My Project" {
-		t.Fatalf("stored name = %q, want trimmed %q", store.createdName, "My Project")
+	if project.Name != "My Project" || project.UserID != userID {
+		t.Fatalf("project = %+v, want name trimmed and user %d", project, userID)
 	}
-	if project.Name != "My Project" || project.UserID != 7 {
-		t.Fatalf("project = %+v, want name trimmed and user 7", project)
+	if project.ID == 0 || project.CreatedAt.IsZero() {
+		t.Fatalf("project missing persisted fields: %+v", project)
+	}
+
+	list, err := svc.List(ctx, userID)
+	if err != nil {
+		t.Fatalf("List() error = %v", err)
+	}
+	if len(list) != 1 || list[0].Name != "My Project" {
+		t.Fatalf("list = %+v, want one stored project named %q", list, "My Project")
 	}
 }
 
 func TestProjectServiceCreateRejectsEmptyName(t *testing.T) {
-	store := &fakeProjectStore{}
-	svc := NewProjectService(store)
+	svc, db := newProjectTestService(t)
+	ctx := context.Background()
+	userID := createTestUser(t, db)
 
-	if _, err := svc.Create(context.Background(), 7, "   "); !errors.Is(err, ErrProjectNameRequired) {
+	if _, err := svc.Create(ctx, userID, "   "); !errors.Is(err, ErrProjectNameRequired) {
 		t.Fatalf("Create() error = %v, want ErrProjectNameRequired", err)
 	}
-	if store.createdName != "" {
-		t.Fatal("store should not be called when name is empty")
+	if list, _ := svc.List(ctx, userID); len(list) != 0 {
+		t.Fatalf("rejected name was stored: %+v", list)
 	}
 }
 
 func TestProjectServiceCreateRejectsTooLongName(t *testing.T) {
-	store := &fakeProjectStore{}
-	svc := NewProjectService(store)
+	// Validation rejects before any insert, so no user row is needed.
+	svc, _ := newProjectTestService(t)
 
 	tooLong := strings.Repeat("a", ProjectNameMaxLength+1)
-	if _, err := svc.Create(context.Background(), 7, tooLong); !errors.Is(err, ErrProjectNameTooLong) {
+	if _, err := svc.Create(context.Background(), 1, tooLong); !errors.Is(err, ErrProjectNameTooLong) {
 		t.Fatalf("Create() error = %v, want ErrProjectNameTooLong", err)
 	}
 }
 
-func TestProjectServiceDeleteScopesToUserAndReportsMiss(t *testing.T) {
-	store := &fakeProjectStore{deleteReturn: false}
-	svc := NewProjectService(store)
+func TestProjectServiceListIsUserScopedAndOrdered(t *testing.T) {
+	svc, db := newProjectTestService(t)
+	ctx := context.Background()
+	owner := createTestUser(t, db)
+	other := createTestUser(t, db)
 
-	if err := svc.Delete(context.Background(), 5, 7); !errors.Is(err, ErrProjectNotFound) {
-		t.Fatalf("Delete() error = %v, want ErrProjectNotFound", err)
+	if _, err := svc.Create(ctx, owner, "Alpha"); err != nil {
+		t.Fatalf("Create(Alpha) error = %v", err)
 	}
-	if store.deletedID != 5 || store.deletedUserID != 7 {
-		t.Fatalf("delete scoped to (id=%d, user=%d), want (5, 7)", store.deletedID, store.deletedUserID)
+	if _, err := svc.Create(ctx, owner, "Beta"); err != nil {
+		t.Fatalf("Create(Beta) error = %v", err)
+	}
+	// Another user's project must not leak into the owner's list.
+	if _, err := svc.Create(ctx, other, "Other"); err != nil {
+		t.Fatalf("Create(Other) error = %v", err)
+	}
+
+	list, err := svc.List(ctx, owner)
+	if err != nil {
+		t.Fatalf("List() error = %v", err)
+	}
+	if len(list) != 2 {
+		t.Fatalf("list length = %d, want 2 (user-scoped)", len(list))
+	}
+	// Newest first; equal timestamps break ties by id DESC, so Beta leads.
+	if list[0].Name != "Beta" {
+		t.Fatalf("first project = %q, want newest %q", list[0].Name, "Beta")
 	}
 }
 
-func TestProjectServiceDeleteSucceeds(t *testing.T) {
-	store := &fakeProjectStore{deleteReturn: true}
-	svc := NewProjectService(store)
+func TestProjectServiceDeleteScopesToUserAndReportsMiss(t *testing.T) {
+	svc, db := newProjectTestService(t)
+	ctx := context.Background()
+	owner := createTestUser(t, db)
+	other := createTestUser(t, db)
 
-	if err := svc.Delete(context.Background(), 5, 7); err != nil {
-		t.Fatalf("Delete() error = %v, want nil", err)
+	project, err := svc.Create(ctx, owner, "Alpha")
+	if err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+
+	// Another user cannot delete this user's project.
+	if err := svc.Delete(ctx, project.ID, other); !errors.Is(err, ErrProjectNotFound) {
+		t.Fatalf("cross-user Delete() error = %v, want ErrProjectNotFound", err)
+	}
+
+	if err := svc.Delete(ctx, project.ID, owner); err != nil {
+		t.Fatalf("owner Delete() error = %v", err)
+	}
+	if list, _ := svc.List(ctx, owner); len(list) != 0 {
+		t.Fatalf("project not deleted: %+v", list)
 	}
 }
