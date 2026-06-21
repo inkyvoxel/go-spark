@@ -20,8 +20,8 @@ const (
 	defaultArgon2idMemoryKiB  uint32 = 19 * 1024
 	defaultArgon2idIterations uint32 = 2
 	defaultArgon2idThreads    uint8  = 1
-	defaultArgon2idSaltLength uint32 = 16
-	defaultArgon2idKeyLength  uint32 = 32
+	argon2idSaltLength        uint32 = 16
+	argon2idKeyLength         uint32 = 32
 )
 
 var errInvalidPasswordHash = errors.New("invalid password hash")
@@ -40,8 +40,6 @@ type argon2idHasher struct {
 	memoryKiB  uint32
 	iterations uint32
 	threads    uint8
-	saltLength uint32
-	keyLength  uint32
 	pepper     string
 }
 
@@ -61,33 +59,21 @@ func newArgon2idHasher(opts AuthOptions) *argon2idHasher {
 		threads = defaultArgon2idThreads
 	}
 
-	saltLength := opts.Argon2idSaltLength
-	if saltLength == 0 {
-		saltLength = defaultArgon2idSaltLength
-	}
-
-	keyLength := opts.Argon2idKeyLength
-	if keyLength == 0 {
-		keyLength = defaultArgon2idKeyLength
-	}
-
 	return &argon2idHasher{
 		memoryKiB:  memoryKiB,
 		iterations: iterations,
 		threads:    threads,
-		saltLength: saltLength,
-		keyLength:  keyLength,
 		pepper:     opts.PasswordPepper,
 	}
 }
 
 func (h *argon2idHasher) Hash(password string) (string, error) {
-	salt := make([]byte, h.saltLength)
+	salt := make([]byte, argon2idSaltLength)
 	if _, err := rand.Read(salt); err != nil {
 		return "", fmt.Errorf("generate salt: %w", err)
 	}
 
-	hash := argon2.IDKey(h.passwordInput(password), salt, h.iterations, h.memoryKiB, h.threads, h.keyLength)
+	hash := argon2.IDKey(h.passwordInput(password), salt, h.iterations, h.memoryKiB, h.threads, argon2idKeyLength)
 	encodedSalt := base64.RawStdEncoding.EncodeToString(salt)
 	encodedHash := base64.RawStdEncoding.EncodeToString(hash)
 

@@ -190,8 +190,6 @@ type AuthOptions struct {
 	Argon2idMemoryKiB              uint32
 	Argon2idIterations             uint32
 	Argon2idParallelism            uint8
-	Argon2idSaltLength             uint32
-	Argon2idKeyLength              uint32
 	PasswordPepper                 string
 	TokenBytes                     int
 	PasswordMinLen                 int

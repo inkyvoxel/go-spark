@@ -7,8 +7,6 @@ func TestArgon2idHasherHashAndVerify(t *testing.T) {
 		Argon2idMemoryKiB:   64,
 		Argon2idIterations:  1,
 		Argon2idParallelism: 1,
-		Argon2idSaltLength:  16,
-		Argon2idKeyLength:   32,
 	})
 
 	hash, err := hasher.Hash("correct horse battery staple")
@@ -38,8 +36,6 @@ func TestArgon2idHasherHashAndVerifyWithPepper(t *testing.T) {
 		Argon2idMemoryKiB:   64,
 		Argon2idIterations:  1,
 		Argon2idParallelism: 1,
-		Argon2idSaltLength:  16,
-		Argon2idKeyLength:   32,
 		PasswordPepper:      "pepper-value",
 	})
 
@@ -62,16 +58,12 @@ func TestArgon2idHasherVerifyFailsWithWrongPepper(t *testing.T) {
 		Argon2idMemoryKiB:   64,
 		Argon2idIterations:  1,
 		Argon2idParallelism: 1,
-		Argon2idSaltLength:  16,
-		Argon2idKeyLength:   32,
 		PasswordPepper:      "pepper-one",
 	})
 	otherHasher := newArgon2idHasher(AuthOptions{
 		Argon2idMemoryKiB:   64,
 		Argon2idIterations:  1,
 		Argon2idParallelism: 1,
-		Argon2idSaltLength:  16,
-		Argon2idKeyLength:   32,
 		PasswordPepper:      "pepper-two",
 	})
 
@@ -102,8 +94,6 @@ func TestArgon2idHasherBlankPepperUsesUnpepperedBehavior(t *testing.T) {
 		Argon2idMemoryKiB:   64,
 		Argon2idIterations:  1,
 		Argon2idParallelism: 1,
-		Argon2idSaltLength:  16,
-		Argon2idKeyLength:   32,
 		PasswordPepper:      "",
 	})
 

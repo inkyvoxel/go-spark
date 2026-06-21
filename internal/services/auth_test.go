@@ -449,8 +449,6 @@ func TestAuthServiceWithPepperSupportsRegisterLoginAndPasswordChange(t *testing.
 		Argon2idMemoryKiB:   64,
 		Argon2idIterations:  1,
 		Argon2idParallelism: 1,
-		Argon2idSaltLength:  16,
-		Argon2idKeyLength:   32,
 		PasswordPepper:      "test-pepper",
 		ConfirmationEmail: email.AccountConfirmationOptions{
 			AppBaseURL: "http://localhost:8080",
@@ -1293,8 +1291,6 @@ func newTestAuthService(t *testing.T) *AuthService {
 		Argon2idMemoryKiB:   64,
 		Argon2idIterations:  1,
 		Argon2idParallelism: 1,
-		Argon2idSaltLength:  16,
-		Argon2idKeyLength:   32,
 		TOTPBackupCodeKey:   []byte("test-backup-code-key"),
 		ConfirmationEmail: email.AccountConfirmationOptions{
 			AppBaseURL: "http://localhost:8080",
@@ -1312,8 +1308,6 @@ func newTestAuthServiceWithNoticeDisabled(t *testing.T) *AuthService {
 		Argon2idMemoryKiB:   64,
 		Argon2idIterations:  1,
 		Argon2idParallelism: 1,
-		Argon2idSaltLength:  16,
-		Argon2idKeyLength:   32,
 		TOTPBackupCodeKey:   []byte("test-backup-code-key"),
 		ConfirmationEmail: email.AccountConfirmationOptions{
 			AppBaseURL: "http://localhost:8080",

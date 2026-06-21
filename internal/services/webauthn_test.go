@@ -20,8 +20,6 @@ func newPasskeyTestService(t *testing.T) (*AuthService, *fakeAuthStore) {
 		Argon2idMemoryKiB:     64,
 		Argon2idIterations:    1,
 		Argon2idParallelism:   1,
-		Argon2idSaltLength:    16,
-		Argon2idKeyLength:     32,
 		WebAuthnRPID:          "localhost",
 		WebAuthnRPDisplayName: "Test App",
 		WebAuthnRPOrigins:     []string{"http://localhost:8080"},
