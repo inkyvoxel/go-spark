@@ -10,11 +10,10 @@ import (
 	"github.com/inkyvoxel/go-spark/internal/email"
 )
 
-func newPasskeyTestService(t *testing.T) (*AuthService, *fakeAuthStore) {
+func newPasskeyTestService(t *testing.T) (*AuthService, *authStore) {
 	t.Helper()
 
-	store := newFakeAuthStore()
-	service := mustNewAuthService(t, store, AuthOptions{
+	service := mustNewAuthService(t, AuthOptions{
 		SessionDuration:       time.Hour,
 		PasswordMinLen:        8,
 		Argon2idMemoryKiB:     64,
@@ -28,7 +27,7 @@ func newPasskeyTestService(t *testing.T) (*AuthService, *fakeAuthStore) {
 			From:       "Go Spark <hello@example.com>",
 		},
 	})
-	return service, store
+	return service, service.store
 }
 
 func TestPasskeysEnabledReflectsConfiguration(t *testing.T) {
@@ -45,7 +44,7 @@ func TestPasskeysEnabledReflectsConfiguration(t *testing.T) {
 
 func TestBeginPasskeyRegistrationReturnsErrorWhenDisabled(t *testing.T) {
 	service := newTestAuthService(t)
-	store := service.store.(*fakeAuthStore)
+	store := service.store
 	user, _ := store.CreateUser(context.Background(), "user@example.com", "hash")
 
 	if _, _, err := service.BeginPasskeyRegistration(context.Background(), user.ID); !errors.Is(err, ErrPasskeysDisabled) {

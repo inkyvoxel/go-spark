@@ -22,7 +22,7 @@ type authStore struct {
 
 // newAuthStore builds the store. totpSecretKey is a 32-byte key (derived from
 // SECRET_KEY_BASE) used to encrypt TOTP shared secrets at rest.
-func NewAuthStore(conn *sql.DB, totpSecretKey []byte) (*authStore, error) {
+func newAuthStore(conn *sql.DB, totpSecretKey []byte) (*authStore, error) {
 	totpSecrets, err := newSecretCipher(totpSecretKey)
 	if err != nil {
 		return nil, fmt.Errorf("configure TOTP secret cipher: %w", err)
