@@ -70,23 +70,13 @@ func (s *LogSender) Send(ctx context.Context, message Message) error {
 	return nil
 }
 
-type AccountConfirmationOptions struct {
+// MessageOptions carries the process-level values every transactional email
+// needs: the app's base URL (for building token links) and the From address.
+// Both come from config and never vary per message. The notice email ignores
+// AppBaseURL since it contains no link.
+type MessageOptions struct {
 	AppBaseURL string
 	From       string
-}
-
-type PasswordResetOptions struct {
-	AppBaseURL string
-	From       string
-}
-
-type EmailChangeOptions struct {
-	AppBaseURL string
-	From       string
-}
-
-type EmailChangeNoticeOptions struct {
-	From string
 }
 
 //go:embed templates/*
@@ -98,7 +88,7 @@ type compiledEmailTemplates struct {
 	html    *template.Template
 }
 
-func NewAccountConfirmationMessage(opts AccountConfirmationOptions, to, token string) (Message, error) {
+func NewAccountConfirmationMessage(opts MessageOptions, to, token string) (Message, error) {
 	from, err := normalizeAddress("from", opts.From)
 	if err != nil {
 		return Message{}, err
@@ -135,7 +125,7 @@ func NewAccountConfirmationMessage(opts AccountConfirmationOptions, to, token st
 	}, nil
 }
 
-func NewPasswordResetMessage(opts PasswordResetOptions, to, token string) (Message, error) {
+func NewPasswordResetMessage(opts MessageOptions, to, token string) (Message, error) {
 	from, err := normalizeAddress("from", opts.From)
 	if err != nil {
 		return Message{}, err
@@ -172,7 +162,7 @@ func NewPasswordResetMessage(opts PasswordResetOptions, to, token string) (Messa
 	}, nil
 }
 
-func NewEmailChangeMessage(opts EmailChangeOptions, to, token string) (Message, error) {
+func NewEmailChangeMessage(opts MessageOptions, to, token string) (Message, error) {
 	from, err := normalizeAddress("from", opts.From)
 	if err != nil {
 		return Message{}, err
@@ -209,7 +199,7 @@ func NewEmailChangeMessage(opts EmailChangeOptions, to, token string) (Message, 
 	}, nil
 }
 
-func NewEmailChangeNoticeMessage(opts EmailChangeNoticeOptions, to string) (Message, error) {
+func NewEmailChangeNoticeMessage(opts MessageOptions, to string) (Message, error) {
 	from, err := normalizeAddress("from", opts.From)
 	if err != nil {
 		return Message{}, err

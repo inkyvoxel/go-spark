@@ -533,7 +533,7 @@ type applyEmailChangeParams struct {
 	UserID                 int64
 	NewEmail               string
 	ChangedAt              time.Time
-	OldEmailNoticeOptions  email.EmailChangeNoticeOptions
+	OldEmailNoticeOptions  email.MessageOptions
 	NoticeEmailAvailableAt time.Time
 	SendOldEmailNotice     bool
 }

@@ -867,7 +867,7 @@ func TestAuthStoreConfirmEmailChangeSkipsOldEmailNoticeWhenDisabled(t *testing.T
 	if _, err := store.ConfirmEmailChange(context.Background(), services.ConfirmEmailChangeParams{
 		TokenHash:              "email-change-token-hash",
 		ChangedAt:              now,
-		OldEmailNoticeOptions:  email.EmailChangeNoticeOptions{From: "sender@example.com"},
+		OldEmailNoticeOptions:  email.MessageOptions{From: "sender@example.com"},
 		NoticeEmailAvailableAt: now,
 		SendOldEmailNotice:     false,
 	}); err != nil {
@@ -923,7 +923,7 @@ func TestAuthStoreConfirmEmailChange(t *testing.T) {
 	changed, err := store.ConfirmEmailChange(context.Background(), services.ConfirmEmailChangeParams{
 		TokenHash:              "email-change-token-hash",
 		ChangedAt:              now,
-		OldEmailNoticeOptions:  email.EmailChangeNoticeOptions{From: "sender@example.com"},
+		OldEmailNoticeOptions:  email.MessageOptions{From: "sender@example.com"},
 		NoticeEmailAvailableAt: now,
 		SendOldEmailNotice:     true,
 	})
@@ -970,7 +970,7 @@ func TestAuthStoreConfirmEmailChange(t *testing.T) {
 	_, err = store.ConfirmEmailChange(context.Background(), services.ConfirmEmailChangeParams{
 		TokenHash:              "email-change-token-hash",
 		ChangedAt:              now,
-		OldEmailNoticeOptions:  email.EmailChangeNoticeOptions{From: "sender@example.com"},
+		OldEmailNoticeOptions:  email.MessageOptions{From: "sender@example.com"},
 		NoticeEmailAvailableAt: now,
 		SendOldEmailNotice:     true,
 	})
@@ -1006,7 +1006,7 @@ func TestAuthStoreConfirmEmailChangeRejectsExpiredToken(t *testing.T) {
 	_, err = store.ConfirmEmailChange(context.Background(), services.ConfirmEmailChangeParams{
 		TokenHash:              "expired-token-hash",
 		ChangedAt:              now,
-		OldEmailNoticeOptions:  email.EmailChangeNoticeOptions{From: "sender@example.com"},
+		OldEmailNoticeOptions:  email.MessageOptions{From: "sender@example.com"},
 		NoticeEmailAvailableAt: now,
 		SendOldEmailNotice:     true,
 	})
@@ -1045,7 +1045,7 @@ func TestAuthStoreConfirmEmailChangeRejectsAlreadyOwnedEmail(t *testing.T) {
 	_, err = store.ConfirmEmailChange(context.Background(), services.ConfirmEmailChangeParams{
 		TokenHash:              "email-change-token-hash",
 		ChangedAt:              now,
-		OldEmailNoticeOptions:  email.EmailChangeNoticeOptions{From: "sender@example.com"},
+		OldEmailNoticeOptions:  email.MessageOptions{From: "sender@example.com"},
 		NoticeEmailAvailableAt: now,
 		SendOldEmailNotice:     true,
 	})

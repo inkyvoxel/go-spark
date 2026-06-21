@@ -78,11 +78,7 @@ func buildRuntime(cfg config.Config, logger *slog.Logger, db *sql.DB, secretKeyB
 		WebAuthnRPID:             passkeyRPID(cfg),
 		WebAuthnRPDisplayName:    passkeyRPDisplayName(cfg),
 		WebAuthnRPOrigins:        []string{cfg.AppBaseURL},
-		ConfirmationEmail: email.AccountConfirmationOptions{
-			AppBaseURL: cfg.AppBaseURL,
-			From:       cfg.EmailFrom,
-		},
-		PasswordResetEmail: email.PasswordResetOptions{
+		EmailOptions: email.MessageOptions{
 			AppBaseURL: cfg.AppBaseURL,
 			From:       cfg.EmailFrom,
 		},

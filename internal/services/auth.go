@@ -60,8 +60,7 @@ type AuthService struct {
 	sessionDuration                time.Duration
 	emailVerificationTokenDuration time.Duration
 	passwordResetTokenDuration     time.Duration
-	confirmationEmail              email.AccountConfirmationOptions
-	passwordResetEmail             email.PasswordResetOptions
+	emailOptions                   email.MessageOptions
 	passwordHasher                 *argon2idHasher
 	dummyPasswordHash              string
 	tokenBytes                     int
@@ -195,8 +194,7 @@ type AuthOptions struct {
 	PasswordMinLen                 int
 	EmailVerificationTokenDuration time.Duration
 	PasswordResetTokenDuration     time.Duration
-	ConfirmationEmail              email.AccountConfirmationOptions
-	PasswordResetEmail             email.PasswordResetOptions
+	EmailOptions                   email.MessageOptions
 	EmailChangeNoticeEnabled       *bool
 	TOTPIssuer                     string
 	TOTPBackupCodeKey              []byte
@@ -233,7 +231,7 @@ type RequestEmailChangeParams struct {
 type ConfirmEmailChangeParams struct {
 	TokenHash              string
 	ChangedAt              time.Time
-	OldEmailNoticeOptions  email.EmailChangeNoticeOptions
+	OldEmailNoticeOptions  email.MessageOptions
 	NoticeEmailAvailableAt time.Time
 	SendOldEmailNotice     bool
 }
@@ -264,14 +262,6 @@ func NewAuthService(store AuthStore, opts AuthOptions) (*AuthService, error) {
 		passwordResetTokenDuration = DefaultPasswordResetTokenTimeout
 	}
 
-	passwordResetEmail := opts.PasswordResetEmail
-	if strings.TrimSpace(passwordResetEmail.AppBaseURL) == "" {
-		passwordResetEmail.AppBaseURL = opts.ConfirmationEmail.AppBaseURL
-	}
-	if strings.TrimSpace(passwordResetEmail.From) == "" {
-		passwordResetEmail.From = opts.ConfirmationEmail.From
-	}
-
 	hasher := newArgon2idHasher(opts)
 	// Hashed once at startup and verified against on the unknown-email login
 	// path, so a missing account costs the same as a wrong password and
@@ -289,8 +279,7 @@ func NewAuthService(store AuthStore, opts AuthOptions) (*AuthService, error) {
 		sessionDuration:                sessionDuration,
 		emailVerificationTokenDuration: emailVerificationTokenDuration,
 		passwordResetTokenDuration:     passwordResetTokenDuration,
-		confirmationEmail:              opts.ConfirmationEmail,
-		passwordResetEmail:             passwordResetEmail,
+		emailOptions:                   opts.EmailOptions,
 		passwordHasher:                 hasher,
 		dummyPasswordHash:              dummyPasswordHash,
 		tokenBytes:                     tokenBytes,
@@ -330,7 +319,7 @@ func (s *AuthService) Register(ctx context.Context, emailAddress, password strin
 		return User{}, fmt.Errorf("generate email verification token: %w", err)
 	}
 
-	message, err := email.NewAccountConfirmationMessage(s.confirmationEmail, emailAddress, token)
+	message, err := email.NewAccountConfirmationMessage(s.emailOptions, emailAddress, token)
 	if err != nil {
 		return User{}, fmt.Errorf("build account confirmation email: %w", err)
 	}
@@ -577,7 +566,7 @@ func (s *AuthService) RequestEmailChange(ctx context.Context, userID int64, curr
 		return fmt.Errorf("generate email change token: %w", err)
 	}
 
-	message, err := email.NewEmailChangeMessage(email.EmailChangeOptions(s.confirmationEmail), newEmail, token)
+	message, err := email.NewEmailChangeMessage(s.emailOptions, newEmail, token)
 	if err != nil {
 		return fmt.Errorf("build email change verification email: %w", err)
 	}
@@ -605,7 +594,7 @@ func (s *AuthService) ConfirmEmailChange(ctx context.Context, token string) (Use
 	user, err := s.store.ConfirmEmailChange(ctx, ConfirmEmailChangeParams{
 		TokenHash:              hashToken(token),
 		ChangedAt:              now,
-		OldEmailNoticeOptions:  email.EmailChangeNoticeOptions{From: s.confirmationEmail.From},
+		OldEmailNoticeOptions:  s.emailOptions,
 		NoticeEmailAvailableAt: now,
 		SendOldEmailNotice:     s.emailChangeNoticeEnabled,
 	})
@@ -641,7 +630,7 @@ func (s *AuthService) RequestPasswordReset(ctx context.Context, emailAddress str
 		return fmt.Errorf("generate password reset token: %w", err)
 	}
 
-	message, err := email.NewPasswordResetMessage(s.passwordResetEmail, user.Email, token)
+	message, err := email.NewPasswordResetMessage(s.emailOptions, user.Email, token)
 	if err != nil {
 		return fmt.Errorf("build password reset email: %w", err)
 	}
@@ -779,7 +768,7 @@ func (s *AuthService) ResendVerificationEmail(ctx context.Context, userID int64)
 		return fmt.Errorf("generate email verification token: %w", err)
 	}
 
-	message, err := email.NewAccountConfirmationMessage(s.confirmationEmail, user.Email, token)
+	message, err := email.NewAccountConfirmationMessage(s.emailOptions, user.Email, token)
 	if err != nil {
 		return fmt.Errorf("build account confirmation email: %w", err)
 	}

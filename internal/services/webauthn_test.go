@@ -23,7 +23,7 @@ func newPasskeyTestService(t *testing.T) (*AuthService, *fakeAuthStore) {
 		WebAuthnRPID:          "localhost",
 		WebAuthnRPDisplayName: "Test App",
 		WebAuthnRPOrigins:     []string{"http://localhost:8080"},
-		ConfirmationEmail: email.AccountConfirmationOptions{
+		EmailOptions: email.MessageOptions{
 			AppBaseURL: "http://localhost:8080",
 			From:       "Go Spark <hello@example.com>",
 		},

@@ -11,7 +11,7 @@ import (
 )
 
 func TestNewAccountConfirmationMessage(t *testing.T) {
-	message, err := NewAccountConfirmationMessage(AccountConfirmationOptions{
+	message, err := NewAccountConfirmationMessage(MessageOptions{
 		AppBaseURL: "https://app.example.com",
 		From:       "Go Spark <hello@example.com>",
 	}, "USER@example.com", "token value")
@@ -37,7 +37,7 @@ func TestNewAccountConfirmationMessage(t *testing.T) {
 }
 
 func TestNewAccountConfirmationMessageKeepsBasePath(t *testing.T) {
-	message, err := NewAccountConfirmationMessage(AccountConfirmationOptions{
+	message, err := NewAccountConfirmationMessage(MessageOptions{
 		AppBaseURL: "https://example.com/app",
 		From:       "hello@example.com",
 	}, "user@example.com", "token")
@@ -53,35 +53,35 @@ func TestNewAccountConfirmationMessageKeepsBasePath(t *testing.T) {
 func TestNewAccountConfirmationMessageValidatesInputs(t *testing.T) {
 	tests := []struct {
 		name  string
-		opts  AccountConfirmationOptions
+		opts  MessageOptions
 		to    string
 		token string
 		want  string
 	}{
 		{
 			name:  "invalid from",
-			opts:  AccountConfirmationOptions{AppBaseURL: "https://app.example.com", From: "not an address"},
+			opts:  MessageOptions{AppBaseURL: "https://app.example.com", From: "not an address"},
 			to:    "user@example.com",
 			token: "token",
 			want:  "from email address",
 		},
 		{
 			name:  "invalid to",
-			opts:  AccountConfirmationOptions{AppBaseURL: "https://app.example.com", From: "hello@example.com"},
+			opts:  MessageOptions{AppBaseURL: "https://app.example.com", From: "hello@example.com"},
 			to:    "nope",
 			token: "token",
 			want:  "to email address",
 		},
 		{
 			name:  "invalid base URL",
-			opts:  AccountConfirmationOptions{AppBaseURL: "localhost:8080", From: "hello@example.com"},
+			opts:  MessageOptions{AppBaseURL: "localhost:8080", From: "hello@example.com"},
 			to:    "user@example.com",
 			token: "token",
 			want:  "app base URL",
 		},
 		{
 			name:  "empty token",
-			opts:  AccountConfirmationOptions{AppBaseURL: "https://app.example.com", From: "hello@example.com"},
+			opts:  MessageOptions{AppBaseURL: "https://app.example.com", From: "hello@example.com"},
 			to:    "user@example.com",
 			token: " ",
 			want:  "confirmation token",
@@ -102,7 +102,7 @@ func TestNewAccountConfirmationMessageValidatesInputs(t *testing.T) {
 }
 
 func TestNewPasswordResetMessage(t *testing.T) {
-	message, err := NewPasswordResetMessage(PasswordResetOptions{
+	message, err := NewPasswordResetMessage(MessageOptions{
 		AppBaseURL: "https://app.example.com",
 		From:       "Go Spark <hello@example.com>",
 	}, "USER@example.com", "token value")
@@ -130,35 +130,35 @@ func TestNewPasswordResetMessage(t *testing.T) {
 func TestNewPasswordResetMessageValidatesInputs(t *testing.T) {
 	tests := []struct {
 		name  string
-		opts  PasswordResetOptions
+		opts  MessageOptions
 		to    string
 		token string
 		want  string
 	}{
 		{
 			name:  "invalid from",
-			opts:  PasswordResetOptions{AppBaseURL: "https://app.example.com", From: "not an address"},
+			opts:  MessageOptions{AppBaseURL: "https://app.example.com", From: "not an address"},
 			to:    "user@example.com",
 			token: "token",
 			want:  "from email address",
 		},
 		{
 			name:  "invalid to",
-			opts:  PasswordResetOptions{AppBaseURL: "https://app.example.com", From: "hello@example.com"},
+			opts:  MessageOptions{AppBaseURL: "https://app.example.com", From: "hello@example.com"},
 			to:    "nope",
 			token: "token",
 			want:  "to email address",
 		},
 		{
 			name:  "invalid base URL",
-			opts:  PasswordResetOptions{AppBaseURL: "localhost:8080", From: "hello@example.com"},
+			opts:  MessageOptions{AppBaseURL: "localhost:8080", From: "hello@example.com"},
 			to:    "user@example.com",
 			token: "token",
 			want:  "app base URL",
 		},
 		{
 			name:  "empty token",
-			opts:  PasswordResetOptions{AppBaseURL: "https://app.example.com", From: "hello@example.com"},
+			opts:  MessageOptions{AppBaseURL: "https://app.example.com", From: "hello@example.com"},
 			to:    "user@example.com",
 			token: " ",
 			want:  "password reset token",
@@ -179,7 +179,7 @@ func TestNewPasswordResetMessageValidatesInputs(t *testing.T) {
 }
 
 func TestNewEmailChangeMessage(t *testing.T) {
-	message, err := NewEmailChangeMessage(EmailChangeOptions{
+	message, err := NewEmailChangeMessage(MessageOptions{
 		AppBaseURL: "https://app.example.com",
 		From:       "Go Spark <hello@example.com>",
 	}, "USER@example.com", "token value")
@@ -205,7 +205,7 @@ func TestNewEmailChangeMessage(t *testing.T) {
 }
 
 func TestNewEmailChangeNoticeMessage(t *testing.T) {
-	message, err := NewEmailChangeNoticeMessage(EmailChangeNoticeOptions{
+	message, err := NewEmailChangeNoticeMessage(MessageOptions{
 		From: "Go Spark <hello@example.com>",
 	}, "OLD@example.com")
 	if err != nil {

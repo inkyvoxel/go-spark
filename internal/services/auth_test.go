@@ -450,7 +450,7 @@ func TestAuthServiceWithPepperSupportsRegisterLoginAndPasswordChange(t *testing.
 		Argon2idIterations:  1,
 		Argon2idParallelism: 1,
 		PasswordPepper:      "test-pepper",
-		ConfirmationEmail: email.AccountConfirmationOptions{
+		EmailOptions: email.MessageOptions{
 			AppBaseURL: "http://localhost:8080",
 			From:       "Go Spark <hello@example.com>",
 		},
@@ -1292,7 +1292,7 @@ func newTestAuthService(t *testing.T) *AuthService {
 		Argon2idIterations:  1,
 		Argon2idParallelism: 1,
 		TOTPBackupCodeKey:   []byte("test-backup-code-key"),
-		ConfirmationEmail: email.AccountConfirmationOptions{
+		EmailOptions: email.MessageOptions{
 			AppBaseURL: "http://localhost:8080",
 			From:       "Go Spark <hello@example.com>",
 		},
@@ -1309,7 +1309,7 @@ func newTestAuthServiceWithNoticeDisabled(t *testing.T) *AuthService {
 		Argon2idIterations:  1,
 		Argon2idParallelism: 1,
 		TOTPBackupCodeKey:   []byte("test-backup-code-key"),
-		ConfirmationEmail: email.AccountConfirmationOptions{
+		EmailOptions: email.MessageOptions{
 			AppBaseURL: "http://localhost:8080",
 			From:       "Go Spark <hello@example.com>",
 		},
