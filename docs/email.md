@@ -24,7 +24,7 @@ not supported; see [production.md](production.md) for provider guidance.
 
 Email is split into a few clear responsibilities:
 
-* `internal/services` decides when email should be sent
+* `internal/auth` decides when email should be sent
 * `internal/email` builds messages and sends them
 * `internal/database` stores SQLite-backed tokens and outbox rows
 * `internal/platform/sqlite` owns SQLite connection setup

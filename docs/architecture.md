@@ -22,42 +22,47 @@ Go Spark prefers:
 ```text
 /cmd/app            wires the application together
 /internal/app       application bootstrap and runtime assembly
+/internal/auth      user accounts, sessions, TOTP, and passkeys
 /internal/config    reads environment config
-/internal/database  SQLite-backed domain stores
+/internal/database  background stores (email outbox, cleanup)
 /internal/db        SQL queries and generated sqlc code
 /internal/email     email messages, senders, and outbox processor
 /internal/jobs      jobs runner and periodic background jobs
 /internal/platform  engine-specific platform code such as SQLite setup
 /internal/paths     canonical public URL paths
+/internal/project   example feature (a user-owned projects list)
 /internal/ratelimit rate-limit policy vocabulary (names, defaults) shared by config and server
+/internal/secret    purpose-scoped key derivation from the root secret
 /internal/server    HTTP handlers, middleware, templates
-/internal/services  business logic
 ```
 
 Rules of thumb:
 
 * handlers own HTTP concerns
-* services own business logic
-* stores own persistence and SQLite-specific translation today
+* a feature package (`internal/auth`, `internal/project`) owns its business rules *and* its SQL, calling the generated `sqlc` queries directly — no separate store layer
+* feature packages return their own domain types, never generated `db` rows
 * engine setup belongs in engine-focused packages under `internal/platform`
 * templates render data, not business rules
-* `internal/server` must not import `internal/db/generated`; handlers should work with service-owned types and leave generated persistence models inside stores
+* `internal/server` must not import `internal/db/generated`; handlers work with the domain types feature packages expose (enforced by a test in `internal/server`)
 
-Go Spark keeps service/store seams because they protect business logic from
-HTTP and persistence concerns. Those seams are not a promise that the starter
-currently supports interchangeable database backends.
+Earlier versions of the starter put a separate store layer behind an interface
+in front of each service. That seam was removed: with a single committed
+database engine (SQLite) the interface had one implementation and earned only
+ceremony, so each feature now talks to `sqlc` directly and is tested against a
+real in-memory database. The boundary that still matters — keeping SQL out of
+handlers and templates — is preserved by returning domain types.
 
 ## Request Flow
 
 Most features follow this path:
 
 1. `internal/server` receives and validates the request
-2. `internal/services` applies business rules
-3. `internal/database` persists through SQLite-targeted `sqlc` queries
-4. the handler renders HTML or redirects
+2. a feature package (`internal/auth`, `internal/project`) applies business
+   rules and persists through SQLite-targeted `sqlc` queries
+3. the handler renders HTML or redirects
 
-This keeps HTTP concerns, business rules, and SQLite persistence behavior
-separate.
+This keeps HTTP concerns separate from business-and-persistence logic, while
+the latter two live together in one cohesive package per feature.
 
 ## Rendering Conventions
 
@@ -84,7 +89,7 @@ The starter uses:
 
 Login defaults to a browser-session cookie. Users can explicitly choose "Remember me on this device" to receive a persistent cookie that lasts until the server-side session expires. Session cookies remain HTTP-only, SameSite=Lax, and Secure when configured or served over TLS.
 
-TOTP follows a three-step flow: the user initiates setup (secret generated and stored as pending), scans the QR code in their authenticator app, then confirms with a valid code — at which point 8 one-time backup codes are generated and shown once. At login, users with 2FA enabled are issued a short-lived signed pending cookie and redirected to a challenge page before a full session is created. The pending cookie carries the explicit remember-me choice so the final session cookie matches what the user selected at the password step. The HMAC-SHA1 code generation and verification are delegated to the maintained [`pquerna/otp`](https://github.com/pquerna/otp) library rather than hand-rolled; `internal/totp` adds only the otpauth:// URI and counter-returning verification, and the replay-protection counter is claimed atomically in `internal/services`.
+TOTP follows a three-step flow: the user initiates setup (secret generated and stored as pending), scans the QR code in their authenticator app, then confirms with a valid code — at which point 8 one-time backup codes are generated and shown once. At login, users with 2FA enabled are issued a short-lived signed pending cookie and redirected to a challenge page before a full session is created. The pending cookie carries the explicit remember-me choice so the final session cookie matches what the user selected at the password step. The HMAC-SHA1 code generation and verification are delegated to the maintained [`pquerna/otp`](https://github.com/pquerna/otp) library rather than hand-rolled; `internal/totp` adds only the otpauth:// URI and counter-returning verification, and the replay-protection counter is claimed atomically in `internal/auth`.
 
 Passkeys are built on the [`go-webauthn/webauthn`](https://github.com/go-webauthn/webauthn) library — a deliberate third-party dependency (alongside `pquerna/otp` for TOTP), because WebAuthn's CBOR/COSE/attestation handling is not something to hand-roll. The relying party is configured from `APP_BASE_URL` (the RP ID defaults to its host, the allowed origin is the URL itself). Each user gets a random 64-byte WebAuthn handle (folded into the base users migration) so the authenticator stores no PII, and credentials live in `webauthn_credentials`. Registration is offered after email confirmation and from the account passkey page; it requires a verified, authenticated session. Because passkeys require **user verification** (biometric, PIN, or security-key gesture), a passkey assertion is treated as full multi-factor authentication: a passkey login skips both the password and the TOTP challenge. Email/password + TOTP remain as a fallback, so removing the last passkey is safe. Login is discoverable (usernameless): the browser surfaces passkeys via conditional-UI autofill and an explicit button, and the server resolves the user from the credential's user handle. Like the TOTP pending cookie, the WebAuthn begin→finish ceremony state is carried in a short-lived, HMAC-signed, path-scoped cookie rather than a server-side store, so no extra cleanup job is needed. The register/login endpoints are JSON over `fetch`; like every state-changing request they are covered by the cross-origin checks described below (a same-origin `fetch` sends `Sec-Fetch-Site: same-origin` automatically, so no custom header or token is needed).
 
@@ -114,13 +119,11 @@ The starter does not currently aim to provide plug-and-play support for
 multiple SQL engines. If a future fork needs something else, treat that as an
 explicit refactor of the persistence layer.
 
-If later phases split connection setup away from stores, the preferred
-direction is:
+If a future fork does need engine portability, the preferred direction is:
 
 * keep SQLite engine setup and tuning in an explicit SQLite-focused package
-* keep domain stores separate from engine setup
-* keep service/store seams because they support domain boundaries, not because
-  they imply broad engine portability
+* introduce a persistence interface only at the point where a second engine
+  actually exists, not speculatively
 * keep tuning defaults small and documented instead of introducing a large
   connection abstraction
 

@@ -5,8 +5,8 @@ import (
 	"html/template"
 	"net/http"
 
+	"github.com/inkyvoxel/go-spark/internal/auth"
 	"github.com/inkyvoxel/go-spark/internal/paths"
-	"github.com/inkyvoxel/go-spark/internal/services"
 )
 
 func (s *Server) newTwoFactorTemplateData(w http.ResponseWriter, r *http.Request) templateData {
@@ -71,7 +71,7 @@ func (s *Server) twoFactorSetup(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if _, _, err := s.auth.BeginTOTPSetup(r.Context(), user.ID); err != nil {
-		if errors.Is(err, services.ErrTOTPAlreadyEnabled) {
+		if errors.Is(err, auth.ErrTOTPAlreadyEnabled) {
 			http.Redirect(w, r, paths.AccountTwoFactor, http.StatusSeeOther)
 			return
 		}
@@ -104,12 +104,12 @@ func (s *Server) twoFactorConfirm(w http.ResponseWriter, r *http.Request) {
 		data := s.newTwoFactorTemplateData(w, r)
 		data.TOTPPending = true
 		switch {
-		case errors.Is(err, services.ErrInvalidTOTPCode):
+		case errors.Is(err, auth.ErrInvalidTOTPCode):
 			data.Error = "That code is incorrect. Check your authenticator app and try again."
-		case errors.Is(err, services.ErrTOTPSetupNotStarted):
+		case errors.Is(err, auth.ErrTOTPSetupNotStarted):
 			http.Redirect(w, r, paths.AccountTwoFactor, http.StatusSeeOther)
 			return
-		case errors.Is(err, services.ErrTOTPAlreadyEnabled):
+		case errors.Is(err, auth.ErrTOTPAlreadyEnabled):
 			http.Redirect(w, r, paths.AccountTwoFactor, http.StatusSeeOther)
 			return
 		default:
@@ -156,9 +156,9 @@ func (s *Server) twoFactorDisable(w http.ResponseWriter, r *http.Request) {
 		data := s.newTwoFactorTemplateData(w, r)
 		data.TOTPEnabled = true
 		switch {
-		case errors.Is(err, services.ErrInvalidTOTPCode):
+		case errors.Is(err, auth.ErrInvalidTOTPCode):
 			data.Error = "That code is incorrect. Check your authenticator app or try a backup code."
-		case errors.Is(err, services.ErrTOTPNotEnabled):
+		case errors.Is(err, auth.ErrTOTPNotEnabled):
 			http.Redirect(w, r, paths.AccountTwoFactor, http.StatusSeeOther)
 			return
 		default:
@@ -198,9 +198,9 @@ func (s *Server) twoFactorRegenerateCodes(w http.ResponseWriter, r *http.Request
 		data := s.newTwoFactorTemplateData(w, r)
 		data.TOTPEnabled = true
 		switch {
-		case errors.Is(err, services.ErrInvalidTOTPCode):
+		case errors.Is(err, auth.ErrInvalidTOTPCode):
 			data.Error = "That code is incorrect. Check your authenticator app or try a backup code."
-		case errors.Is(err, services.ErrTOTPNotEnabled):
+		case errors.Is(err, auth.ErrTOTPNotEnabled):
 			http.Redirect(w, r, paths.AccountTwoFactor, http.StatusSeeOther)
 			return
 		default:
@@ -255,7 +255,7 @@ func (s *Server) twoFactorChallenge(w http.ResponseWriter, r *http.Request) {
 		data := s.newTemplateData(w, r, "Two-Factor Authentication")
 		data.Next = next
 		switch {
-		case errors.Is(err, services.ErrInvalidTOTPCode):
+		case errors.Is(err, auth.ErrInvalidTOTPCode):
 			data.Error = "That code is incorrect. Try again or use a backup code."
 		default:
 			s.loggerForRequest(r).Error("verify TOTP login", "user_id", pendingLogin.UserID, "err", err)

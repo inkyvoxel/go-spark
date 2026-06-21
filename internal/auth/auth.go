@@ -1,4 +1,4 @@
-package services
+package auth
 
 import (
 	"context"
@@ -153,11 +153,11 @@ type AuthOptions struct {
 	TOTPIssuer                     string
 	// TOTPSecretKey encrypts TOTP shared secrets at rest (32 bytes, derived
 	// from AUTH_TOTP_KEY). TOTPBackupCodeKey signs backup codes.
-	TOTPSecretKey     []byte
-	TOTPBackupCodeKey []byte
-	WebAuthnRPID                   string
-	WebAuthnRPDisplayName          string
-	WebAuthnRPOrigins              []string
+	TOTPSecretKey         []byte
+	TOTPBackupCodeKey     []byte
+	WebAuthnRPID          string
+	WebAuthnRPDisplayName string
+	WebAuthnRPOrigins     []string
 }
 
 type ResendEmailVerificationParams struct {

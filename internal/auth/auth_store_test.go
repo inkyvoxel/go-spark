@@ -1,4 +1,4 @@
-package services
+package auth
 
 import (
 	"context"
@@ -424,7 +424,7 @@ func TestAuthStoreDeleteSessionByIDAndUserIDAndTokenHashNot(t *testing.T) {
 
 func TestAuthStoreUnexpectedCreateUserErrorIsWrapped(t *testing.T) {
 	conn := newauthStoreTestDB(t)
-	store := mustnewAuthStore(t, conn)
+	store := mustNewAuthStore(t, conn)
 
 	if err := conn.Close(); err != nil {
 		t.Fatalf("Close() error = %v", err)
@@ -498,7 +498,7 @@ func TestAuthStoreCreateUserWithEmailVerification(t *testing.T) {
 
 func TestAuthStoreCreateUserWithEmailVerificationRollsBackOnOutboxError(t *testing.T) {
 	conn := newauthStoreTestDB(t)
-	store := mustnewAuthStore(t, conn)
+	store := mustNewAuthStore(t, conn)
 	if _, err := conn.Exec("DROP TABLE email_outbox"); err != nil {
 		t.Fatalf("drop email_outbox: %v", err)
 	}
@@ -749,7 +749,7 @@ func TestAuthStoreResendEmailVerification(t *testing.T) {
 
 func TestAuthStoreResendEmailVerificationRollsBackOnOutboxError(t *testing.T) {
 	conn := newauthStoreTestDB(t)
-	store := mustnewAuthStore(t, conn)
+	store := mustNewAuthStore(t, conn)
 	now := time.Now().UTC()
 
 	user, err := store.CreateUser(context.Background(), "user@example.com", "hash")
@@ -1067,10 +1067,10 @@ var testTOTPSecretKey = []byte("0123456789abcdef0123456789abcdef")
 func newTestauthStore(t *testing.T) *authStore {
 	t.Helper()
 
-	return mustnewAuthStore(t, newauthStoreTestDB(t))
+	return mustNewAuthStore(t, newauthStoreTestDB(t))
 }
 
-func mustnewAuthStore(t *testing.T, conn *sql.DB) *authStore {
+func mustNewAuthStore(t *testing.T, conn *sql.DB) *authStore {
 	t.Helper()
 
 	store, err := newAuthStore(conn, testTOTPSecretKey)
@@ -1134,7 +1134,7 @@ CREATE TABLE projects (
 	}
 
 	ctx := context.Background()
-	store := mustnewAuthStore(t, conn)
+	store := mustNewAuthStore(t, conn)
 
 	user, err := store.CreateUser(ctx, "owner@example.com", "hash")
 	if err != nil {

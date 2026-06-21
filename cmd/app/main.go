@@ -18,9 +18,9 @@ import (
 
 	appassets "github.com/inkyvoxel/go-spark"
 	bootstrap "github.com/inkyvoxel/go-spark/internal/app"
+	"github.com/inkyvoxel/go-spark/internal/auth"
 	"github.com/inkyvoxel/go-spark/internal/config"
 	"github.com/inkyvoxel/go-spark/internal/jobs"
-	"github.com/inkyvoxel/go-spark/internal/services"
 	"github.com/pressly/goose/v3"
 )
 
@@ -55,7 +55,7 @@ func run(args []string, logger *slog.Logger) error {
 		return fmt.Errorf("load .env: %w", err)
 	}
 
-	cfg, err := config.FromEnvWithProcess(services.DefaultPasswordMinLength, command.processOverride)
+	cfg, err := config.FromEnvWithProcess(auth.DefaultPasswordMinLength, command.processOverride)
 	if err != nil {
 		return fmt.Errorf("load config: %w", err)
 	}
@@ -128,7 +128,7 @@ func runMigrate(action string) error {
 		return fmt.Errorf("load .env: %w", err)
 	}
 
-	cfg, err := config.FromEnvWithProcess(services.DefaultPasswordMinLength, config.ProcessAll)
+	cfg, err := config.FromEnvWithProcess(auth.DefaultPasswordMinLength, config.ProcessAll)
 	if err != nil {
 		return fmt.Errorf("load config: %w", err)
 	}

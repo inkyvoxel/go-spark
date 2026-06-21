@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/inkyvoxel/go-spark/internal/auth"
 	"github.com/inkyvoxel/go-spark/internal/ratelimit"
-	"github.com/inkyvoxel/go-spark/internal/services"
 )
 
 func TestLoadDotEnvLoadsValuesWithoutOverridingEnvironment(t *testing.T) {
@@ -148,7 +148,7 @@ func TestFromEnvUsesDefaults(t *testing.T) {
 	t.Setenv("JOBS_CLEANUP_SENT_EMAIL_RETENTION", "")
 	t.Setenv("JOBS_CLEANUP_FAILED_EMAIL_RETENTION", "")
 
-	cfg, err := FromEnv(services.DefaultPasswordMinLength)
+	cfg, err := FromEnv(auth.DefaultPasswordMinLength)
 	if err != nil {
 		t.Fatalf("FromEnv() error = %v", err)
 	}
@@ -174,8 +174,8 @@ func TestFromEnvUsesDefaults(t *testing.T) {
 	if !cfg.EmailChangeNoticeEnabled {
 		t.Fatal("EmailChangeNoticeEnabled = false, want true")
 	}
-	if cfg.PasswordMinLength != services.DefaultPasswordMinLength {
-		t.Fatalf("PasswordMinLength = %d, want %d", cfg.PasswordMinLength, services.DefaultPasswordMinLength)
+	if cfg.PasswordMinLength != auth.DefaultPasswordMinLength {
+		t.Fatalf("PasswordMinLength = %d, want %d", cfg.PasswordMinLength, auth.DefaultPasswordMinLength)
 	}
 	if cfg.PasswordPepper != "" {
 		t.Fatalf("PasswordPepper = %q, want empty", cfg.PasswordPepper)
@@ -244,7 +244,7 @@ func TestFromEnvUsesEnvironment(t *testing.T) {
 	t.Setenv("RATE_LIMIT_REVOKE_OTHER_SESSIONS_MAX_REQUESTS", "3")
 	t.Setenv("RATE_LIMIT_REVOKE_OTHER_SESSIONS_WINDOW", "7m")
 
-	cfg, err := FromEnv(services.DefaultPasswordMinLength)
+	cfg, err := FromEnv(auth.DefaultPasswordMinLength)
 	if err != nil {
 		t.Fatalf("FromEnv() error = %v", err)
 	}
@@ -353,7 +353,7 @@ func TestFromEnvUsesEnvironment(t *testing.T) {
 func TestFromEnvParsesCookieSecureBool(t *testing.T) {
 	t.Setenv("APP_COOKIE_SECURE", "1")
 
-	cfg, err := FromEnv(services.DefaultPasswordMinLength)
+	cfg, err := FromEnv(auth.DefaultPasswordMinLength)
 	if err != nil {
 		t.Fatalf("FromEnv() error = %v", err)
 	}
@@ -366,7 +366,7 @@ func TestFromEnvParsesCookieSecureBool(t *testing.T) {
 func TestFromEnvRejectsInvalidPasswordMinLength(t *testing.T) {
 	t.Setenv("AUTH_PASSWORD_MIN_LENGTH", "nope")
 
-	_, err := FromEnv(services.DefaultPasswordMinLength)
+	_, err := FromEnv(auth.DefaultPasswordMinLength)
 	if err == nil {
 		t.Fatal("FromEnv() error = nil, want error")
 	}
@@ -378,7 +378,7 @@ func TestFromEnvRejectsInvalidPasswordMinLength(t *testing.T) {
 func TestFromEnvRejectsInvalidLogFormat(t *testing.T) {
 	t.Setenv("LOG_FORMAT", "yaml")
 
-	_, err := FromEnv(services.DefaultPasswordMinLength)
+	_, err := FromEnv(auth.DefaultPasswordMinLength)
 	if err == nil {
 		t.Fatal("FromEnv() error = nil, want error")
 	}
@@ -390,7 +390,7 @@ func TestFromEnvRejectsInvalidLogFormat(t *testing.T) {
 func TestFromEnvRejectsNonPositivePasswordMinLength(t *testing.T) {
 	t.Setenv("AUTH_PASSWORD_MIN_LENGTH", "0")
 
-	_, err := FromEnv(services.DefaultPasswordMinLength)
+	_, err := FromEnv(auth.DefaultPasswordMinLength)
 	if err == nil {
 		t.Fatal("FromEnv() error = nil, want error")
 	}
@@ -402,7 +402,7 @@ func TestFromEnvRejectsNonPositivePasswordMinLength(t *testing.T) {
 func TestFromEnvRejectsInvalidCookieSecureBool(t *testing.T) {
 	t.Setenv("APP_COOKIE_SECURE", "sometimes")
 
-	_, err := FromEnv(services.DefaultPasswordMinLength)
+	_, err := FromEnv(auth.DefaultPasswordMinLength)
 	if err == nil {
 		t.Fatal("FromEnv() error = nil, want error")
 	}
@@ -414,7 +414,7 @@ func TestFromEnvRejectsInvalidCookieSecureBool(t *testing.T) {
 func TestFromEnvRejectsInvalidEmailChangeNoticeEnabledBool(t *testing.T) {
 	t.Setenv("AUTH_EMAIL_CHANGE_NOTICE_ENABLED", "sometimes")
 
-	_, err := FromEnv(services.DefaultPasswordMinLength)
+	_, err := FromEnv(auth.DefaultPasswordMinLength)
 	if err == nil {
 		t.Fatal("FromEnv() error = nil, want error")
 	}
@@ -430,7 +430,7 @@ func TestFromEnvParsesProcessModes(t *testing.T) {
 		t.Run(process, func(t *testing.T) {
 			t.Setenv("APP_PROCESS", process)
 
-			cfg, err := FromEnv(services.DefaultPasswordMinLength)
+			cfg, err := FromEnv(auth.DefaultPasswordMinLength)
 			if err != nil {
 				t.Fatalf("FromEnv() error = %v", err)
 			}
@@ -444,7 +444,7 @@ func TestFromEnvParsesProcessModes(t *testing.T) {
 func TestFromEnvRejectsInvalidProcess(t *testing.T) {
 	t.Setenv("APP_PROCESS", "jobs")
 
-	_, err := FromEnv(services.DefaultPasswordMinLength)
+	_, err := FromEnv(auth.DefaultPasswordMinLength)
 	if err == nil {
 		t.Fatal("FromEnv() error = nil, want error")
 	}
@@ -456,7 +456,7 @@ func TestFromEnvRejectsInvalidProcess(t *testing.T) {
 func TestFromEnvWithProcessOverridesEnvironmentProcess(t *testing.T) {
 	t.Setenv("APP_PROCESS", "jobs")
 
-	cfg, err := FromEnvWithProcess(services.DefaultPasswordMinLength, ProcessWeb)
+	cfg, err := FromEnvWithProcess(auth.DefaultPasswordMinLength, ProcessWeb)
 	if err != nil {
 		t.Fatalf("FromEnvWithProcess() error = %v", err)
 	}
@@ -466,7 +466,7 @@ func TestFromEnvWithProcessOverridesEnvironmentProcess(t *testing.T) {
 }
 
 func TestFromEnvWithProcessRejectsInvalidOverride(t *testing.T) {
-	_, err := FromEnvWithProcess(services.DefaultPasswordMinLength, "jobs")
+	_, err := FromEnvWithProcess(auth.DefaultPasswordMinLength, "jobs")
 	if err == nil {
 		t.Fatal("FromEnvWithProcess() error = nil, want error")
 	}
@@ -478,7 +478,7 @@ func TestFromEnvWithProcessRejectsInvalidOverride(t *testing.T) {
 func TestFromEnvRejectsInvalidAppBaseURL(t *testing.T) {
 	t.Setenv("APP_BASE_URL", "localhost:8080")
 
-	_, err := FromEnv(services.DefaultPasswordMinLength)
+	_, err := FromEnv(auth.DefaultPasswordMinLength)
 	if err == nil {
 		t.Fatal("FromEnv() error = nil, want error")
 	}
@@ -490,7 +490,7 @@ func TestFromEnvRejectsInvalidAppBaseURL(t *testing.T) {
 func TestFromEnvRejectsInvalidEmailFrom(t *testing.T) {
 	t.Setenv("EMAIL_FROM", "not an address")
 
-	_, err := FromEnv(services.DefaultPasswordMinLength)
+	_, err := FromEnv(auth.DefaultPasswordMinLength)
 	if err == nil {
 		t.Fatal("FromEnv() error = nil, want error")
 	}
@@ -502,7 +502,7 @@ func TestFromEnvRejectsInvalidEmailFrom(t *testing.T) {
 func TestFromEnvRejectsUnknownEmailProvider(t *testing.T) {
 	t.Setenv("EMAIL_PROVIDER", "ses")
 
-	_, err := FromEnv(services.DefaultPasswordMinLength)
+	_, err := FromEnv(auth.DefaultPasswordMinLength)
 	if err == nil {
 		t.Fatal("FromEnv() error = nil, want error")
 	}
@@ -514,7 +514,7 @@ func TestFromEnvRejectsUnknownEmailProvider(t *testing.T) {
 func TestFromEnvRejectsInvalidRateLimitWindow(t *testing.T) {
 	t.Setenv("RATE_LIMIT_FORGOT_PASSWORD_WINDOW", "tomorrow")
 
-	_, err := FromEnv(services.DefaultPasswordMinLength)
+	_, err := FromEnv(auth.DefaultPasswordMinLength)
 	if err == nil {
 		t.Fatal("FromEnv() error = nil, want error")
 	}
@@ -533,7 +533,7 @@ func TestFromEnvParsesSMTPProvider(t *testing.T) {
 	t.Setenv("SMTP_FROM", "Ignored Sender <ignored@example.com>")
 	t.Setenv("SMTP_TLS", "true")
 
-	cfg, err := FromEnv(services.DefaultPasswordMinLength)
+	cfg, err := FromEnv(auth.DefaultPasswordMinLength)
 	if err != nil {
 		t.Fatalf("FromEnv() error = %v", err)
 	}
@@ -568,7 +568,7 @@ func TestFromEnvSMTPProviderDefaultsTLS(t *testing.T) {
 	t.Setenv("SMTP_PORT", "587")
 	t.Setenv("SMTP_TLS", "")
 
-	cfg, err := FromEnv(services.DefaultPasswordMinLength)
+	cfg, err := FromEnv(auth.DefaultPasswordMinLength)
 	if err != nil {
 		t.Fatalf("FromEnv() error = %v", err)
 	}
@@ -586,7 +586,7 @@ func TestFromEnvSMTPProviderRejectsMissingHost(t *testing.T) {
 	t.Setenv("SMTP_HOST", "")
 	t.Setenv("SMTP_PORT", "587")
 
-	_, err := FromEnv(services.DefaultPasswordMinLength)
+	_, err := FromEnv(auth.DefaultPasswordMinLength)
 	if err == nil {
 		t.Fatal("FromEnv() error = nil, want error")
 	}
@@ -600,7 +600,7 @@ func TestFromEnvSMTPProviderRejectsMissingPort(t *testing.T) {
 	t.Setenv("SMTP_HOST", "smtp.example.com")
 	t.Setenv("SMTP_PORT", "")
 
-	_, err := FromEnv(services.DefaultPasswordMinLength)
+	_, err := FromEnv(auth.DefaultPasswordMinLength)
 	if err == nil {
 		t.Fatal("FromEnv() error = nil, want error")
 	}
@@ -614,7 +614,7 @@ func TestFromEnvSMTPProviderRejectsInvalidPort(t *testing.T) {
 	t.Setenv("SMTP_HOST", "smtp.example.com")
 	t.Setenv("SMTP_PORT", "abc")
 
-	_, err := FromEnv(services.DefaultPasswordMinLength)
+	_, err := FromEnv(auth.DefaultPasswordMinLength)
 	if err == nil {
 		t.Fatal("FromEnv() error = nil, want error")
 	}
@@ -629,7 +629,7 @@ func TestFromEnvSMTPProviderRejectsInvalidTLSBool(t *testing.T) {
 	t.Setenv("SMTP_PORT", "587")
 	t.Setenv("SMTP_TLS", "sometimes")
 
-	_, err := FromEnv(services.DefaultPasswordMinLength)
+	_, err := FromEnv(auth.DefaultPasswordMinLength)
 	if err == nil {
 		t.Fatal("FromEnv() error = nil, want error")
 	}
@@ -645,7 +645,7 @@ func TestFromEnvSMTPProviderRejectsPartialAuth(t *testing.T) {
 	t.Setenv("SMTP_USERNAME", "mailer")
 	t.Setenv("SMTP_PASSWORD", "")
 
-	_, err := FromEnv(services.DefaultPasswordMinLength)
+	_, err := FromEnv(auth.DefaultPasswordMinLength)
 	if err == nil {
 		t.Fatal("FromEnv() error = nil, want error")
 	}
@@ -660,7 +660,7 @@ func TestFromEnvLogProviderIgnoresSMTPSettings(t *testing.T) {
 	t.Setenv("SMTP_PORT", "not-a-number")
 	t.Setenv("SMTP_TLS", "sometimes")
 
-	cfg, err := FromEnv(services.DefaultPasswordMinLength)
+	cfg, err := FromEnv(auth.DefaultPasswordMinLength)
 	if err != nil {
 		t.Fatalf("FromEnv() error = %v", err)
 	}
@@ -672,7 +672,7 @@ func TestFromEnvLogProviderIgnoresSMTPSettings(t *testing.T) {
 func TestFromEnvParsesTrustedProxies(t *testing.T) {
 	t.Setenv("TRUSTED_PROXY_IPS", "127.0.0.1, 10.0.0.1, 192.168.0.0/24")
 
-	cfg, err := FromEnv(services.DefaultPasswordMinLength)
+	cfg, err := FromEnv(auth.DefaultPasswordMinLength)
 	if err != nil {
 		t.Fatalf("FromEnv() error = %v", err)
 	}
@@ -690,7 +690,7 @@ func TestFromEnvParsesTrustedProxies(t *testing.T) {
 func TestFromEnvTrustedProxiesDefaultsToNil(t *testing.T) {
 	t.Setenv("TRUSTED_PROXY_IPS", "")
 
-	cfg, err := FromEnv(services.DefaultPasswordMinLength)
+	cfg, err := FromEnv(auth.DefaultPasswordMinLength)
 	if err != nil {
 		t.Fatalf("FromEnv() error = %v", err)
 	}
@@ -702,7 +702,7 @@ func TestFromEnvTrustedProxiesDefaultsToNil(t *testing.T) {
 func TestFromEnvRejectsInvalidTrustedProxyIP(t *testing.T) {
 	t.Setenv("TRUSTED_PROXY_IPS", "not-an-ip")
 
-	_, err := FromEnv(services.DefaultPasswordMinLength)
+	_, err := FromEnv(auth.DefaultPasswordMinLength)
 	if err == nil {
 		t.Fatal("FromEnv() error = nil, want error")
 	}
@@ -714,7 +714,7 @@ func TestFromEnvRejectsInvalidTrustedProxyIP(t *testing.T) {
 func TestFromEnvRejectsInvalidTrustedProxyCIDR(t *testing.T) {
 	t.Setenv("TRUSTED_PROXY_IPS", "999.999.999.0/24")
 
-	_, err := FromEnv(services.DefaultPasswordMinLength)
+	_, err := FromEnv(auth.DefaultPasswordMinLength)
 	if err == nil {
 		t.Fatal("FromEnv() error = nil, want error")
 	}
@@ -726,7 +726,7 @@ func TestFromEnvRejectsInvalidTrustedProxyCIDR(t *testing.T) {
 func TestFromEnvRejectsInvalidEmailLogBodyBool(t *testing.T) {
 	t.Setenv("EMAIL_LOG_BODY", "sometimes")
 
-	_, err := FromEnv(services.DefaultPasswordMinLength)
+	_, err := FromEnv(auth.DefaultPasswordMinLength)
 	if err == nil {
 		t.Fatal("FromEnv() error = nil, want error")
 	}

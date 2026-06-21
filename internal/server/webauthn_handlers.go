@@ -8,8 +8,8 @@ import (
 	"strings"
 
 	"github.com/go-webauthn/webauthn/protocol"
+	"github.com/inkyvoxel/go-spark/internal/auth"
 	"github.com/inkyvoxel/go-spark/internal/paths"
-	"github.com/inkyvoxel/go-spark/internal/services"
 )
 
 func (s *Server) newPasskeysTemplateData(w http.ResponseWriter, r *http.Request) templateData {
@@ -53,7 +53,7 @@ func (s *Server) passkeyRegisterBegin(w http.ResponseWriter, r *http.Request) {
 
 	creation, session, err := s.auth.BeginPasskeyRegistration(r.Context(), user.ID)
 	if err != nil {
-		if errors.Is(err, services.ErrPasskeysDisabled) {
+		if errors.Is(err, auth.ErrPasskeysDisabled) {
 			s.writeJSONError(w, http.StatusNotFound, "Passkeys are not available.")
 			return
 		}
@@ -94,7 +94,7 @@ func (s *Server) passkeyRegisterFinish(w http.ResponseWriter, r *http.Request) {
 
 	name := strings.TrimSpace(r.URL.Query().Get("name"))
 	if err := s.auth.FinishPasskeyRegistration(r.Context(), user.ID, session, parsed, name); err != nil {
-		if errors.Is(err, services.ErrPasskeyCeremony) {
+		if errors.Is(err, auth.ErrPasskeyCeremony) {
 			s.writeJSONError(w, http.StatusUnprocessableEntity, "That passkey could not be verified. Please try again.")
 			return
 		}
@@ -129,7 +129,7 @@ func (s *Server) passkeyRename(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := s.auth.RenamePasskey(r.Context(), user.ID, credentialID, r.FormValue("name")); err != nil {
-		if errors.Is(err, services.ErrPasskeyNotFound) {
+		if errors.Is(err, auth.ErrPasskeyNotFound) {
 			s.setFlash(w, r, flashError("That passkey is no longer available."))
 			http.Redirect(w, r, paths.AccountPasskeys, http.StatusSeeOther)
 			return
@@ -165,7 +165,7 @@ func (s *Server) passkeyDelete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := s.auth.DeletePasskey(r.Context(), user.ID, credentialID); err != nil {
-		if errors.Is(err, services.ErrPasskeyNotFound) {
+		if errors.Is(err, auth.ErrPasskeyNotFound) {
 			s.setFlash(w, r, flashError("That passkey is no longer available."))
 			http.Redirect(w, r, paths.AccountPasskeys, http.StatusSeeOther)
 			return
@@ -185,7 +185,7 @@ func (s *Server) passkeyDelete(w http.ResponseWriter, r *http.Request) {
 func (s *Server) passkeyLoginBegin(w http.ResponseWriter, r *http.Request) {
 	assertion, session, err := s.auth.BeginPasskeyLogin(r.Context())
 	if err != nil {
-		if errors.Is(err, services.ErrPasskeysDisabled) {
+		if errors.Is(err, auth.ErrPasskeysDisabled) {
 			s.writeJSONError(w, http.StatusNotFound, "Passkeys are not available.")
 			return
 		}
@@ -220,7 +220,7 @@ func (s *Server) passkeyLoginFinish(w http.ResponseWriter, r *http.Request) {
 
 	user, authSession, err := s.auth.FinishPasskeyLogin(r.Context(), session, parsed)
 	if err != nil {
-		if errors.Is(err, services.ErrPasskeyCeremony) || errors.Is(err, services.ErrPasskeyNotFound) {
+		if errors.Is(err, auth.ErrPasskeyCeremony) || errors.Is(err, auth.ErrPasskeyNotFound) {
 			s.loggerForRequest(r).Info("passkey login failed")
 			s.writeJSONError(w, http.StatusUnauthorized, "That passkey could not be verified. Please try again.")
 			return

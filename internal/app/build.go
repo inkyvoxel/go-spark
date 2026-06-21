@@ -9,13 +9,15 @@ import (
 	"strings"
 	"time"
 
+	"github.com/inkyvoxel/go-spark/internal/auth"
 	"github.com/inkyvoxel/go-spark/internal/config"
 	"github.com/inkyvoxel/go-spark/internal/database"
 	"github.com/inkyvoxel/go-spark/internal/email"
 	"github.com/inkyvoxel/go-spark/internal/jobs"
 	"github.com/inkyvoxel/go-spark/internal/platform/sqlite"
+	"github.com/inkyvoxel/go-spark/internal/project"
+	"github.com/inkyvoxel/go-spark/internal/secret"
 	"github.com/inkyvoxel/go-spark/internal/server"
-	"github.com/inkyvoxel/go-spark/internal/services"
 )
 
 const defaultStarterEmailFrom = `"Go Spark" <hello@example.com>`
@@ -64,12 +66,12 @@ func buildRuntime(cfg config.Config, logger *slog.Logger, db *sql.DB, secretKeyB
 	// factor. Rotating AUTH_TOTP_KEY, by contrast, forces 2FA re-enrolment.
 	totpKey := []byte(strings.TrimSpace(cfg.TOTPKey))
 
-	auth, err := services.NewAuthService(db, services.AuthOptions{
+	authService, err := auth.NewAuthService(db, auth.AuthOptions{
 		PasswordMinLen:           cfg.PasswordMinLength,
 		PasswordPepper:           cfg.PasswordPepper,
 		TOTPIssuer:               cfg.TOTPIssuer,
-		TOTPSecretKey:            services.DeriveKey(totpKey, "totp_secret"),
-		TOTPBackupCodeKey:        services.DeriveKey(totpKey, "totp_backup_code"),
+		TOTPSecretKey:            secret.DeriveKey(totpKey, "totp_secret"),
+		TOTPBackupCodeKey:        secret.DeriveKey(totpKey, "totp_backup_code"),
 		EmailChangeNoticeEnabled: boolPtr(cfg.EmailChangeNoticeEnabled),
 		WebAuthnRPID:             passkeyRPID(cfg),
 		WebAuthnRPDisplayName:    passkeyRPDisplayName(cfg),
@@ -93,12 +95,12 @@ func buildRuntime(cfg config.Config, logger *slog.Logger, db *sql.DB, secretKeyB
 	}
 
 	// Example feature wiring. Remove with the rest of the projects example.
-	projectService := services.NewProjectService(db)
+	projectService := project.NewProjectService(db)
 
 	webApp, err := server.New(server.Options{
 		Logger:            logger,
 		DB:                db,
-		Auth:              auth,
+		Auth:              authService,
 		Projects:          projectService,
 		CookieSecure:      cfg.CookieSecure,
 		AppBaseURL:        cfg.AppBaseURL,
@@ -220,13 +222,13 @@ func validateSecurityConfig(cfg config.Config) error {
 		{"SECRET_KEY_BASE", cfg.SecretKeyBase},
 		{"AUTH_TOTP_KEY", cfg.TOTPKey},
 	}
-	for _, secret := range secrets {
-		trimmed := strings.TrimSpace(secret.value)
+	for _, s := range secrets {
+		trimmed := strings.TrimSpace(s.value)
 		if trimmed == "" {
-			return fmt.Errorf("%s must be set", secret.name)
+			return fmt.Errorf("%s must be set", s.name)
 		}
 		if len(trimmed) < minSecretLength {
-			return fmt.Errorf("%s must be at least %d characters (generate with: openssl rand -hex 32)", secret.name, minSecretLength)
+			return fmt.Errorf("%s must be at least %d characters (generate with: openssl rand -hex 32)", s.name, minSecretLength)
 		}
 	}
 	return nil

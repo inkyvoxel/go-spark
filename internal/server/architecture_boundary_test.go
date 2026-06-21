@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/inkyvoxel/go-spark/internal/services"
+	"github.com/inkyvoxel/go-spark/internal/auth"
 )
 
 func TestServerPackageDoesNotImportGeneratedDB(t *testing.T) {
@@ -39,8 +39,8 @@ func TestServerPackageDoesNotImportGeneratedDB(t *testing.T) {
 
 func TestTemplateDataUsesSafeAuthUser(t *testing.T) {
 	userType := reflect.TypeOf(templateData{}.User)
-	if userType != reflect.TypeOf(services.User{}) {
-		t.Fatalf("templateData.User type = %s, want services.User", userType)
+	if userType != reflect.TypeOf(auth.User{}) {
+		t.Fatalf("templateData.User type = %s, want auth.User", userType)
 	}
 
 	for _, fieldName := range []string{"PasswordHash", "TokenHash", "SessionToken"} {

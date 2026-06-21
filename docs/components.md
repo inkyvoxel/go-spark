@@ -145,9 +145,9 @@ Note that session validity does **not** depend on either root — session tokens
 are random values stored as unkeyed SHA-256 hashes — so rotating `SECRET_KEY_BASE`
 does not sign users out.
 
-Every key above is produced by `services.DeriveKey(root, "purpose")` — a single
+Every key above is produced by `secret.DeriveKey(root, "purpose")` — a single
 HMAC-SHA256 helper — so all derivations share one implementation. To add a new
-signing purpose, call `services.DeriveKey` with a new, unique purpose string:
+signing purpose, call `secret.DeriveKey` with a new, unique purpose string:
 in the server package derive it during server initialisation and store it as a
 field on `Server`; application-wide service keys are derived during runtime
 assembly in `internal/app`. This follows the Rails `secret_key_base` pattern —

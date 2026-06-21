@@ -10,29 +10,30 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/inkyvoxel/go-spark/internal/auth"
 	"github.com/inkyvoxel/go-spark/internal/paths"
-	"github.com/inkyvoxel/go-spark/internal/services"
+	"github.com/inkyvoxel/go-spark/internal/project"
 )
 
 type fakeProjectService struct {
 	createName   string
-	createReturn services.Project
+	createReturn project.Project
 	createErr    error
-	listReturn   []services.Project
+	listReturn   []project.Project
 	listErr      error
 	deletedID    int64
 	deleteErr    error
 }
 
-func (f *fakeProjectService) Create(_ context.Context, userID int64, name string) (services.Project, error) {
+func (f *fakeProjectService) Create(_ context.Context, userID int64, name string) (project.Project, error) {
 	f.createName = name
 	if f.createErr != nil {
-		return services.Project{}, f.createErr
+		return project.Project{}, f.createErr
 	}
-	return services.Project{ID: 1, UserID: userID, Name: name}, nil
+	return project.Project{ID: 1, UserID: userID, Name: name}, nil
 }
 
-func (f *fakeProjectService) List(_ context.Context, _ int64) ([]services.Project, error) {
+func (f *fakeProjectService) List(_ context.Context, _ int64) ([]project.Project, error) {
 	return f.listReturn, f.listErr
 }
 
@@ -64,12 +65,12 @@ func projectRequest(t *testing.T, method, target string, form url.Values) *http.
 	} else {
 		req = httptest.NewRequest(method, target, nil)
 	}
-	user := services.User{ID: 7, Email: "user@example.com"}
+	user := auth.User{ID: 7, Email: "user@example.com"}
 	return req.WithContext(contextWithUser(req.Context(), user))
 }
 
 func TestProjectsIndexRendersUserProjects(t *testing.T) {
-	svc := &fakeProjectService{listReturn: []services.Project{{ID: 3, Name: "Alpha"}}}
+	svc := &fakeProjectService{listReturn: []project.Project{{ID: 3, Name: "Alpha"}}}
 	srv := newProjectTestServer(t, svc)
 
 	rec := httptest.NewRecorder()
@@ -102,7 +103,7 @@ func TestCreateProjectRedirectsOnSuccess(t *testing.T) {
 }
 
 func TestCreateProjectShowsFieldErrorOnInvalidName(t *testing.T) {
-	svc := &fakeProjectService{createErr: services.ErrProjectNameRequired}
+	svc := &fakeProjectService{createErr: project.ErrProjectNameRequired}
 	srv := newProjectTestServer(t, svc)
 
 	rec := httptest.NewRecorder()

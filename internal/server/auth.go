@@ -12,8 +12,9 @@ import (
 
 	"github.com/go-webauthn/webauthn/protocol"
 	"github.com/go-webauthn/webauthn/webauthn"
+	"github.com/inkyvoxel/go-spark/internal/auth"
 	"github.com/inkyvoxel/go-spark/internal/paths"
-	"github.com/inkyvoxel/go-spark/internal/services"
+	"github.com/inkyvoxel/go-spark/internal/secret"
 )
 
 const (
@@ -28,21 +29,21 @@ const (
 
 type authService interface {
 	RequestEmailChange(context.Context, int64, string, string) error
-	ConfirmEmailChange(context.Context, string) (services.User, error)
+	ConfirmEmailChange(context.Context, string) (auth.User, error)
 	ChangePassword(context.Context, int64, string, string) error
-	ListManagedSessions(context.Context, int64, string) ([]services.ManagedSession, error)
+	ListManagedSessions(context.Context, int64, string) ([]auth.ManagedSession, error)
 	RevokeOtherSessions(context.Context, int64, string) error
 	RevokeSessionByID(context.Context, int64, string, int64) error
-	Login(context.Context, string, string) (services.User, services.AuthSession, error)
+	Login(context.Context, string, string) (auth.User, auth.AuthSession, error)
 	Logout(context.Context, string) error
 	RequestPasswordReset(context.Context, string) error
-	Register(context.Context, string, string) (services.User, error)
+	Register(context.Context, string, string) (auth.User, error)
 	ResetPasswordWithToken(context.Context, string, string) error
 	ResendVerificationEmailByAddress(context.Context, string) error
 	ResendVerificationEmail(context.Context, int64) error
-	UserBySessionToken(context.Context, string) (services.User, error)
+	UserBySessionToken(context.Context, string) (auth.User, error)
 	ValidatePasswordResetToken(context.Context, string) error
-	VerifyEmail(context.Context, string) (services.User, error)
+	VerifyEmail(context.Context, string) (auth.User, error)
 	DeleteAccount(context.Context, int64, string) error
 	// TOTP
 	BeginTOTPSetup(context.Context, int64) (secret, otpAuthURI string, err error)
@@ -51,15 +52,15 @@ type authService interface {
 	DisableTOTP(context.Context, int64, string) error
 	GetTOTPStatus(context.Context, int64) (enabled bool, backupCodesRemaining int, err error)
 	TOTPSetupState(context.Context, int64) (pending, enabled bool, err error)
-	VerifyTOTPLogin(context.Context, int64, string) (services.AuthSession, error)
+	VerifyTOTPLogin(context.Context, int64, string) (auth.AuthSession, error)
 	RegenerateBackupCodes(context.Context, int64, string) ([]string, error)
 	// Passkeys / WebAuthn
 	PasskeysEnabled() bool
 	BeginPasskeyRegistration(context.Context, int64) (*protocol.CredentialCreation, *webauthn.SessionData, error)
 	FinishPasskeyRegistration(context.Context, int64, webauthn.SessionData, *protocol.ParsedCredentialCreationData, string) error
 	BeginPasskeyLogin(context.Context) (*protocol.CredentialAssertion, *webauthn.SessionData, error)
-	FinishPasskeyLogin(context.Context, webauthn.SessionData, *protocol.ParsedCredentialAssertionData) (services.User, services.AuthSession, error)
-	ListPasskeys(context.Context, int64) ([]services.WebAuthnCredential, error)
+	FinishPasskeyLogin(context.Context, webauthn.SessionData, *protocol.ParsedCredentialAssertionData) (auth.User, auth.AuthSession, error)
+	ListPasskeys(context.Context, int64) ([]auth.WebAuthnCredential, error)
 	CountPasskeys(context.Context, int64) (int, error)
 	RenamePasskey(context.Context, int64, int64, string) error
 	DeletePasskey(context.Context, int64, int64) error
@@ -67,16 +68,16 @@ type authService interface {
 
 type authContextKey struct{}
 
-func currentUser(ctx context.Context) (services.User, bool) {
-	user, ok := ctx.Value(authContextKey{}).(services.User)
+func currentUser(ctx context.Context) (auth.User, bool) {
+	user, ok := ctx.Value(authContextKey{}).(auth.User)
 	return user, ok
 }
 
-func contextWithUser(ctx context.Context, user services.User) context.Context {
+func contextWithUser(ctx context.Context, user auth.User) context.Context {
 	return context.WithValue(ctx, authContextKey{}, user)
 }
 
-func (s *Server) setSessionCookie(w http.ResponseWriter, r *http.Request, session services.AuthSession, rememberMe bool) {
+func (s *Server) setSessionCookie(w http.ResponseWriter, r *http.Request, session auth.AuthSession, rememberMe bool) {
 	cookie := &http.Cookie{
 		Name:     sessionCookieName,
 		Value:    session.Token,
@@ -172,7 +173,7 @@ func (s *Server) loadSession(next http.Handler) http.Handler {
 		}
 
 		user, err := s.auth.UserBySessionToken(r.Context(), cookie.Value)
-		if errors.Is(err, services.ErrInvalidSession) {
+		if errors.Is(err, auth.ErrInvalidSession) {
 			s.clearSessionCookie(w, r)
 			next.ServeHTTP(w, r)
 			return
@@ -278,7 +279,7 @@ func safeRedirectPath(value string) string {
 }
 
 func (s *Server) totpPendingKey() []byte {
-	return services.DeriveKey(s.cookieSigningKey, "totp_pending")
+	return secret.DeriveKey(s.cookieSigningKey, "totp_pending")
 }
 
 // setTOTPPendingCookie stores a short-lived signed cookie carrying the userID

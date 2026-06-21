@@ -38,7 +38,7 @@ Requests flow through three layers. Keep concerns in their layer.
 
 ```
 internal/server     HTTP handlers, middleware, template rendering
-internal/services   business logic
+internal/auth   business logic
 internal/database   SQLite-backed stores (persistence only)
 ```
 

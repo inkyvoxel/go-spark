@@ -13,8 +13,9 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/inkyvoxel/go-spark/internal/auth"
 	"github.com/inkyvoxel/go-spark/internal/paths"
-	"github.com/inkyvoxel/go-spark/internal/services"
+	"github.com/inkyvoxel/go-spark/internal/project"
 )
 
 const emailPattern = `[^@\s]+@[^@\s]+\.[^@\s]+`
@@ -33,9 +34,9 @@ type templateData struct {
 	ResetTokenInvalid bool
 	Authenticated     bool
 	Verified          bool
-	User              services.User
+	User              auth.User
 	PasswordMinLength int
-	ManagedSessions   []services.ManagedSession
+	ManagedSessions   []auth.ManagedSession
 	// TOTP
 	TOTPEnabled              bool
 	TOTPPending              bool
@@ -45,9 +46,9 @@ type templateData struct {
 	TOTPBackupCodesRemaining int
 	// Passkeys
 	PasskeysEnabled bool
-	Passkeys        []services.WebAuthnCredential
+	Passkeys        []auth.WebAuthnCredential
 	// Projects (example feature; remove with the projects example)
-	Projects []services.Project
+	Projects []project.Project
 }
 
 type breadcrumbItem struct {
@@ -70,7 +71,7 @@ func newTemplateData(r *http.Request, title string) templateData {
 		RequestID:         requestID(r.Context()),
 		Routes:            paths.TemplateRoutes,
 		EmailPattern:      emailPattern,
-		PasswordMinLength: services.DefaultPasswordMinLength,
+		PasswordMinLength: auth.DefaultPasswordMinLength,
 	}
 	if user, ok := currentUser(r.Context()); ok {
 		data.Authenticated = true
@@ -137,7 +138,7 @@ func (s *Server) forgotPassword(w http.ResponseWriter, r *http.Request) {
 
 	emailAddress := r.FormValue("email")
 	if err := s.auth.RequestPasswordReset(r.Context(), emailAddress); err != nil {
-		if errors.Is(err, services.ErrInvalidEmail) {
+		if errors.Is(err, auth.ErrInvalidEmail) {
 			data := s.newTemplateData(w, r, "Forgot Password")
 			data.Email = strings.TrimSpace(emailAddress)
 			data.Error = "Check your details and try again."
@@ -162,7 +163,7 @@ func (s *Server) resetPasswordForm(w http.ResponseWriter, r *http.Request) {
 	token := strings.TrimSpace(r.URL.Query().Get("token"))
 	if token != "" {
 		if err := s.auth.ValidatePasswordResetToken(r.Context(), token); err != nil {
-			if errors.Is(err, services.ErrInvalidPasswordResetToken) {
+			if errors.Is(err, auth.ErrInvalidPasswordResetToken) {
 				s.clearResetCookie(w, r)
 				data.Error = "This password reset link is invalid or has expired."
 				data.ResetTokenInvalid = true
@@ -181,7 +182,7 @@ func (s *Server) resetPasswordForm(w http.ResponseWriter, r *http.Request) {
 
 	token = resetTokenFromCookie(r)
 	if err := s.auth.ValidatePasswordResetToken(r.Context(), token); err != nil {
-		if errors.Is(err, services.ErrInvalidPasswordResetToken) {
+		if errors.Is(err, auth.ErrInvalidPasswordResetToken) {
 			s.clearResetCookie(w, r)
 			data.Error = "This password reset link is invalid or has expired."
 			data.ResetTokenInvalid = true
@@ -212,7 +213,7 @@ func (s *Server) confirmEmail(w http.ResponseWriter, r *http.Request) {
 		"confirm email",
 		s.auth.VerifyEmail,
 		func(err error, data *templateData) (int, bool) {
-			if errors.Is(err, services.ErrInvalidVerificationToken) {
+			if errors.Is(err, auth.ErrInvalidVerificationToken) {
 				data.Error = "This confirmation link is invalid or has expired."
 				return http.StatusBadRequest, true
 			}
@@ -238,10 +239,10 @@ func (s *Server) confirmEmailChange(w http.ResponseWriter, r *http.Request) {
 		s.auth.ConfirmEmailChange,
 		func(err error, data *templateData) (int, bool) {
 			switch {
-			case errors.Is(err, services.ErrInvalidEmailChangeToken):
+			case errors.Is(err, auth.ErrInvalidEmailChangeToken):
 				data.Error = "This email change link is invalid or has expired."
 				return http.StatusBadRequest, true
-			case errors.Is(err, services.ErrEmailAlreadyRegistered):
+			case errors.Is(err, auth.ErrEmailAlreadyRegistered):
 				data.Error = "This email address is already used by another account."
 				return http.StatusConflict, true
 			default:
@@ -256,7 +257,7 @@ func (s *Server) confirmEmailChange(w http.ResponseWriter, r *http.Request) {
 	s.loggerForRequest(r).Info("auth email change confirmed")
 	data.Authenticated = false
 	data.Verified = false
-	data.User = services.User{}
+	data.User = auth.User{}
 	s.render(w, templateConfirmEmailChange, data)
 }
 
@@ -268,7 +269,7 @@ func (s *Server) confirmEmailToken(
 	data *templateData,
 	templateName string,
 	logMessage string,
-	confirm func(context.Context, string) (services.User, error),
+	confirm func(context.Context, string) (auth.User, error),
 	handleErr confirmEmailErrorHandler,
 ) bool {
 	if _, err := confirm(r.Context(), r.URL.Query().Get("token")); err != nil {
@@ -294,7 +295,7 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 	user, session, err := s.auth.Login(r.Context(), r.FormValue("email"), r.FormValue("password"))
 	rememberMe := rememberMeFromForm(r)
 	if err != nil {
-		if errors.Is(err, services.ErrTOTPRequired) {
+		if errors.Is(err, auth.ErrTOTPRequired) {
 			next := safeRedirectPath(r.FormValue("next"))
 			s.setTOTPPendingCookie(w, r, user.ID, rememberMe)
 			challengeURL := paths.AccountTwoFactorChallenge
@@ -304,7 +305,7 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 			http.Redirect(w, r, challengeURL, http.StatusSeeOther)
 			return
 		}
-		if errors.Is(err, services.ErrInvalidCredentials) {
+		if errors.Is(err, auth.ErrInvalidCredentials) {
 			s.loggerForRequest(r).Info("auth login failed")
 		}
 		data := s.newTemplateData(w, r, "Sign In")
@@ -333,7 +334,7 @@ func rememberMeFromForm(r *http.Request) bool {
 func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
 	cookie, err := r.Cookie(sessionCookieName)
 	if err == nil {
-		if err := s.auth.Logout(r.Context(), cookie.Value); err != nil && !errors.Is(err, services.ErrInvalidSession) {
+		if err := s.auth.Logout(r.Context(), cookie.Value); err != nil && !errors.Is(err, auth.ErrInvalidSession) {
 			s.loggerForRequest(r).Error("logout", "err", err)
 			s.internalServerError(w, r)
 			return
@@ -380,13 +381,13 @@ func (s *Server) revokeSession(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		data := s.newTemplateData(w, r, "Account")
 		switch {
-		case errors.Is(err, services.ErrInvalidSession):
+		case errors.Is(err, auth.ErrInvalidSession):
 			s.clearSessionCookie(w, r)
 			http.Redirect(w, r, paths.Login, http.StatusSeeOther)
 			return
-		case errors.Is(err, services.ErrCannotRevokeCurrentSession):
+		case errors.Is(err, auth.ErrCannotRevokeCurrentSession):
 			data.Error = "You cannot revoke your current session. Use Sign out for this device."
-		case errors.Is(err, services.ErrInvalidSessionTarget):
+		case errors.Is(err, auth.ErrInvalidSessionTarget):
 			data.Error = "The selected session is no longer available."
 		default:
 			s.loggerForRequest(r).Error("revoke session", "user_id", user.ID, "session_id", sessionID, "err", err)
@@ -415,7 +416,7 @@ func (s *Server) revokeOtherSessions(w http.ResponseWriter, r *http.Request) {
 
 	if err := s.auth.RevokeOtherSessions(r.Context(), user.ID, sessionTokenFromCookie(r)); err != nil {
 		switch {
-		case errors.Is(err, services.ErrInvalidSession):
+		case errors.Is(err, auth.ErrInvalidSession):
 			s.clearSessionCookie(w, r)
 			http.Redirect(w, r, paths.Login, http.StatusSeeOther)
 			return
@@ -502,19 +503,19 @@ func (s *Server) changePassword(w http.ResponseWriter, r *http.Request) {
 		data := s.newChangePasswordTemplateData(w, r)
 		data.Error = "Check your details and try again."
 		switch {
-		case errors.Is(err, services.ErrCurrentPasswordIncorrect):
+		case errors.Is(err, auth.ErrCurrentPasswordIncorrect):
 			data.FieldErrors = map[string]string{"current_password": "Current password is not correct."}
 			s.renderStatus(w, http.StatusUnprocessableEntity, templateChangePassword, data)
 			return
-		case errors.Is(err, services.ErrInvalidPassword):
+		case errors.Is(err, auth.ErrInvalidPassword):
 			data.FieldErrors = map[string]string{"new_password": fmt.Sprintf("Use at least %d characters.", data.PasswordMinLength)}
 			s.renderStatus(w, http.StatusUnprocessableEntity, templateChangePassword, data)
 			return
-		case errors.Is(err, services.ErrPasswordTooLong):
-			data.FieldErrors = map[string]string{"new_password": fmt.Sprintf("Use at most %d characters.", services.PasswordMaxLength)}
+		case errors.Is(err, auth.ErrPasswordTooLong):
+			data.FieldErrors = map[string]string{"new_password": fmt.Sprintf("Use at most %d characters.", auth.PasswordMaxLength)}
 			s.renderStatus(w, http.StatusUnprocessableEntity, templateChangePassword, data)
 			return
-		case errors.Is(err, services.ErrPasswordUnchanged):
+		case errors.Is(err, auth.ErrPasswordUnchanged):
 			data.FieldErrors = map[string]string{"new_password": "Choose a different password."}
 			s.renderStatus(w, http.StatusUnprocessableEntity, templateChangePassword, data)
 			return
@@ -567,11 +568,11 @@ func (s *Server) changeEmail(w http.ResponseWriter, r *http.Request) {
 		data.Email = strings.TrimSpace(newEmail)
 		data.Error = "Check your details and try again."
 		switch {
-		case errors.Is(err, services.ErrCurrentPasswordIncorrect):
+		case errors.Is(err, auth.ErrCurrentPasswordIncorrect):
 			data.FieldErrors = map[string]string{"current_password": "Current password is not correct."}
-		case errors.Is(err, services.ErrInvalidEmail):
+		case errors.Is(err, auth.ErrInvalidEmail):
 			data.FieldErrors = map[string]string{"email": "Enter a valid email address."}
-		case errors.Is(err, services.ErrEmailUnchanged):
+		case errors.Is(err, auth.ErrEmailUnchanged):
 			data.FieldErrors = map[string]string{"email": "Choose a different email address."}
 		default:
 			s.loggerForRequest(r).Error("change email", "user_id", user.ID, "err", err)
@@ -610,18 +611,18 @@ func (s *Server) resetPassword(w http.ResponseWriter, r *http.Request) {
 		data := s.newTemplateData(w, r, "Reset Password")
 		data.Error = "Check your details and try again."
 		switch {
-		case errors.Is(err, services.ErrInvalidPasswordResetToken):
+		case errors.Is(err, auth.ErrInvalidPasswordResetToken):
 			s.clearResetCookie(w, r)
 			data.Error = "This password reset link is invalid or has expired."
 			data.ResetTokenInvalid = true
 			s.renderStatus(w, http.StatusBadRequest, templateResetPassword, data)
 			return
-		case errors.Is(err, services.ErrInvalidPassword):
+		case errors.Is(err, auth.ErrInvalidPassword):
 			data.FieldErrors = map[string]string{"new_password": fmt.Sprintf("Use at least %d characters.", data.PasswordMinLength)}
 			s.renderStatus(w, http.StatusUnprocessableEntity, templateResetPassword, data)
 			return
-		case errors.Is(err, services.ErrPasswordTooLong):
-			data.FieldErrors = map[string]string{"new_password": fmt.Sprintf("Use at most %d characters.", services.PasswordMaxLength)}
+		case errors.Is(err, auth.ErrPasswordTooLong):
+			data.FieldErrors = map[string]string{"new_password": fmt.Sprintf("Use at most %d characters.", auth.PasswordMaxLength)}
 			s.renderStatus(w, http.StatusUnprocessableEntity, templateResetPassword, data)
 			return
 		default:
@@ -645,7 +646,7 @@ func (s *Server) resendVerificationPublic(w http.ResponseWriter, r *http.Request
 
 	emailAddress := r.FormValue("email")
 	if err := s.auth.ResendVerificationEmailByAddress(r.Context(), emailAddress); err != nil {
-		if errors.Is(err, services.ErrInvalidEmail) {
+		if errors.Is(err, auth.ErrInvalidEmail) {
 			data := s.newTemplateData(w, r, "Resend Verification Email")
 			data.Email = strings.TrimSpace(emailAddress)
 			data.Error = "Check your details and try again."
@@ -693,7 +694,7 @@ func (s *Server) deleteAccount(w http.ResponseWriter, r *http.Request) {
 	if err := s.auth.DeleteAccount(r.Context(), user.ID, currentPassword); err != nil {
 		data := s.newDeleteAccountTemplateData(w, r)
 		switch {
-		case errors.Is(err, services.ErrCurrentPasswordIncorrect):
+		case errors.Is(err, auth.ErrCurrentPasswordIncorrect):
 			data.Error = "Check your details and try again."
 			data.FieldErrors = map[string]string{"current_password": "Current password is not correct."}
 			s.renderStatus(w, http.StatusUnprocessableEntity, templateDeleteAccount, data)
@@ -711,25 +712,25 @@ func (s *Server) deleteAccount(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleAuthFormError(w http.ResponseWriter, r *http.Request, templateName string, data templateData, err error) {
-	if errors.Is(err, services.ErrInvalidEmail) {
+	if errors.Is(err, auth.ErrInvalidEmail) {
 		data.Error = "Check your details and try again."
 		data.FieldErrors = map[string]string{"email": "Enter a valid email address."}
 		s.renderStatus(w, http.StatusUnprocessableEntity, templateName, data)
 		return
 	}
-	if errors.Is(err, services.ErrInvalidPassword) {
+	if errors.Is(err, auth.ErrInvalidPassword) {
 		data.Error = "Check your details and try again."
 		data.FieldErrors = map[string]string{"password": fmt.Sprintf("Use at least %d characters.", data.PasswordMinLength)}
 		s.renderStatus(w, http.StatusUnprocessableEntity, templateName, data)
 		return
 	}
-	if errors.Is(err, services.ErrPasswordTooLong) {
+	if errors.Is(err, auth.ErrPasswordTooLong) {
 		data.Error = "Check your details and try again."
-		data.FieldErrors = map[string]string{"password": fmt.Sprintf("Use at most %d characters.", services.PasswordMaxLength)}
+		data.FieldErrors = map[string]string{"password": fmt.Sprintf("Use at most %d characters.", auth.PasswordMaxLength)}
 		s.renderStatus(w, http.StatusUnprocessableEntity, templateName, data)
 		return
 	}
-	if errors.Is(err, services.ErrInvalidCredentials) {
+	if errors.Is(err, auth.ErrInvalidCredentials) {
 		data.Error = "Email or password is not correct."
 		s.renderStatus(w, http.StatusUnprocessableEntity, templateName, data)
 		return
@@ -760,7 +761,7 @@ func (s *Server) populateAccountSessions(w http.ResponseWriter, r *http.Request,
 
 	sessions, err := s.auth.ListManagedSessions(r.Context(), user.ID, sessionTokenFromCookie(r))
 	if err != nil {
-		if errors.Is(err, services.ErrInvalidSession) {
+		if errors.Is(err, auth.ErrInvalidSession) {
 			s.clearSessionCookie(w, r)
 			http.Redirect(w, r, paths.Login, http.StatusSeeOther)
 			return false
@@ -786,7 +787,7 @@ func (s *Server) sessionIDFromRequest(raw string) (int64, error) {
 func (s *Server) validatePasswordPair(password, confirmPassword, passwordField, confirmPasswordField string) map[string]string {
 	passwordMinLength := s.passwordMinLength
 	if passwordMinLength == 0 {
-		passwordMinLength = services.DefaultPasswordMinLength
+		passwordMinLength = auth.DefaultPasswordMinLength
 	}
 
 	fieldErrors := make(map[string]string)
@@ -794,8 +795,8 @@ func (s *Server) validatePasswordPair(password, confirmPassword, passwordField, 
 		fieldErrors[passwordField] = "Enter a password."
 	} else if length := utf8.RuneCountInString(password); length < passwordMinLength {
 		fieldErrors[passwordField] = fmt.Sprintf("Use at least %d characters.", passwordMinLength)
-	} else if length > services.PasswordMaxLength {
-		fieldErrors[passwordField] = fmt.Sprintf("Use at most %d characters.", services.PasswordMaxLength)
+	} else if length > auth.PasswordMaxLength {
+		fieldErrors[passwordField] = fmt.Sprintf("Use at most %d characters.", auth.PasswordMaxLength)
 	}
 	if confirmPassword == "" {
 		fieldErrors[confirmPasswordField] = "Confirm your password."
