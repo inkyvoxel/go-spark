@@ -1238,7 +1238,9 @@ func outbox(t *testing.T, s *authStore) []email.Message {
 }
 
 // countRows returns the number of rows in a table, replacing the in-memory
-// fake's map-length checks.
+// fake's map-length checks. Test-only: it interpolates the table name into the
+// query, which is safe here because every caller passes a hardcoded literal —
+// do not lift this into non-test code.
 func countRows(t *testing.T, s *authStore, table string) int {
 	t.Helper()
 	var n int

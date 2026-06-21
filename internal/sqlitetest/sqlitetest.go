@@ -26,8 +26,10 @@ func New(t testing.TB) *sql.DB {
 
 	gooseOnce.Do(func() {
 		goose.SetBaseFS(appassets.FS)
+		// "sqlite3" is a dialect goose always knows, so this never fails; panic
+		// rather than t.Fatalf since Do runs under whichever test wins the race.
 		if err := goose.SetDialect("sqlite3"); err != nil {
-			t.Fatalf("set goose dialect: %v", err)
+			panic("sqlitetest: set goose dialect: " + err.Error())
 		}
 	})
 
