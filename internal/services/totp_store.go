@@ -1,4 +1,4 @@
-package database
+package services
 
 import (
 	"context"
@@ -7,34 +7,33 @@ import (
 	"time"
 
 	db "github.com/inkyvoxel/go-spark/internal/db/generated"
-	"github.com/inkyvoxel/go-spark/internal/services"
 )
 
-func (s *AuthStore) GetTOTPByUserID(ctx context.Context, userID int64) (services.TOTPRecord, error) {
+func (s *authStore) GetTOTPByUserID(ctx context.Context, userID int64) (TOTPRecord, error) {
 	row, err := s.queries.GetTOTPByUserID(ctx, userID)
 	if err != nil {
-		return services.TOTPRecord{}, fmt.Errorf("get TOTP by user ID: %w", err)
+		return TOTPRecord{}, fmt.Errorf("get TOTP by user ID: %w", err)
 	}
 	record := totpRecordFromDB(row)
 	if record.Secret, err = s.totpSecrets.decrypt(record.Secret); err != nil {
-		return services.TOTPRecord{}, fmt.Errorf("decrypt TOTP secret: %w", err)
+		return TOTPRecord{}, fmt.Errorf("decrypt TOTP secret: %w", err)
 	}
 	return record, nil
 }
 
-func (s *AuthStore) GetEnabledTOTPByUserID(ctx context.Context, userID int64) (services.TOTPRecord, error) {
+func (s *authStore) GetEnabledTOTPByUserID(ctx context.Context, userID int64) (TOTPRecord, error) {
 	row, err := s.queries.GetEnabledTOTPByUserID(ctx, userID)
 	if err != nil {
-		return services.TOTPRecord{}, fmt.Errorf("get enabled TOTP by user ID: %w", err)
+		return TOTPRecord{}, fmt.Errorf("get enabled TOTP by user ID: %w", err)
 	}
 	record := totpRecordFromDB(row)
 	if record.Secret, err = s.totpSecrets.decrypt(record.Secret); err != nil {
-		return services.TOTPRecord{}, fmt.Errorf("decrypt TOTP secret: %w", err)
+		return TOTPRecord{}, fmt.Errorf("decrypt TOTP secret: %w", err)
 	}
 	return record, nil
 }
 
-func (s *AuthStore) UpsertPendingTOTP(ctx context.Context, userID int64, secret string) error {
+func (s *authStore) UpsertPendingTOTP(ctx context.Context, userID int64, secret string) error {
 	encryptedSecret, err := s.totpSecrets.encrypt(secret)
 	if err != nil {
 		return fmt.Errorf("encrypt TOTP secret: %w", err)
@@ -50,7 +49,7 @@ func (s *AuthStore) UpsertPendingTOTP(ctx context.Context, userID int64, secret 
 
 // EnableTOTPWithBackupCodes atomically marks TOTP as enabled and replaces
 // any existing backup codes with the newly generated set.
-func (s *AuthStore) EnableTOTPWithBackupCodes(ctx context.Context, userID int64, enabledAt time.Time, codeHashes []string) error {
+func (s *authStore) EnableTOTPWithBackupCodes(ctx context.Context, userID int64, enabledAt time.Time, codeHashes []string) error {
 	return withTx(ctx, s.db, s.queries, "enable TOTP with backup codes", func(queries *db.Queries) error {
 		if err := queries.EnableTOTP(ctx, db.EnableTOTPParams{
 			EnabledAt: sql.NullTime{Time: enabledAt, Valid: true},
@@ -78,7 +77,7 @@ func (s *AuthStore) EnableTOTPWithBackupCodes(ctx context.Context, userID int64,
 
 // ReplaceBackupCodes atomically deletes all existing backup codes for the user
 // and inserts the new set, leaving the TOTP record itself unchanged.
-func (s *AuthStore) ReplaceBackupCodes(ctx context.Context, userID int64, codeHashes []string) error {
+func (s *authStore) ReplaceBackupCodes(ctx context.Context, userID int64, codeHashes []string) error {
 	return withTx(ctx, s.db, s.queries, "replace backup codes", func(queries *db.Queries) error {
 		if err := queries.DeleteTOTPBackupCodesByUserID(ctx, userID); err != nil {
 			return fmt.Errorf("delete backup codes: %w", err)
@@ -96,7 +95,7 @@ func (s *AuthStore) ReplaceBackupCodes(ctx context.Context, userID int64, codeHa
 }
 
 // DeleteTOTPAndBackupCodes atomically removes all TOTP and backup code data.
-func (s *AuthStore) DeleteTOTPAndBackupCodes(ctx context.Context, userID int64) error {
+func (s *authStore) DeleteTOTPAndBackupCodes(ctx context.Context, userID int64) error {
 	return withTx(ctx, s.db, s.queries, "delete TOTP and backup codes", func(queries *db.Queries) error {
 		if err := queries.DeleteTOTPBackupCodesByUserID(ctx, userID); err != nil {
 			return fmt.Errorf("delete backup codes: %w", err)
@@ -108,7 +107,7 @@ func (s *AuthStore) DeleteTOTPAndBackupCodes(ctx context.Context, userID int64) 
 	})
 }
 
-func (s *AuthStore) ConsumeTOTPBackupCode(ctx context.Context, userID int64, codeHash string, usedAt time.Time) (bool, error) {
+func (s *authStore) ConsumeTOTPBackupCode(ctx context.Context, userID int64, codeHash string, usedAt time.Time) (bool, error) {
 	rows, err := s.queries.ConsumeTOTPBackupCode(ctx, db.ConsumeTOTPBackupCodeParams{
 		UsedAt:   sql.NullTime{Time: usedAt, Valid: true},
 		UserID:   userID,
@@ -123,7 +122,7 @@ func (s *AuthStore) ConsumeTOTPBackupCode(ctx context.Context, userID int64, cod
 // ClaimTOTPCounter records the accepted TOTP time-step counter. It reports
 // false when the counter is not strictly newer than the stored one, meaning
 // the code was already used and must be rejected as a replay.
-func (s *AuthStore) ClaimTOTPCounter(ctx context.Context, userID, counter int64) (bool, error) {
+func (s *authStore) ClaimTOTPCounter(ctx context.Context, userID, counter int64) (bool, error) {
 	rows, err := s.queries.ClaimTOTPCounter(ctx, db.ClaimTOTPCounterParams{
 		Counter: sql.NullInt64{Int64: counter, Valid: true},
 		UserID:  userID,
@@ -134,7 +133,7 @@ func (s *AuthStore) ClaimTOTPCounter(ctx context.Context, userID, counter int64)
 	return rows > 0, nil
 }
 
-func (s *AuthStore) CountUnusedTOTPBackupCodes(ctx context.Context, userID int64) (int64, error) {
+func (s *authStore) CountUnusedTOTPBackupCodes(ctx context.Context, userID int64) (int64, error) {
 	count, err := s.queries.CountUnusedTOTPBackupCodes(ctx, userID)
 	if err != nil {
 		return 0, fmt.Errorf("count unused TOTP backup codes: %w", err)
@@ -142,8 +141,8 @@ func (s *AuthStore) CountUnusedTOTPBackupCodes(ctx context.Context, userID int64
 	return count, nil
 }
 
-func totpRecordFromDB(row db.UserTotp) services.TOTPRecord {
-	return services.TOTPRecord{
+func totpRecordFromDB(row db.UserTotp) TOTPRecord {
+	return TOTPRecord{
 		ID:              row.ID,
 		UserID:          row.UserID,
 		Secret:          row.Secret,

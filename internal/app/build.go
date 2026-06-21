@@ -64,7 +64,7 @@ func buildRuntime(cfg config.Config, logger *slog.Logger, db *sql.DB, secretKeyB
 	// factor. Rotating AUTH_TOTP_KEY, by contrast, forces 2FA re-enrolment.
 	totpKey := []byte(strings.TrimSpace(cfg.TOTPKey))
 
-	authStore, err := database.NewAuthStore(db, services.DeriveKey(totpKey, "totp_secret"))
+	authStore, err := services.NewAuthStore(db, services.DeriveKey(totpKey, "totp_secret"))
 	if err != nil {
 		return Runtime{}, fmt.Errorf("configure auth store: %w", err)
 	}

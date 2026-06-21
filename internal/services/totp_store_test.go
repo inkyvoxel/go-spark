@@ -1,4 +1,4 @@
-package database
+package services
 
 import (
 	"context"
@@ -6,7 +6,7 @@ import (
 )
 
 func TestAuthStoreEncryptsTOTPSecretAtRest(t *testing.T) {
-	store := newTestAuthStore(t)
+	store := newTestauthStore(t)
 	ctx := context.Background()
 
 	user, err := store.CreateUser(ctx, "user@example.com", "hash")
@@ -39,7 +39,7 @@ func TestAuthStoreEncryptsTOTPSecretAtRest(t *testing.T) {
 }
 
 func TestAuthStoreReencryptsSecretOnEachWrite(t *testing.T) {
-	store := newTestAuthStore(t)
+	store := newTestauthStore(t)
 	ctx := context.Background()
 
 	user, err := store.CreateUser(ctx, "user@example.com", "hash")

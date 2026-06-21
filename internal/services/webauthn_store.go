@@ -1,4 +1,4 @@
-package database
+package services
 
 import (
 	"context"
@@ -8,7 +8,6 @@ import (
 	"fmt"
 
 	db "github.com/inkyvoxel/go-spark/internal/db/generated"
-	"github.com/inkyvoxel/go-spark/internal/services"
 )
 
 // webAuthnUserHandleBytes is the length of the opaque per-user WebAuthn handle.
@@ -25,7 +24,7 @@ func newWebAuthnUserHandle() ([]byte, error) {
 	return handle, nil
 }
 
-func (s *AuthStore) GetWebAuthnHandleByUserID(ctx context.Context, userID int64) ([]byte, error) {
+func (s *authStore) GetWebAuthnHandleByUserID(ctx context.Context, userID int64) ([]byte, error) {
 	handle, err := s.queries.GetWebAuthnHandleByUserID(ctx, userID)
 	if err != nil {
 		return nil, fmt.Errorf("get webauthn handle by user ID: %w", err)
@@ -33,12 +32,12 @@ func (s *AuthStore) GetWebAuthnHandleByUserID(ctx context.Context, userID int64)
 	return handle, nil
 }
 
-func (s *AuthStore) GetUserByWebAuthnHandle(ctx context.Context, handle []byte) (services.User, error) {
+func (s *authStore) GetUserByWebAuthnHandle(ctx context.Context, handle []byte) (User, error) {
 	user, err := s.queries.GetUserByWebAuthnHandle(ctx, handle)
 	if err != nil {
-		return services.User{}, fmt.Errorf("get user by webauthn handle: %w", err)
+		return User{}, fmt.Errorf("get user by webauthn handle: %w", err)
 	}
-	return services.User{
+	return User{
 		ID:              user.ID,
 		Email:           user.Email,
 		EmailVerifiedAt: user.EmailVerifiedAt,
@@ -46,7 +45,7 @@ func (s *AuthStore) GetUserByWebAuthnHandle(ctx context.Context, handle []byte) 
 	}, nil
 }
 
-func (s *AuthStore) CreateWebAuthnCredential(ctx context.Context, params services.CreateWebAuthnCredentialParams) error {
+func (s *authStore) CreateWebAuthnCredential(ctx context.Context, params CreateWebAuthnCredentialParams) error {
 	transports, err := json.Marshal(params.Transports)
 	if err != nil {
 		return fmt.Errorf("marshal webauthn transports: %w", err)
@@ -68,12 +67,12 @@ func (s *AuthStore) CreateWebAuthnCredential(ctx context.Context, params service
 	return nil
 }
 
-func (s *AuthStore) ListWebAuthnCredentialsByUserID(ctx context.Context, userID int64) ([]services.WebAuthnCredential, error) {
+func (s *authStore) ListWebAuthnCredentialsByUserID(ctx context.Context, userID int64) ([]WebAuthnCredential, error) {
 	rows, err := s.queries.ListWebAuthnCredentialsByUserID(ctx, userID)
 	if err != nil {
 		return nil, fmt.Errorf("list webauthn credentials by user ID: %w", err)
 	}
-	credentials := make([]services.WebAuthnCredential, 0, len(rows))
+	credentials := make([]WebAuthnCredential, 0, len(rows))
 	for _, row := range rows {
 		credential, err := webAuthnCredentialFromDB(row)
 		if err != nil {
@@ -84,7 +83,7 @@ func (s *AuthStore) ListWebAuthnCredentialsByUserID(ctx context.Context, userID 
 	return credentials, nil
 }
 
-func (s *AuthStore) UpdateWebAuthnCredentialOnLogin(ctx context.Context, params services.UpdateWebAuthnCredentialParams) error {
+func (s *authStore) UpdateWebAuthnCredentialOnLogin(ctx context.Context, params UpdateWebAuthnCredentialParams) error {
 	if err := s.queries.UpdateWebAuthnCredentialOnLogin(ctx, db.UpdateWebAuthnCredentialOnLoginParams{
 		SignCount:    int64(params.SignCount),
 		BackupState:  boolToInt64(params.BackupState),
@@ -96,7 +95,7 @@ func (s *AuthStore) UpdateWebAuthnCredentialOnLogin(ctx context.Context, params 
 	return nil
 }
 
-func (s *AuthStore) RenameWebAuthnCredential(ctx context.Context, userID, credentialDBID int64, name string) (bool, error) {
+func (s *authStore) RenameWebAuthnCredential(ctx context.Context, userID, credentialDBID int64, name string) (bool, error) {
 	rows, err := s.queries.RenameWebAuthnCredential(ctx, db.RenameWebAuthnCredentialParams{
 		Name:   name,
 		ID:     credentialDBID,
@@ -108,7 +107,7 @@ func (s *AuthStore) RenameWebAuthnCredential(ctx context.Context, userID, creden
 	return rows > 0, nil
 }
 
-func (s *AuthStore) DeleteWebAuthnCredential(ctx context.Context, userID, credentialDBID int64) (bool, error) {
+func (s *authStore) DeleteWebAuthnCredential(ctx context.Context, userID, credentialDBID int64) (bool, error) {
 	rows, err := s.queries.DeleteWebAuthnCredentialByIDAndUserID(ctx, db.DeleteWebAuthnCredentialByIDAndUserIDParams{
 		ID:     credentialDBID,
 		UserID: userID,
@@ -119,7 +118,7 @@ func (s *AuthStore) DeleteWebAuthnCredential(ctx context.Context, userID, creden
 	return rows > 0, nil
 }
 
-func (s *AuthStore) CountWebAuthnCredentialsByUserID(ctx context.Context, userID int64) (int64, error) {
+func (s *authStore) CountWebAuthnCredentialsByUserID(ctx context.Context, userID int64) (int64, error) {
 	count, err := s.queries.CountWebAuthnCredentialsByUserID(ctx, userID)
 	if err != nil {
 		return 0, fmt.Errorf("count webauthn credentials by user ID: %w", err)
@@ -127,14 +126,14 @@ func (s *AuthStore) CountWebAuthnCredentialsByUserID(ctx context.Context, userID
 	return count, nil
 }
 
-func webAuthnCredentialFromDB(row db.WebauthnCredential) (services.WebAuthnCredential, error) {
+func webAuthnCredentialFromDB(row db.WebauthnCredential) (WebAuthnCredential, error) {
 	var transports []string
 	if row.Transports != "" {
 		if err := json.Unmarshal([]byte(row.Transports), &transports); err != nil {
-			return services.WebAuthnCredential{}, fmt.Errorf("unmarshal webauthn transports: %w", err)
+			return WebAuthnCredential{}, fmt.Errorf("unmarshal webauthn transports: %w", err)
 		}
 	}
-	return services.WebAuthnCredential{
+	return WebAuthnCredential{
 		ID:              row.ID,
 		UserID:          row.UserID,
 		CredentialID:    row.CredentialID,

@@ -1749,28 +1749,6 @@ func sessionRecordFromDB(row db.Session) SessionRecord {
 	}
 }
 
-func emailVerificationTokenFromDB(row db.EmailVerificationToken) EmailVerificationToken {
-	return EmailVerificationToken{
-		ID:         row.ID,
-		UserID:     row.UserID,
-		TokenHash:  row.TokenHash,
-		ExpiresAt:  row.ExpiresAt,
-		ConsumedAt: row.ConsumedAt,
-		CreatedAt:  row.CreatedAt,
-	}
-}
-
-func passwordResetTokenFromDB(row db.PasswordResetToken) PasswordResetToken {
-	return PasswordResetToken{
-		ID:         row.ID,
-		UserID:     row.UserID,
-		TokenHash:  row.TokenHash,
-		ExpiresAt:  row.ExpiresAt,
-		ConsumedAt: row.ConsumedAt,
-		CreatedAt:  row.CreatedAt,
-	}
-}
-
 func (s *fakeAuthStore) GetTOTPByUserID(ctx context.Context, userID int64) (TOTPRecord, error) {
 	totp, ok := s.totpByUserID[userID]
 	if !ok {
