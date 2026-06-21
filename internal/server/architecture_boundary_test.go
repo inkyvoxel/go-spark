@@ -13,8 +13,6 @@ import (
 )
 
 func TestServerPackageDoesNotImportGeneratedDB(t *testing.T) {
-	t.Helper()
-
 	err := filepath.WalkDir(".", func(path string, entry os.DirEntry, err error) error {
 		if err != nil {
 			return err
