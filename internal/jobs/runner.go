@@ -40,11 +40,9 @@ func NewRunner(logger *slog.Logger, jobs ...Job) (*Runner, error) {
 func (r *Runner) Run(ctx context.Context) error {
 	var wg sync.WaitGroup
 	for _, job := range r.jobs {
-		wg.Add(1)
-		go func(job Job) {
-			defer wg.Done()
+		wg.Go(func() {
 			r.runJobLoop(ctx, job)
-		}(job)
+		})
 	}
 
 	<-ctx.Done()
