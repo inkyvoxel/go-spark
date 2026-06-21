@@ -2,13 +2,35 @@
 <section>
   <h1>Go from idea to app faster.</h1>
   <p>
-    Go Spark gives you a small, practical foundation: Go, SQLite, templates, sessions, CSRF protection, and auth already
-    wired in, plus basic email support for account confirmation.
+    Go Spark is a small, practical foundation for server-rendered Go web apps:
+    standard-library HTTP, SQLite, <code>html/template</code>, secure sessions,
+    CSRF protection, and complete email/password auth — with 2FA, passkeys, a
+    background worker, and transactional email all wired in.
   </p>
+</section>
+
+<section>
+  <h2>First time here?</h2>
+  <p>This page is served by your freshly cloned template. To make it yours:</p>
+  <ol>
+    <li>Run <code>make init</code> — names your project and module path, generates a <code>.env</code> with random secrets, then removes itself.</li>
+    <li>Run <code>make migrate-up</code> to set up the database.</li>
+    <li>Run <code>make start</code> and reload this page.</li>
+  </ol>
   <p>
-    If you are starting a new project from this template,
-    begin by copying <code>.env.example</code> to <code>.env</code>, running <code>make migrate-up</code>, and then
-    <code>make start</code>.
+    Then add your first feature — a table, page, form, or job — following
+    <code>docs/extending.md</code>.
   </p>
+</section>
+
+<section>
+  <h2>Documentation</h2>
+  <p>Find these in your repo's <code>docs/</code> directory:</p>
+  <ul>
+    <li><code>development.md</code> — getting started, commands, conventions</li>
+    <li><code>architecture.md</code> — package boundaries and design</li>
+    <li><code>extending.md</code> — recipes for adding features</li>
+    <li><code>production.md</code> — deployment guide</li>
+  </ul>
 </section>
 {{ end }}
