@@ -3,23 +3,29 @@
 Working list toward a v1 feature-complete release. Tackle top to bottom.
 Each item notes the why and the main files to touch.
 
-## 1. Harden init.sh substring + sed edge cases
+## 1. PicoCSS / default CSS
 
-`scripts/init.sh` replaces module path, then `Go Spark`, then `go-spark`. If a
-user's module path itself contains `go-spark` (e.g.
-`github.com/me/go-spark-fork`), the third pass corrupts it. `sed` replacement
-also breaks if the module path/name contains `&` or `|`.
+Make decision what to do for default CSS. Keep PicoCSS? Use classless so it's easier to replace? Write some minimal, custom CSS? Use something else?
 
-- Add a guard/escape or at least a documented note. CI `init-script` job already
-  covers the common case.
-- Files: `scripts/init.sh`.
+## 2. Email/jobs
 
-## 2. Minor cleanups
+Context: email sending already uses the transactional outbox pattern
+(enqueue inside the business txn, separate worker polls + sends with
+retries/lease). This is the correct design. Do NOT move to per-request
+goroutines or per-email processes; that loses durability, atomicity, and
+retries. The list below is refinement, not a rewrite.
 
-- `.gitignore` references `.gospark-init-state`, which nothing creates. Remove
-  the line.
-- `internal/server/architecture_boundary_test.go` calls `t.Helper()` inside a
-  top-level `Test` function (no-op there). Drop it.
+- [ ] Tidy `jobs.Runner.Run`: replace manual `wg.Add(1)`/`go func(job Job)`/
+      `defer wg.Done()` with `wg.Go(func() { ... })` (Go 1.25+)
+- [ ] Drop the explicit `func(job Job)` loop-var capture in the runner
+      (per-iteration loop vars since Go 1.22)
+- [ ] Review `emailJobInterval`: shorten to a few seconds so auth mail
+      (verify/reset) sends promptly. SQLite + index on
+      `(status, available_at)` makes frequent polling cheap. Skip building a
+      cross-process notify.
+- [ ] Future jobs decision: recurring work -> interval Runner; one-shot
+      durable work (PDF, webhook, upload) -> generalise the OUTBOX, not the
+      ticker runner. (River is the Go reference but it's Postgres-only.)
 
 ## 3. Write the CHANGELOG before tagging v1
 

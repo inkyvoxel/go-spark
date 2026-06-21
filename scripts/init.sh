@@ -57,6 +57,12 @@ fi
 replace_in_files() {
     local pattern="$1"
     local replacement="$2"
+    # Escape sed replacement metacharacters (\, &, and the | delimiter) so a
+    # user-supplied module path/name containing them isn't mangled. Backslash
+    # must be escaped first.
+    replacement="${replacement//\\/\\\\}"
+    replacement="${replacement//&/\\&}"
+    replacement="${replacement//|/\\|}"
     # Find all text files tracked or present in the repo, excluding binary/generated paths
     find . \
         -type f \
@@ -67,12 +73,19 @@ replace_in_files() {
         | xargs -r sed "${SED_INPLACE[@]}" "s|${pattern}|${replacement}|g"
 }
 
+# Park the module path behind a placeholder first, then substitute the real
+# value last. Otherwise the bare "go-spark" pass below would corrupt a module
+# path that itself contains "go-spark" (e.g. github.com/me/go-spark-fork).
+MODULE_PLACEHOLDER="@@GOSPARK_MODULE@@"
+
 echo "Updating module path..."
-replace_in_files "$TEMPLATE_MODULE" "$MODULE_PATH"
+replace_in_files "$TEMPLATE_MODULE" "$MODULE_PLACEHOLDER"
 
 echo "Updating project name..."
 replace_in_files "$TEMPLATE_PROJECT_TITLE" "$PROJECT_TITLE"
 replace_in_files "$TEMPLATE_PROJECT" "$PROJECT_NAME"
+
+replace_in_files "$MODULE_PLACEHOLDER" "$MODULE_PATH"
 
 echo "Tidying Go modules..."
 go mod tidy
@@ -98,7 +111,9 @@ fi
 echo ""
 echo "Done! Next steps:"
 echo ""
-if [[ "$ENV_GENERATED" != "true" ]]; then
+if [[ "$ENV_GENERATED" == "true" ]]; then
+    echo "  # .env was created with randomly generated secrets — change them in .env if you like"
+else
     echo "  # set the required secrets in .env (SECRET_KEY_BASE, AUTH_TOTP_KEY, AUTH_PASSWORD_PEPPER)"
 fi
 echo "  make migrate-up"
@@ -108,6 +123,6 @@ echo ""
 # Self-destruct so init cannot be run again on an established project
 rm -- "$0"
 # Remove the init target from the Makefile now that the script is gone
-sed "${SED_INPLACE[@]}" '/^init:/,/^\t@bash scripts\/init\.sh/d' Makefile
+sed "${SED_INPLACE[@]}" '/^init:/,/^$/d' Makefile
 sed "${SED_INPLACE[@]}" 's/init //' Makefile
 rmdir --ignore-fail-on-non-empty scripts 2>/dev/null || true
