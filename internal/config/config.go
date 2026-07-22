@@ -124,11 +124,11 @@ func unquoteDotEnvValue(value string) (string, error) {
 	return value[1 : len(value)-1], nil
 }
 
-func FromEnv(defaultPasswordMinLength int) (Config, error) {
-	return FromEnvWithProcess(defaultPasswordMinLength, "")
+func FromEnv() (Config, error) {
+	return FromEnvWithProcess("")
 }
 
-func FromEnvWithProcess(defaultPasswordMinLength int, processOverride string) (Config, error) {
+func FromEnvWithProcess(processOverride string) (Config, error) {
 	process, err := processFromOverrideOrEnv(processOverride)
 	if err != nil {
 		return Config{}, err
@@ -143,7 +143,9 @@ func FromEnvWithProcess(defaultPasswordMinLength int, processOverride string) (C
 		return Config{}, err
 	}
 
-	passwordMinLength, err := envIntOrDefault("AUTH_PASSWORD_MIN_LENGTH", defaultPasswordMinLength)
+	// Left as 0 when unset; auth.NewAuthService and server.New own the default
+	// minimum, so config does not need to know the auth package's policy value.
+	passwordMinLength, err := envIntOptionalPositive("AUTH_PASSWORD_MIN_LENGTH")
 	if err != nil {
 		return Config{}, err
 	}
@@ -312,23 +314,6 @@ func envBoolOrDefault(key string, fallback bool) (bool, error) {
 		return false, fmt.Errorf("%s must be a boolean: %w", key, err)
 	}
 	return parsed, nil
-}
-
-func envIntOrDefault(key string, fallback int) (int, error) {
-	raw := os.Getenv(key)
-	if raw == "" {
-		return fallback, nil
-	}
-
-	value, err := strconv.Atoi(raw)
-	if err != nil {
-		return 0, fmt.Errorf("%s must be an integer: %w", key, err)
-	}
-	if value <= 0 {
-		return 0, fmt.Errorf("%s must be greater than zero", key)
-	}
-
-	return value, nil
 }
 
 func envInt(key string) (int, error) {
